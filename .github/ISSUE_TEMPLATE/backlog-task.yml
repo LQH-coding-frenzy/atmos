@@ -1,0 +1,25 @@
+name: Backlog task
+description: Implement exactly one canonical Atmos backlog item.
+title: '[TASK] <BACKLOG-ID>: '
+labels: [backlog]
+body:
+  - type: input
+    id: backlog-id
+    attributes:
+      label: Canonical backlog ID
+      placeholder: WEB-002
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Completed dependencies
+      description: List exact IDs marked DONE in .agent/status.yaml.
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Security, cost, rollback, and evidence
+    validations:
+      required: true

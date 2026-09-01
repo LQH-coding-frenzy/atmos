@@ -1,0 +1,79 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "share": "disabled",
+  "autoupdate": "notify",
+  "snapshot": true,
+  "instructions": ["AGENTS.md"],
+  "provider": {
+    "openrouter": {
+      "options": {
+        "apiKey": "{env:OPENROUTER_API_KEY}",
+        "setCacheKey": true,
+      },
+    },
+  },
+  "mcp": {
+    "context7": {
+      "type": "local",
+      "command": ["npx", "-y", "@upstash/context7-mcp@4.0.4"],
+      "enabled": true,
+      "timeout": 15000,
+    },
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "-y", "@playwright/mcp@0.0.80"],
+      "enabled": true,
+      "timeout": 30000,
+    },
+  },
+  "permission": {
+    "read": {
+      "*": "allow",
+      ".env": "deny",
+      ".env.*": "deny",
+      "**/*.tfstate": "deny",
+      "**/*.tfstate.*": "deny",
+      "**/*.pem": "deny",
+      "**/*.key": "deny",
+    },
+    "edit": {
+      "*": "allow",
+      ".env": "deny",
+      ".env.*": "deny",
+      "**/*.tfstate": "deny",
+      "**/*.tfstate.*": "deny",
+    },
+    "bash": {
+      "*": "ask",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "pnpm lint": "allow",
+      "pnpm typecheck": "allow",
+      "pnpm test": "allow",
+      "pnpm build": "allow",
+      "rm *": "deny",
+      "git reset *": "deny",
+      "git checkout *": "deny",
+      "terraform apply*": "deny",
+      "supabase db push*": "deny",
+    },
+    "external_directory": "deny",
+    "webfetch": "allow",
+    "task": "allow",
+  },
+  "tool_output": {
+    "max_lines": 200,
+    "max_bytes": 16384,
+  },
+  "compaction": {
+    "auto": true,
+    "prune": true,
+    "tail_turns": 8,
+    "preserve_recent_tokens": 12000,
+    "reserved": 8000,
+  },
+  "experimental": {
+    "mcp_timeout": 30000,
+  },
+}

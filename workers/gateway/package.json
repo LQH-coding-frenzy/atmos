@@ -1,0 +1,16 @@
+{
+  "name": "@atmos/gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run"
+  },
+  "dependencies": {
+    "hono": "4.13.5"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260901.1"
+  }
+}

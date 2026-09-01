@@ -1,0 +1,9 @@
+[tools]
+node = "24.14.1"
+pnpm = "11.25.0"
+terraform = "1.14.6"
+trivy = "0.69.3"
+gitleaks = "8.30.0"
+cosign = "3.0.2"
+syft = "1.38.0"
+k6 = "1.6.1"

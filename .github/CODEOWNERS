@@ -1,0 +1,8 @@
+# Changes in these paths require platform and security review.
+/.github/workflows/** @LQH-coding-frenzy
+/infra/** @LQH-coding-frenzy
+/supabase/migrations/** @LQH-coding-frenzy
+/supabase/tests/** @LQH-coding-frenzy
+/workers/** @LQH-coding-frenzy
+/security/** @LQH-coding-frenzy
+/jobs/** @LQH-coding-frenzy

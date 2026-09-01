@@ -1,0 +1,36 @@
+name: Browser smoke tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'tests/e2e/**'
+      - 'playwright.config.ts'
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  playwright:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.14.1
+          cache: pnpm
+      - name: Enable Corepack and install
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run browser smoke tests
+        run: pnpm test:e2e

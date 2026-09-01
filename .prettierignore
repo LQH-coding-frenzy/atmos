@@ -1,0 +1,9 @@
+node_modules/
+.next/
+dist/
+coverage/
+pnpm-lock.yaml
+apps/web/next-env.d.ts
+docs/architecture/atmos-devsecops-master-plan.md
+weather-dashboard-rough-design-example/
+weather-dashboard-image-example.png

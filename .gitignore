@@ -1,0 +1,37 @@
+# Dependencies and generated output
+node_modules/
+.next/
+dist/
+coverage/
+*.tsbuildinfo
+playwright-report/
+test-results/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# Terraform and provider state
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Local Supabase and editor files
+supabase/.temp/
+supabase/.branches/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Never version database dumps, backup archives, or generated evidence
+*.sql.gz
+*.dump
+*.bak
+backups/
+docs/evidence/generated/

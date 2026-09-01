@@ -1,0 +1,20 @@
+{
+  "name": "@atmos/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@atmos/contracts": "workspace:*",
+    "@atmos/domain": "workspace:*",
+    "@atmos/provider-openmeteo": "workspace:*",
+    "lucide-react": "1.39.0",
+    "next": "16.3.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  }
+}

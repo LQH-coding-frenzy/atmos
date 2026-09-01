@@ -1,0 +1,1 @@
+-- Local development fixtures belong here. User records are created through local Auth tests.

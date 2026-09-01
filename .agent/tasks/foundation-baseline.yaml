@@ -1,0 +1,54 @@
+task:
+  id: FOUNDATION-BASELINE
+  title: Foundation baseline by explicit owner scope expansion
+  status: IN_PROGRESS
+  objective: Establish a reproducible local product, security baseline, and public source repository without remote cloud provisioning.
+  depends_on: []
+  external_policy_checks:
+    - Production provider preflight is required before any provider mutation.
+  runtime_placement:
+    allowed: [vercel-nextjs, cloudflare-worker, postgres]
+    selected: vercel-nextjs
+    reason: The local baseline exercises the frontend while preserving the planned runtime split.
+  scope:
+    include:
+      [
+        repository bootstrap,
+        mock dashboard,
+        Supabase schema,
+        Worker skeleton,
+        CI,
+        security,
+        OpenCode,
+      ]
+    exclude: [production provider provisioning, secrets, destructive migrations, paid resources]
+  inputs:
+    required_config: [OPENROUTER_API_KEY]
+    required_secrets: []
+  outputs:
+    files: [apps/web, workers/gateway, packages, supabase, .github, .opencode]
+    terraform_resources: []
+    database_changes: [20260901000000_base_schema.sql]
+    deployed_units: []
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: not deployed
+  validation:
+    commands: [pnpm lint, pnpm typecheck, pnpm test, pnpm build]
+    expected: [local dashboard and worker build successfully]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [none during local skeleton]
+    logs: [request_id]
+    traces: [not applicable during local skeleton]
+  evidence: [CI workflow results, local test output]
+  rollback:
+    strategy: Revert the bootstrap commit before any remote deployment.
+  human_approval:
+    required: true
+    reason: Production resource provisioning is deferred until the foundation milestone completes.

@@ -1,0 +1,12 @@
+name: Bug report
+description: Report reproducible user-visible behavior.
+title: '[BUG] '
+labels: [bug]
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      placeholder: Steps, expected behavior, actual behavior, and screenshots or logs with sensitive data removed.
+    validations:
+      required: true
