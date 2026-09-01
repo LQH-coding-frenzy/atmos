@@ -1,7 +1,7 @@
 task:
   id: FOUNDATION-BASELINE
   title: Foundation baseline by explicit owner scope expansion
-  status: IN_PROGRESS
+  status: DONE
   objective: Establish a reproducible local product, security baseline, and public source repository without remote cloud provisioning.
   depends_on: []
   external_policy_checks:
