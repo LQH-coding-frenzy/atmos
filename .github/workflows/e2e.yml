@@ -3,11 +3,6 @@ name: Browser smoke tests
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'apps/web/**'
-      - 'packages/**'
-      - 'tests/e2e/**'
-      - 'playwright.config.ts'
   push:
     branches: [main]
 
