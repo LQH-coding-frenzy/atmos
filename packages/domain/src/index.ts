@@ -13,7 +13,8 @@ export const plannerActivityKinds = [
 ] as const;
 export type PlannerActivityKind = (typeof plannerActivityKinds)[number];
 
-export type PlannerActivity = { kind: PlannerActivityKind } | { kind: 'custom'; name: string };
+export type PlannerActivity =
+  { kind: PlannerActivityKind; name?: never } | { kind: 'custom'; name: string };
 
 export const plannerDimensions = [
   'temperature',
@@ -74,10 +75,13 @@ export type AlertCondition =
       metric: AlertThresholdMetric;
       comparison: 'above' | 'below';
       value: number;
+      expected?: never;
     }
   | {
       metric: AlertOccurrenceMetric;
       expected: true;
+      comparison?: never;
+      value?: never;
     };
 
 export type Weekday =

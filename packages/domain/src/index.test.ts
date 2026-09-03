@@ -7,6 +7,8 @@ import {
   plannerActivityKinds,
   plannerDimensions,
   type AlertRule,
+  type AlertCondition,
+  type PlannerActivity,
   type PlannerResult,
 } from './index';
 
@@ -41,6 +43,30 @@ describe('planner and alert models', () => {
       'uv',
       'aqi',
     ]);
+  });
+
+  it('rejects mixed discriminated-union shapes at compile time', () => {
+    const customActivity: PlannerActivity = { kind: 'custom', name: 'Gardening' };
+    const thresholdCondition: AlertCondition = {
+      metric: 'rain-probability',
+      comparison: 'above',
+      value: 60,
+    };
+
+    // @ts-expect-error Built-in activities cannot carry custom names.
+    const invalidBuiltInActivity: PlannerActivity = { kind: 'running', name: 'Jogging' };
+    const invalidOccurrenceCondition: AlertCondition = {
+      metric: 'thunderstorm',
+      expected: true,
+      // @ts-expect-error Occurrence conditions cannot carry threshold fields.
+      comparison: 'above',
+      value: 60,
+    };
+
+    expect(customActivity.name).toBe('Gardening');
+    expect(thresholdCondition.value).toBe(60);
+    expect(invalidBuiltInActivity).toBeDefined();
+    expect(invalidOccurrenceCondition).toBeDefined();
   });
 
   it('keeps serializable planner and alert results type-safe', () => {
