@@ -34,7 +34,7 @@ const quotaWindowDurations: Record<OpenMeteoQuotaWindow, number> = {
   minute: 60_000,
   hour: 60 * 60_000,
   day: 24 * 60 * 60_000,
-  month: 30 * 24 * 60 * 60_000,
+  month: 0,
 };
 
 export interface OpenMeteoUsageSnapshot {
@@ -68,12 +68,16 @@ export class OpenMeteoUsageGuard {
     }
 
     this.requestTimestamps = nextTimestamps;
-    return this.snapshot(now);
+    return this.createSnapshot(requests);
   }
 
   snapshot(now = Date.now()): OpenMeteoUsageSnapshot {
     this.prune(now);
     const requests = this.countRequests(this.requestTimestamps, now);
+    return this.createSnapshot(requests);
+  }
+
+  private createSnapshot(requests: Record<OpenMeteoQuotaWindow, number>): OpenMeteoUsageSnapshot {
     const warnings = (Object.keys(this.limits) as OpenMeteoQuotaWindow[]).filter(
       (window) => requests[window] >= this.limits[window] * this.warningRatio,
     );
@@ -82,9 +86,8 @@ export class OpenMeteoUsageGuard {
   }
 
   private prune(now: number) {
-    const oldestAllowed = now - quotaWindowDurations.month;
-    this.requestTimestamps = this.requestTimestamps.filter(
-      (timestamp) => timestamp > oldestAllowed,
+    this.requestTimestamps = this.requestTimestamps.filter((timestamp) =>
+      this.isCurrentMonth(timestamp, now),
     );
   }
 
@@ -92,9 +95,22 @@ export class OpenMeteoUsageGuard {
     return Object.fromEntries(
       (Object.keys(this.limits) as OpenMeteoQuotaWindow[]).map((window) => [
         window,
-        timestamps.filter((timestamp) => timestamp > now - quotaWindowDurations[window]).length,
+        timestamps.filter((timestamp) =>
+          window === 'month'
+            ? this.isCurrentMonth(timestamp, now)
+            : timestamp > now - quotaWindowDurations[window],
+        ).length,
       ]),
     ) as Record<OpenMeteoQuotaWindow, number>;
+  }
+
+  private isCurrentMonth(timestamp: number, now: number) {
+    const requestDate = new Date(timestamp);
+    const currentDate = new Date(now);
+    return (
+      requestDate.getUTCFullYear() === currentDate.getUTCFullYear() &&
+      requestDate.getUTCMonth() === currentDate.getUTCMonth()
+    );
   }
 }
 

@@ -72,6 +72,13 @@ describe('weather providers', () => {
     expect(() => guard.reserve(3_000)).toThrow(new OpenMeteoQuotaError('minute'));
   });
 
+  it('resets the monthly quota at the UTC calendar boundary', () => {
+    const guard = new OpenMeteoUsageGuard({ minute: 10, hour: 10, day: 10, month: 1 });
+
+    guard.reserve(Date.UTC(2026, 0, 31, 23, 59));
+    expect(guard.reserve(Date.UTC(2026, 1, 1)).requests.month).toBe(1);
+  });
+
   it('publishes the required attribution metadata', () => {
     expect(openMeteoAttribution).toEqual({
       name: 'Open-Meteo',
