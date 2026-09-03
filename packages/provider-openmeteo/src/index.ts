@@ -8,6 +8,96 @@ import {
 
 const openMeteoBaseUrl = 'https://api.open-meteo.com/v1/forecast';
 
+export const openMeteoAttribution = {
+  name: 'Open-Meteo',
+  url: 'https://open-meteo.com/',
+  license: 'CC BY 4.0',
+} as const;
+
+export interface OpenMeteoQuotaLimits {
+  minute: number;
+  hour: number;
+  day: number;
+  month: number;
+}
+
+export const openMeteoQuotaLimits: OpenMeteoQuotaLimits = {
+  minute: 600,
+  hour: 5_000,
+  day: 10_000,
+  month: 300_000,
+};
+
+export type OpenMeteoQuotaWindow = keyof OpenMeteoQuotaLimits;
+
+const quotaWindowDurations: Record<OpenMeteoQuotaWindow, number> = {
+  minute: 60_000,
+  hour: 60 * 60_000,
+  day: 24 * 60 * 60_000,
+  month: 30 * 24 * 60 * 60_000,
+};
+
+export interface OpenMeteoUsageSnapshot {
+  requests: Record<OpenMeteoQuotaWindow, number>;
+  warnings: readonly OpenMeteoQuotaWindow[];
+}
+
+export class OpenMeteoQuotaError extends Error {
+  constructor(readonly window: OpenMeteoQuotaWindow) {
+    super(`Open-Meteo ${window} quota exceeded`);
+  }
+}
+
+export class OpenMeteoUsageGuard {
+  private requestTimestamps: number[] = [];
+
+  constructor(
+    private readonly limits: OpenMeteoQuotaLimits = openMeteoQuotaLimits,
+    private readonly warningRatio = 0.7,
+  ) {}
+
+  reserve(now = Date.now()): OpenMeteoUsageSnapshot {
+    this.prune(now);
+    const nextTimestamps = [...this.requestTimestamps, now];
+    const requests = this.countRequests(nextTimestamps, now);
+
+    for (const window of Object.keys(this.limits) as OpenMeteoQuotaWindow[]) {
+      if (requests[window] > this.limits[window]) {
+        throw new OpenMeteoQuotaError(window);
+      }
+    }
+
+    this.requestTimestamps = nextTimestamps;
+    return this.snapshot(now);
+  }
+
+  snapshot(now = Date.now()): OpenMeteoUsageSnapshot {
+    this.prune(now);
+    const requests = this.countRequests(this.requestTimestamps, now);
+    const warnings = (Object.keys(this.limits) as OpenMeteoQuotaWindow[]).filter(
+      (window) => requests[window] >= this.limits[window] * this.warningRatio,
+    );
+
+    return { requests, warnings };
+  }
+
+  private prune(now: number) {
+    const oldestAllowed = now - quotaWindowDurations.month;
+    this.requestTimestamps = this.requestTimestamps.filter(
+      (timestamp) => timestamp > oldestAllowed,
+    );
+  }
+
+  private countRequests(timestamps: readonly number[], now: number) {
+    return Object.fromEntries(
+      (Object.keys(this.limits) as OpenMeteoQuotaWindow[]).map((window) => [
+        window,
+        timestamps.filter((timestamp) => timestamp > now - quotaWindowDurations[window]).length,
+      ]),
+    ) as Record<OpenMeteoQuotaWindow, number>;
+  }
+}
+
 type OpenMeteoResponse = {
   timezone: string;
   current: {
@@ -48,9 +138,13 @@ function toIso(time: string): string {
 }
 
 export class OpenMeteoProvider implements WeatherProvider {
-  constructor(private readonly fetcher: typeof fetch = fetch) {}
+  constructor(
+    private readonly fetcher: typeof fetch = fetch,
+    private readonly usageGuard = new OpenMeteoUsageGuard(),
+  ) {}
 
   async getDashboard(input: LocationInput): Promise<Dashboard> {
+    this.usageGuard.reserve();
     const url = new URL(openMeteoBaseUrl);
     url.searchParams.set('latitude', String(input.latitude));
     url.searchParams.set('longitude', String(input.longitude));
