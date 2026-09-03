@@ -1,7 +1,7 @@
 task:
   id: DOM-002
   title: Planner and alert domain models
-  status: REVIEW
+  status: DONE
   objective: Define portable, serializable planner and alert models for future API, database, and UI work.
   depends_on: [DOM-001]
   external_policy_checks: [none]
