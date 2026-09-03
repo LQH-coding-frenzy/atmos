@@ -1,6 +1,7 @@
 'use client';
 
 import type { Session } from '@supabase/supabase-js';
+import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase-browser';
 
@@ -23,7 +24,7 @@ export function AuthControl() {
 
   if (!client) return <span className="auth-status">Sign-in unavailable</span>;
 
-  async function signIn(event: React.FormEvent<HTMLFormElement>) {
+  async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!client) return;
     setMessage('');
