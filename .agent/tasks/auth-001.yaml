@@ -1,0 +1,61 @@
+task:
+  id: AUTH-001
+  title: Supabase Auth frontend
+  status: REVIEW
+  objective: Provide a session-aware hosted Supabase Auth UI with email/password, Google OAuth, and sign-out controls.
+  depends_on: [WEB-001, SUPA-001]
+  external_policy_checks:
+    [Google OAuth must be enabled with the deployed callback URL before production use.]
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Browser session controls use only Supabase's publishable key and hosted Auth endpoint.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/auth-001.yaml,
+        apps/web,
+        docs/auth.md,
+        docs/evidence/auth-001/2026-09-03.md,
+      ]
+    exclude:
+      [RLS policies, service-role keys, provider dashboard mutation, user persistence changes]
+  inputs:
+    required_config: [NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY]
+    required_secrets: []
+  outputs:
+    files:
+      [
+        .agent/status.yaml,
+        .agent/tasks/auth-001.yaml,
+        apps/web,
+        docs/auth.md,
+        docs/evidence/auth-001/2026-09-03.md,
+      ]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: []
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: not deployed
+  validation:
+    commands: [corepack pnpm --filter @atmos/web build, corepack pnpm test:e2e]
+    expected:
+      [Dashboard builds with hosted auth configuration and the sign-in control remains accessible.]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [Supabase Auth provider events]
+    logs: [Supabase Auth audit logs]
+    traces: [not applicable]
+  evidence: [docs/evidence/auth-001/2026-09-03.md, pull request checks]
+  rollback:
+    strategy: Revert the auth UI commit; no persisted application data or provider configuration is changed.
+  human_approval:
+    required: false
+    reason: Public client configuration was supplied by the owner; no remote mutation is performed.

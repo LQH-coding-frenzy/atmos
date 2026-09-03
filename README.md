@@ -33,6 +33,8 @@ corepack pnpm build
 
 The dashboard uses deterministic mock data by default, so no provider credentials are required locally.
 
+Hosted authentication setup is documented in [docs/auth.md](docs/auth.md).
+
 ## Attribution
 
 Live weather data is supplied by [Open-Meteo](https://open-meteo.com/) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) and its [Free API terms](https://open-meteo.com/en/terms). The Free endpoint is limited to non-commercial use; it must not be used with ads or subscriptions. Map styling uses OpenFreeMap/OpenStreetMap-compatible public map data; see [design provenance](docs/design/provenance.md).
