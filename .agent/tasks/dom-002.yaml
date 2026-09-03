@@ -1,0 +1,69 @@
+task:
+  id: DOM-002
+  title: Planner and alert domain models
+  status: REVIEW
+  objective: Define portable, serializable planner and alert models for future API, database, and UI work.
+  depends_on: [DOM-001]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [supabase-edge-function, vercel-nextjs]
+    selected: supabase-edge-function
+    reason: Future planner scoring and alert evaluation are authenticated, DB-adjacent business logic.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/dom-002.yaml,
+        docs/evidence/dom-002/2026-09-03.md,
+        packages/domain/src/index.ts,
+        packages/domain/src/index.test.ts,
+      ]
+    exclude:
+      [
+        planner scoring,
+        alert persistence,
+        migrations,
+        RLS,
+        notification delivery,
+        remote provisioning,
+      ]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files:
+      [
+        .agent/status.yaml,
+        .agent/tasks/dom-002.yaml,
+        docs/evidence/dom-002/2026-09-03.md,
+        packages/domain/src/index.ts,
+        packages/domain/src/index.test.ts,
+      ]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: []
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: not deployed
+  validation:
+    commands:
+      - corepack pnpm exec vitest run packages/domain/src/index.test.ts
+      - corepack pnpm --filter @atmos/domain build
+    expected:
+      - Planner and alert model coverage remains deterministic and the domain package builds.
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [none for pure domain models]
+    logs: [none for pure domain models]
+    traces: [none for pure domain models]
+  evidence: [docs/evidence/dom-002/2026-09-03.md, pull request checks]
+  rollback:
+    strategy: Revert the domain model commit before dependent APIs or persistence are introduced.
+  human_approval:
+    required: false
+    reason: No remote mutation, secrets, paid resources, or persisted data change.
