@@ -1,7 +1,7 @@
 task:
   id: WX-004
   title: Open-Meteo usage, attribution, and quota guard
-  status: REVIEW
+  status: DONE
   objective: Make the Open-Meteo free-tier usage contract explicit, testable, and safe to enforce locally.
   depends_on: [WX-003, GOV-003]
   external_policy_checks:
