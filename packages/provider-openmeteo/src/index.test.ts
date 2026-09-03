@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { MockWeatherProvider, OpenMeteoProvider } from './index';
+import {
+  MockWeatherProvider,
+  OpenMeteoProvider,
+  OpenMeteoQuotaError,
+  OpenMeteoUsageGuard,
+  openMeteoAttribution,
+} from './index';
 
 describe('weather providers', () => {
   it('returns deterministic mock dashboard data', async () => {
@@ -56,5 +62,28 @@ describe('weather providers', () => {
 
     expect(dashboard.current.condition).toBe('partly-cloudy');
     expect(dashboard.daily[0]?.highC).toBe(23);
+  });
+
+  it('reports warnings and rejects requests beyond a quota', () => {
+    const guard = new OpenMeteoUsageGuard({ minute: 2, hour: 10, day: 10, month: 10 });
+
+    expect(guard.reserve(1_000).warnings).toEqual([]);
+    expect(guard.reserve(2_000).warnings).toEqual(['minute']);
+    expect(() => guard.reserve(3_000)).toThrow(new OpenMeteoQuotaError('minute'));
+  });
+
+  it('resets the monthly quota at the UTC calendar boundary', () => {
+    const guard = new OpenMeteoUsageGuard({ minute: 10, hour: 10, day: 10, month: 1 });
+
+    guard.reserve(Date.UTC(2026, 0, 31, 23, 59));
+    expect(guard.reserve(Date.UTC(2026, 1, 1)).requests.month).toBe(1);
+  });
+
+  it('publishes the required attribution metadata', () => {
+    expect(openMeteoAttribution).toEqual({
+      name: 'Open-Meteo',
+      url: 'https://open-meteo.com/',
+      license: 'CC BY 4.0',
+    });
   });
 });

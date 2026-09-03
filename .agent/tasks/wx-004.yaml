@@ -1,0 +1,73 @@
+task:
+  id: WX-004
+  title: Open-Meteo usage, attribution, and quota guard
+  status: DONE
+  objective: Make the Open-Meteo free-tier usage contract explicit, testable, and safe to enforce locally.
+  depends_on: [WX-003, GOV-003]
+  external_policy_checks:
+    - Open-Meteo terms and pricing rechecked on 2026-09-03; Free API remains non-commercial with 600/minute, 5,000/hour, 10,000/day, and 300,000/month limits.
+  runtime_placement:
+    allowed: [cloudflare-worker, vercel-nextjs]
+    selected: cloudflare-worker
+    reason: The live provider call path belongs in the future public Worker route; this shared package remains runtime-neutral.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/wx-004.yaml,
+        docs/cost/quota-budget.md,
+        docs/evidence/wx-004/2026-09-03.md,
+        packages/provider-openmeteo/src/index.ts,
+        packages/provider-openmeteo/src/index.test.ts,
+        README.md,
+      ]
+    exclude:
+      [
+        public Worker route,
+        cache implementation,
+        distributed counters,
+        remote provisioning,
+        paid provider plans,
+      ]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files:
+      [
+        .agent/status.yaml,
+        .agent/tasks/wx-004.yaml,
+        docs/cost/quota-budget.md,
+        docs/evidence/wx-004/2026-09-03.md,
+        packages/provider-openmeteo/src/index.ts,
+        packages/provider-openmeteo/src/index.test.ts,
+        README.md,
+      ]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: []
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: not deployed
+  validation:
+    commands:
+      - corepack pnpm exec vitest run packages/provider-openmeteo/src/index.test.ts
+      - corepack pnpm --filter @atmos/provider-openmeteo build
+    expected:
+      - The provider rejects a request at every configured hard quota and reports the 70 percent warning threshold.
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [local quota snapshot until EDGE-004 and CACHE-001 provide centralized counters]
+    logs: [none]
+    traces: [none]
+  evidence: [docs/evidence/wx-004/2026-09-03.md, pull request checks]
+  rollback:
+    strategy: Revert the quota guard before any public route is deployed; no persisted or remote state exists.
+  human_approval:
+    required: false
+    reason: No provider mutation, paid resource, secret, or production traffic is created.
