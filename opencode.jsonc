@@ -3,7 +3,6 @@
   "share": "disabled",
   "autoupdate": "notify",
   "snapshot": true,
-  "instructions": ["AGENTS.md"],
   "provider": {
     "openrouter": {
       "options": {
@@ -25,6 +24,18 @@
       "enabled": true,
       "timeout": 30000,
     },
+  },
+  "watcher": {
+    "ignore": [
+      "node_modules/**",
+      ".next/**",
+      "dist/**",
+      "coverage/**",
+      "playwright-report/**",
+      "test-results/**",
+      "supabase/.temp/**",
+      "weather-dashboard-rough-design-example/**",
+    ],
   },
   "permission": {
     "read": {
@@ -63,15 +74,13 @@
     "task": "allow",
   },
   "tool_output": {
-    "max_lines": 200,
-    "max_bytes": 16384,
+    "max_lines": 120,
+    "max_bytes": 8192,
   },
   "compaction": {
     "auto": true,
     "prune": true,
-    "tail_turns": 8,
-    "preserve_recent_tokens": 12000,
-    "reserved": 8000,
+    "tail_turns": 6,
   },
   "experimental": {
     "mcp_timeout": 30000,
