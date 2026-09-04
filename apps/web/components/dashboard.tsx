@@ -21,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { useState } from 'react';
+import { AuthControl } from './auth-control';
 
 type DashboardProps = {
   initialDashboard: DashboardData;
@@ -145,6 +146,7 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
                 F
               </button>
             </div>
+            <AuthControl />
           </div>
         </header>
 
