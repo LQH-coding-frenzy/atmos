@@ -1,0 +1,57 @@
+task:
+  id: FUNC-001
+  title: Hono Edge Function template
+  status: REVIEW
+  objective: Establish the versioned Supabase Edge Function foundation for authenticated business APIs.
+  depends_on: [SUPA-001, DOM-001]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [supabase-edge-function]
+    selected: supabase-edge-function
+    reason: Future authenticated, database-adjacent business routes belong close to Supabase data.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/func-001.yaml,
+        docs/evidence/func-001/2026-09-04.md,
+        supabase/functions/api-v1/index.ts,
+      ]
+    exclude: [database access, privileged credentials, API business routes, remote deployment]
+  inputs:
+    required_config: [CORS_ORIGIN, RELEASE_ID]
+    required_secrets: []
+  outputs:
+    files:
+      [
+        .agent/status.yaml,
+        .agent/tasks/func-001.yaml,
+        docs/evidence/func-001/2026-09-04.md,
+        supabase/functions/api-v1/index.ts,
+      ]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [api-v1 Supabase Edge Function]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: not deployed
+  validation:
+    commands: [corepack pnpm exec supabase functions serve api-v1 --no-verify-jwt]
+    expected:
+      [The local Edge Runtime serves api-v1 without loading credentials or database dependencies.]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [none until OBS-004]
+    logs: [request IDs only; never credentials or tokens]
+    traces: [none until OBS-004]
+  evidence: [docs/evidence/func-001/2026-09-04.md, pull request checks]
+  rollback:
+    strategy: Revert the function template before any versioned deployment is introduced.
+  human_approval:
+    required: false
+    reason: Local runtime validation only; no remote function deployment occurs.
