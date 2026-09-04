@@ -1,0 +1,52 @@
+task:
+  id: ALERT-001
+  title: Alert rule schema and RLS
+  status: REVIEW
+  objective: Add user-owned alert rules with bounded rule shape, explicit grants, and CRUD ownership RLS.
+  depends_on: [DB-001, RLS-001]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [postgres]
+    selected: postgres
+    reason: Alert rules are durable user state secured by PostgreSQL RLS.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/alert-001.yaml,
+        supabase/migrations/20260905010000_alert_rules.sql,
+        supabase/tests/003_alert_rules_rls.sql,
+        docs/evidence/alert-001/2026-09-05.md,
+      ]
+    exclude: [alert evaluator, schedule trigger, notification delivery, remote database deploy]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files:
+      [supabase/migrations/20260905010000_alert_rules.sql, supabase/tests/003_alert_rules_rls.sql]
+    terraform_resources: []
+    database_changes: [additive alert_rules table, RLS policies, retrieval index]
+    deployed_units: [postgres]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until alert-rule consumers are introduced
+  validation:
+    commands: [corepack pnpm exec supabase db reset, corepack pnpm test:db]
+    expected: [migration reconstructs schema, owner CRUD allows, cross-user CRUD denies]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable, rls_tests_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['none; ALERT-001 is schema-only']
+    logs: ['none; migration does not log rule details']
+    traces: ['none; no request path is introduced']
+  evidence: [docs/evidence/alert-001/2026-09-05.md, local database test output, pull request checks]
+  rollback:
+    strategy: No consumers exist; rollback is a reviewed future drop migration after the retention window.
+  human_approval:
+    required: false
+    reason: ''
