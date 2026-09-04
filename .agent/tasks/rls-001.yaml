@@ -1,0 +1,56 @@
+task:
+  id: RLS-001
+  title: RLS baseline behavioral coverage
+  status: REVIEW
+  objective: Verify that authenticated users can access only their own profiles and preferences.
+  depends_on: [DB-001, AUTH-001]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [supabase-postgres]
+    selected: supabase-postgres
+    reason: RLS policies execute in PostgreSQL for every authenticated data request.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/rls-001.yaml,
+        docs/evidence/rls-001/2026-09-03.md,
+        supabase/tests/001_rls_baseline.sql,
+      ]
+    exclude: [new tables, policy rewrites, privileged-key use, production database mutation]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files:
+      [
+        .agent/status.yaml,
+        .agent/tasks/rls-001.yaml,
+        docs/evidence/rls-001/2026-09-03.md,
+        supabase/tests/001_rls_baseline.sql,
+      ]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: []
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: not deployed
+  validation:
+    commands: [corepack pnpm exec supabase db reset, corepack pnpm test:db]
+    expected: [Authenticated users can access their own rows and cannot access another user's rows.]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [none for database policy tests]
+    logs: [Supabase Auth audit logs in hosted environments]
+    traces: [not applicable]
+  evidence: [docs/evidence/rls-001/2026-09-03.md, pull request checks]
+  rollback:
+    strategy: Revert the test-only RLS coverage commit.
+  human_approval:
+    required: false
+    reason: No schema, policy, secret, paid-resource, or production mutation occurs.
