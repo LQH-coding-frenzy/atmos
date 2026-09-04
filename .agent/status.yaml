@@ -1,5 +1,5 @@
 project: atmos
-updated: 2026-09-01
+updated: 2026-09-04
 tasks:
   GOV-001: DONE
   GOV-002: DONE
@@ -13,6 +13,7 @@ tasks:
   FUNC-001: DONE
   FUNC-002: REVIEW
   ROUTE-001: REVIEW
+  FEAT-PLAN-001: REVIEW
   WX-001: DONE
   WX-002: DONE
   WX-003: DONE

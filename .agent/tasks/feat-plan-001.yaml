@@ -1,0 +1,57 @@
+task:
+  id: FEAT-PLAN-001
+  title: Deterministic activity planner
+  status: REVIEW
+  objective: Return deterministic activity recommendations scored from documented mock dashboard conditions.
+  depends_on: [DOM-002, FUNC-001]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [supabase-edge-function]
+    selected: supabase-edge-function
+    reason: Planner scoring is business logic that belongs outside the Worker CPU budget.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/feat-plan-001.yaml,
+        supabase/functions/_shared/planner.ts,
+        supabase/functions/_shared/planner.test.ts,
+        supabase/functions/api-v1/index.ts,
+        vitest.config.ts,
+        docs/evidence/feat-plan-001/2026-09-04.md,
+      ]
+    exclude: [live provider calls, database access, remote Edge Function deploy]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files: [supabase/functions/_shared/planner.ts, supabase/functions/api-v1/index.ts]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [api-v1]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until the previous Edge Function release is retired
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run supabase/functions/_shared/planner.test.ts,
+        supabase functions serve api-v1 --no-verify-jwt,
+      ]
+    expected: [deterministic scores and ranked windows, sanitized invalid-request errors]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['none; mock data has no durable telemetry']
+    logs: ['none; planner input contains no user data']
+    traces: ['none; local mock-only route']
+  evidence: [docs/evidence/feat-plan-001/2026-09-04.md, pull request checks]
+  rollback:
+    strategy: Revert the route and shared scorer; no persisted state exists.
+  human_approval:
+    required: false
+    reason: ''
