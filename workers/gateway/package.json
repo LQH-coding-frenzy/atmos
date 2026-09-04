@@ -8,6 +8,8 @@
     "build": "wrangler deploy --dry-run"
   },
   "dependencies": {
+    "@atmos/contracts": "workspace:*",
+    "@atmos/provider-openmeteo": "workspace:*",
     "hono": "4.13.5"
   },
   "devDependencies": {

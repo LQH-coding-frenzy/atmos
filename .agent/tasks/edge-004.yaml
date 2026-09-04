@@ -1,0 +1,64 @@
+task:
+  id: EDGE-004
+  title: Public weather dashboard route
+  status: REVIEW
+  objective: Serve normalized Open-Meteo dashboard weather through a bounded public Worker route.
+  depends_on: [EDGE-002, WX-003, WX-004]
+  external_policy_checks:
+    [Open-Meteo non-commercial use, attribution and quota guard already established by WX-004]
+  runtime_placement:
+    allowed: [cloudflare-worker]
+    selected: cloudflare-worker
+    reason: This is a thin anonymous weather read with input validation and one provider call.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/edge-004.yaml,
+        workers/gateway/package.json,
+        workers/gateway/src/index.ts,
+        workers/gateway/src/index.test.ts,
+        pnpm-lock.yaml,
+        docs/evidence/edge-004/2026-09-04.md,
+      ]
+    exclude:
+      [cache implementation, remote Worker deploy, provider credential creation, database access]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files: [workers/gateway/src/index.ts, workers/gateway/src/index.test.ts]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [gateway]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until the previous Worker version is retired
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run workers/gateway/src/index.test.ts,
+        corepack pnpm --filter @atmos/gateway build,
+      ]
+    expected:
+      [
+        bounded input is normalized,
+        invalid input never calls the provider,
+        upstream failure is sanitized,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['none; PERF-001 owns measured Worker CPU evidence']
+    logs: ['none; no coordinates or provider errors are logged']
+    traces: ['x-request-id response header from existing gateway middleware']
+  evidence: [docs/evidence/edge-004/2026-09-04.md, pull request checks]
+  rollback:
+    strategy: Revert the route before the next Worker version promotion; the Supabase proxy remains unchanged.
+  human_approval:
+    required: false
+    reason: ''
