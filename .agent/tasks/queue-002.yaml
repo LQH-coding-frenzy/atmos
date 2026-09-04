@@ -1,0 +1,63 @@
+task:
+  id: QUEUE-002
+  title: Durable notification delivery schema
+  status: REVIEW
+  objective: Add durable, idempotent notification delivery state with owner-visible RLS.
+  depends_on: [DB-001]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [postgres]
+    selected: postgres
+    reason: Delivery status is durable state; queues are transport only.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/queue-002.yaml,
+        supabase/migrations/20260905020000_notification_deliveries.sql,
+        supabase/tests/004_notification_deliveries_rls.sql,
+        docs/evidence/queue-002/2026-09-05.md,
+      ]
+    exclude:
+      [
+        Cloudflare Queue provisioning,
+        producer,
+        consumer,
+        notification sending,
+        remote database deploy,
+      ]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files:
+      [
+        supabase/migrations/20260905020000_notification_deliveries.sql,
+        supabase/tests/004_notification_deliveries_rls.sql,
+      ]
+    terraform_resources: []
+    database_changes: [additive notification_deliveries table, RLS policy, retrieval index]
+    deployed_units: [postgres]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until queue consumers are introduced
+  validation:
+    commands: [corepack pnpm exec supabase db reset, corepack pnpm test:db]
+    expected:
+      [migration reconstructs schema, delivery state is owner-visible and immutable to clients]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable, rls_tests_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['none; QUEUE-002 is schema-only']
+    logs: ['none; migration does not log delivery state']
+    traces: ['none; no request path is introduced']
+  evidence: [docs/evidence/queue-002/2026-09-05.md, local database test output, pull request checks]
+  rollback:
+    strategy: No consumers exist; rollback is a reviewed future drop migration after the retention window.
+  human_approval:
+    required: false
+    reason: ''
