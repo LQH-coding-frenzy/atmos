@@ -113,6 +113,12 @@ importers:
 
   workers/gateway:
     dependencies:
+      '@atmos/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@atmos/provider-openmeteo':
+        specifier: workspace:*
+        version: link:../../packages/provider-openmeteo
       hono:
         specifier: 4.13.5
         version: 4.13.5
