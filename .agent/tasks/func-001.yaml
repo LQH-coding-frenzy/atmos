@@ -1,7 +1,7 @@
 task:
   id: FUNC-001
   title: Hono Edge Function template
-  status: REVIEW
+  status: DONE
   objective: Establish the versioned Supabase Edge Function foundation for authenticated business APIs.
   depends_on: [SUPA-001, DOM-001]
   external_policy_checks: [none]
