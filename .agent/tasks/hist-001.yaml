@@ -1,0 +1,55 @@
+task:
+  id: HIST-001
+  title: Weather snapshot schema
+  status: REVIEW
+  objective: Add immutable user-owned weather snapshots with ownership RLS and retrieval indexing.
+  depends_on: [DB-001]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [postgres]
+    selected: postgres
+    reason: Snapshots are durable relational history with authorization enforced by RLS.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/hist-001.yaml,
+        supabase/migrations/20260905000000_weather_snapshots.sql,
+        supabase/tests/002_weather_snapshots_rls.sql,
+        docs/evidence/hist-001/2026-09-05.md,
+      ]
+    exclude: [historical provider backfill, history API, aggregate tables, remote database deploy]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files:
+      [
+        supabase/migrations/20260905000000_weather_snapshots.sql,
+        supabase/tests/002_weather_snapshots_rls.sql,
+      ]
+    terraform_resources: []
+    database_changes: [additive weather_snapshots table, RLS policies, retrieval index]
+    deployed_units: [postgres]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until historical consumers are introduced
+  validation:
+    commands: [corepack pnpm exec supabase db reset, corepack pnpm test:db]
+    expected: [migration reconstructs the schema, owner allow and cross-user deny assertions pass]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable, rls_tests_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['none; HIST-001 is schema-only']
+    logs: ['none; migration does not log snapshot payloads']
+    traces: ['none; no request path is introduced']
+  evidence: [docs/evidence/hist-001/2026-09-05.md, local database test output, pull request checks]
+  rollback:
+    strategy: No consumers exist; rollback is a reviewed future drop migration after the retention window.
+  human_approval:
+    required: false
+    reason: ''
