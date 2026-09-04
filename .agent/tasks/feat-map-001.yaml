@@ -1,0 +1,60 @@
+task:
+  id: FEAT-MAP-001
+  title: Interactive local dashboard map
+  status: REVIEW
+  objective: Render an interactive MapLibre surface centered on the documented mock dashboard location.
+  depends_on: [WEB-002]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Map interaction is browser-only and the initial inline style uses no tile provider or credentials.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/feat-map-001.yaml,
+        apps/web/app/globals.css,
+        apps/web/components/dashboard.tsx,
+        apps/web/components/dashboard-map.tsx,
+        apps/web/lib/mock-map.ts,
+        apps/web/lib/mock-map.test.ts,
+        apps/web/package.json,
+        pnpm-lock.yaml,
+        docs/evidence/feat-map-001/2026-09-04.md,
+      ]
+    exclude: [external map tiles, live weather overlays, place search, remote Vercel deployment]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files: [apps/web/components/dashboard-map.tsx, apps/web/lib/mock-map.ts]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until the previous Vercel deployment is retired
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run apps/web/lib/mock-map.test.ts,
+        corepack pnpm --filter @atmos/web build,
+      ]
+    expected: [map marker preserves dashboard coordinates, production build succeeds]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['none; the local map loads no external tile or telemetry service']
+    logs: ['none; no user location is logged']
+    traces: ['none; client-only map interaction']
+  evidence: [docs/evidence/feat-map-001/2026-09-04.md, pull request checks]
+  rollback:
+    strategy: Revert the MapLibre component and restore the previous static map preview; no persisted state exists.
+  human_approval:
+    required: false
+    reason: ''

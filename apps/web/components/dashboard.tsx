@@ -23,6 +23,7 @@ import {
 import { useState } from 'react';
 import { AuthControl } from './auth-control';
 import { AirQualityCard } from './air-quality-card';
+import { DashboardMap } from './dashboard-map';
 import { ForecastTrendChart } from './forecast-trend-chart';
 import type { ForecastTrendMetric } from '../lib/forecast-trend';
 
@@ -58,7 +59,6 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
   const [activeMetric, setActiveMetric] = useState<ForecastTrendMetric>('temperature');
   const dashboard = initialDashboard;
   const currentTemperature = temperature(dashboard.current.temperatureC, units);
-  const weatherDescription = dashboard.current.condition.replace('-', ' ');
 
   return (
     <main className="atmos-page">
@@ -173,19 +173,7 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
             </div>
           </article>
 
-          <article className="map-card" id="map" aria-label="OpenStreetMap-compatible map preview">
-            <div className="map-grid" />
-            <div className="map-contour contour-one" />
-            <div className="map-contour contour-two" />
-            <div className="map-label">
-              <span className="map-pin" />
-              {dashboard.location.name}, {dashboard.location.country}
-              <small>
-                {currentTemperature} deg, {weatherDescription}
-              </small>
-            </div>
-            <p className="map-caption">OpenStreetMap-compatible map layer</p>
-          </article>
+          <DashboardMap location={dashboard.location} current={dashboard.current} />
 
           <article className="overview-card panel">
             <div className="card-heading">
