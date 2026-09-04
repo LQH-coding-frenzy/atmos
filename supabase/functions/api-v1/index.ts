@@ -30,7 +30,7 @@ app.use(
 app.use('*', secureHeaders());
 
 app.get('/health', (context) => context.json({ status: 'ok' }));
-app.get('/health/dependencies', (context) => context.json({ database: 'degraded' }, 503));
+app.get('/health/dependencies', (context) => context.json({ database: 'not_configured' }, 501));
 app.get('/version', (context) => context.json({ release: context.env.RELEASE_ID ?? 'local' }));
 
 app.notFound((context) =>
@@ -39,7 +39,10 @@ app.notFound((context) =>
       error: {
         code: 'NOT_FOUND',
         message: 'Route not found.',
-        request_id: context.res.headers.get('x-request-id'),
+        request_id:
+          context.res.headers.get('x-request-id') ??
+          context.req.header('x-request-id') ??
+          crypto.randomUUID(),
       },
     },
     404,

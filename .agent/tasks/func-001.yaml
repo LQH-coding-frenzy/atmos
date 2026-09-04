@@ -31,7 +31,7 @@ task:
       ]
     terraform_resources: []
     database_changes: [none]
-    deployed_units: [api-v1 Supabase Edge Function]
+    deployed_units: []
   compatibility:
     requires_expand_contract: false
     stable_version_compatible: true
