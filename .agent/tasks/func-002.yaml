@@ -1,0 +1,57 @@
+task:
+  id: FUNC-002
+  title: Authenticated profile API
+  status: REVIEW
+  objective: Return the authenticated caller's profile and preferences through the Supabase Edge Function.
+  depends_on: [FUNC-001, RLS-001]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [supabase-edge-function]
+    selected: supabase-edge-function
+    reason: The endpoint verifies Auth and queries RLS-protected user data.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/func-002.yaml,
+        docs/evidence/func-002/2026-09-04.md,
+        supabase/functions/api-v1/index.ts,
+      ]
+    exclude: [new schema, service-role use, remote deployment]
+  inputs:
+    required_config: [SUPABASE_URL, SUPABASE_ANON_KEY]
+    required_secrets: []
+  outputs:
+    files:
+      [
+        .agent/status.yaml,
+        .agent/tasks/func-002.yaml,
+        docs/evidence/func-002/2026-09-04.md,
+        supabase/functions/api-v1/index.ts,
+      ]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: []
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: not deployed
+  validation:
+    commands: [corepack pnpm exec supabase functions serve api-v1 --no-verify-jwt]
+    expected:
+      [The local Edge Runtime loads the authenticated endpoint without privileged credentials.]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [none until OBS-004]
+    logs: [request IDs only]
+    traces: [none until OBS-004]
+  evidence: [docs/evidence/func-002/2026-09-04.md, pull request checks]
+  rollback:
+    strategy: Revert the endpoint before a remote versioned deployment.
+  human_approval:
+    required: false
+    reason: Local runtime validation only; no remote mutation occurs.
