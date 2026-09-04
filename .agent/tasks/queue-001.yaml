@@ -1,0 +1,51 @@
+task:
+  id: QUEUE-001
+  title: Notification queue producer binding
+  status: REVIEW
+  objective: Declare the stable notification queue producer binding without deploying or consuming messages.
+  depends_on: [EDGE-001]
+  external_policy_checks:
+    [Cloudflare Queue is declared only; no remote resource is created in this task]
+  runtime_placement:
+    allowed: [cloudflare-worker]
+    selected: cloudflare-worker
+    reason: Queue binding belongs to the Worker producer runtime.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/queue-001.yaml,
+        workers/gateway/wrangler.jsonc,
+        docs/evidence/queue-001/2026-09-05.md,
+      ]
+    exclude: [remote Worker deploy, queue consumer, queue publish path, retry/DLQ configuration]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files: [workers/gateway/wrangler.jsonc]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [gateway]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until the next Worker version is retired
+  validation:
+    commands: [corepack pnpm --filter @atmos/gateway build]
+    expected: [Worker bundle accepts the producer-only Queue binding]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['none; no producer path exists yet']
+    logs: ['none; no queue payload exists yet']
+    traces: ['none; no queue message is sent yet']
+  evidence: [docs/evidence/queue-001/2026-09-05.md, pull request checks]
+  rollback:
+    strategy: Revert the binding before the next Worker version promotion.
+  human_approval:
+    required: false
+    reason: ''
