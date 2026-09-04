@@ -7,4 +7,12 @@
   "observability": {
     "enabled": true,
   },
+  "queues": {
+    "producers": [
+      {
+        "binding": "NOTIFICATION_QUEUE",
+        "queue": "atmos-notifications",
+      },
+    ],
+  },
 }
