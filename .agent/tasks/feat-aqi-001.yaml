@@ -1,0 +1,58 @@
+task:
+  id: FEAT-AQI-001
+  title: Dashboard air-quality panel
+  status: REVIEW
+  objective: Render US and European AQI with a pollutant breakdown from a documented deterministic mock snapshot.
+  depends_on: [WX-003, WEB-002]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: This is client-rendered dashboard presentation with no credentials or provider call.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/feat-aqi-001.yaml,
+        apps/web/components/air-quality-card.tsx,
+        apps/web/components/dashboard.tsx,
+        apps/web/lib/air-quality.ts,
+        apps/web/lib/air-quality.test.ts,
+        apps/web/app/globals.css,
+        docs/evidence/feat-aqi-001/2026-09-04.md,
+      ]
+    exclude: [live provider calls, new API routes, database access, remote Vercel deployment]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files: [apps/web/components/air-quality-card.tsx, apps/web/lib/air-quality.ts]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until the previous Vercel deployment is retired
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run apps/web/lib/air-quality.test.ts,
+        corepack pnpm --filter @atmos/web build,
+      ]
+    expected: [AQI boundaries classify deterministically, production build succeeds]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['none; a static mock snapshot produces no runtime telemetry']
+    logs: ['none; no user or provider data is logged']
+    traces: ['none; client-only presentation']
+  evidence: [docs/evidence/feat-aqi-001/2026-09-04.md, pull request checks]
+  rollback:
+    strategy: Revert the AQI card and fixture; no persisted state exists.
+  human_approval:
+    required: false
+    reason: ''
