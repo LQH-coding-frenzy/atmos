@@ -1,7 +1,7 @@
 task:
   id: AUTH-001
   title: Supabase Auth frontend
-  status: REVIEW
+  status: DONE
   objective: Provide a session-aware hosted Supabase Auth UI with email/password, Google OAuth, and sign-out controls.
   depends_on: [WEB-001, SUPA-001]
   external_policy_checks:
