@@ -1,11 +1,28 @@
 begin;
-select plan(16);
+select plan(20);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, raw_app_meta_data, raw_user_meta_data, created_at, updated_at
 ) values
   ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'user-a@example.test', '', '{}', '{}', now(), now()),
   ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000002', 'authenticated', 'authenticated', 'user-b@example.test', '', '{}', '{}', now(), now());
+
+select ok(
+  exists (select 1 from public.profiles where id = '00000000-0000-0000-0000-000000000001'),
+  'user A profile fixture exists'
+);
+select ok(
+  exists (select 1 from public.profiles where id = '00000000-0000-0000-0000-000000000002'),
+  'user B profile fixture exists'
+);
+select ok(
+  exists (select 1 from public.user_preferences where user_id = '00000000-0000-0000-0000-000000000001'),
+  'user A preferences fixture exists'
+);
+select ok(
+  exists (select 1 from public.user_preferences where user_id = '00000000-0000-0000-0000-000000000002'),
+  'user B preferences fixture exists'
+);
 
 select has_table('public', 'profiles', 'profiles table exists');
 select has_table('public', 'user_preferences', 'user preferences table exists');
