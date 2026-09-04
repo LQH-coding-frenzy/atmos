@@ -1,0 +1,50 @@
+task:
+  id: RLS-002
+  title: pgTAP RLS validation
+  status: DONE
+  objective: Verify owner-scoped RLS allow and cross-user deny behavior from a clean local schema reset.
+  depends_on: [RLS-001]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [postgres]
+    selected: postgres
+    reason: RLS behavior must be verified in the local PostgreSQL/Supabase runtime.
+  scope:
+    include: [.agent/status.yaml, .agent/tasks/rls-002.yaml, docs/evidence/rls-002/2026-09-05.md]
+    exclude: [schema change, policy change, remote database deploy]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files:
+      [
+        supabase/tests/001_rls_baseline.sql,
+        supabase/tests/002_weather_snapshots_rls.sql,
+        supabase/tests/003_alert_rules_rls.sql,
+        supabase/tests/004_notification_deliveries_rls.sql,
+      ]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [none]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: not_applicable
+  validation:
+    commands: [corepack pnpm exec supabase db reset, corepack pnpm test:db]
+    expected: [all owner-allow and cross-user-deny assertions pass]
+  security_checks: [rls_tests_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['none; validation-only task']
+    logs: ['none; test fixtures use synthetic identities']
+    traces: ['none; no request path is introduced']
+  evidence: [docs/evidence/rls-002/2026-09-05.md, local database test output, pull request checks]
+  rollback:
+    strategy: No runtime change exists; restore task status only if validation evidence is superseded.
+  human_approval:
+    required: false
+    reason: ''
