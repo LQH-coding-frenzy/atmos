@@ -39,7 +39,7 @@ app.use(
       const allowedOrigin = context.env.CORS_ORIGIN ?? 'http://127.0.0.1:3000';
       return origin === allowedOrigin ? origin : allowedOrigin;
     },
-    allowHeaders: ['Content-Type', 'X-Request-Id'],
+    allowHeaders: ['Authorization', 'Content-Type', 'X-Request-Id'],
     allowMethods: ['GET', 'OPTIONS'],
     maxAge: 86400,
   }),
@@ -56,13 +56,15 @@ app.get('/api/v1/me', async (context) => {
     return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
   }
 
-  const client = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-    {
-      global: { headers: { Authorization: authorization } },
-    },
-  );
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return error(context, 'PROFILE_UNAVAILABLE', 'Profile is unavailable.', 503);
+  }
+
+  const client = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authorization } },
+  });
   const { data: userData, error: userError } = await client.auth.getUser();
   if (userError || !userData.user) {
     return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
