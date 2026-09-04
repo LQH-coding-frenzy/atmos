@@ -2,6 +2,12 @@ import { Hono, type Context } from 'npm:hono@4.13.5';
 import { cors } from 'npm:hono@4.13.5/cors';
 import { secureHeaders } from 'npm:hono@4.13.5/secure-headers';
 import { createClient } from 'npm:@supabase/supabase-js@2.114.0';
+import {
+  recommendActivity,
+  type PlannerActivity,
+  type PlannerConditions,
+  type PlannerWindow,
+} from '../_shared/planner.ts';
 
 type Bindings = {
   CORS_ORIGIN?: string;
@@ -10,7 +16,7 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-function error(context: Context, code: string, message: string, status: 401 | 503) {
+function error(context: Context, code: string, message: string, status: 400 | 401 | 503) {
   return context.json(
     {
       error: {
@@ -40,7 +46,7 @@ app.use(
       return origin === allowedOrigin ? origin : allowedOrigin;
     },
     allowHeaders: ['Authorization', 'Content-Type', 'X-Request-Id'],
-    allowMethods: ['GET', 'OPTIONS'],
+    allowMethods: ['GET', 'OPTIONS', 'POST'],
     maxAge: 86400,
   }),
 );
@@ -80,6 +86,98 @@ app.get('/api/v1/me', async (context) => {
   }
 
   return context.json({ profile, preferences });
+});
+
+const plannerActivities = new Set<PlannerActivity>([
+  'running',
+  'cycling',
+  'hiking',
+  'football',
+  'photography',
+  'beach',
+  'commuting',
+  'sightseeing',
+  'picnic',
+  'custom',
+]);
+
+type PlannerRequestActivity =
+  { kind: Exclude<PlannerActivity, 'custom'>; name?: never } | { kind: 'custom'; name: string };
+
+function parsePlannerActivity(value: unknown): PlannerRequestActivity | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+
+  const { kind, name } = value as Record<string, unknown>;
+  if (typeof kind !== 'string' || !plannerActivities.has(kind as PlannerActivity)) return undefined;
+  if (kind === 'custom') {
+    if (typeof name !== 'string' || name.trim().length === 0 || name.length > 100) return undefined;
+    return { kind, name: name.trim() };
+  }
+
+  if (name !== undefined) return undefined;
+  return { kind: kind as Exclude<PlannerActivity, 'custom'> };
+}
+
+// Temporary adapter for FEAT-PLAN-001. Values trace to MockWeatherProvider's Berlin
+// dashboard fixture; UV and AQI are explicit deterministic stand-ins until live data arrives.
+const mockDashboardPlannerConditions: PlannerConditions = {
+  temperatureC: 20,
+  apparentTemperatureC: 19,
+  humidityPercent: 64,
+  precipitationProbability: 5,
+  condition: 'partly-cloudy',
+  windSpeedKph: 13,
+  uvIndex: 3,
+  aqi: 42,
+};
+
+const mockDashboardPlannerWindows: PlannerWindow[] = [
+  {
+    ...mockDashboardPlannerConditions,
+    startsAt: '2026-09-01T10:00:00.000Z',
+    endsAt: '2026-09-01T11:00:00.000Z',
+    temperatureC: 19,
+  },
+  {
+    ...mockDashboardPlannerConditions,
+    startsAt: '2026-09-01T12:00:00.000Z',
+    endsAt: '2026-09-01T13:00:00.000Z',
+    temperatureC: 23,
+    apparentTemperatureC: 23,
+  },
+  {
+    ...mockDashboardPlannerConditions,
+    startsAt: '2026-09-01T15:00:00.000Z',
+    endsAt: '2026-09-01T16:00:00.000Z',
+    temperatureC: 24,
+    apparentTemperatureC: 23,
+    precipitationProbability: 40,
+    condition: 'rain',
+  },
+];
+
+app.post('/api/v1/planner/recommend', async (context) => {
+  let body: { activity?: unknown };
+  try {
+    body = await context.req.json();
+  } catch {
+    return error(context, 'INVALID_REQUEST', 'A JSON request body is required.', 400);
+  }
+
+  const activity = parsePlannerActivity(body.activity);
+  if (!activity) {
+    return error(context, 'INVALID_ACTIVITY', 'A supported activity is required.', 400);
+  }
+
+  return context.json({
+    activity,
+    source: 'mock-dashboard',
+    ...recommendActivity(
+      activity.kind,
+      mockDashboardPlannerConditions,
+      mockDashboardPlannerWindows,
+    ),
+  });
 });
 
 app.notFound((context) =>
