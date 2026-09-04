@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { AuthControl } from './auth-control';
+import { AirQualityCard } from './air-quality-card';
 import { ForecastTrendChart } from './forecast-trend-chart';
 import type { ForecastTrendMetric } from '../lib/forecast-trend';
 
@@ -240,6 +241,8 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
               ))}
             </div>
           </article>
+
+          <AirQualityCard />
 
           <section className="saved-locations" id="saved" aria-label="Saved locations">
             <button className="add-location">
