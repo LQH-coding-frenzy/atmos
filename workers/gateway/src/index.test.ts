@@ -24,7 +24,7 @@ describe('gateway', () => {
   });
 
   it('proxies API requests to the configured versioned function', async () => {
-    const fetcher = vi.fn(async (request: Request) => new Response('ok'));
+    const fetcher = vi.fn(async () => new Response('ok'));
     vi.stubGlobal('fetch', fetcher);
 
     const response = await app.request('http://localhost/api/v1/me?detail=full', undefined, {
