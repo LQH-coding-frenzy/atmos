@@ -22,24 +22,16 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { AuthControl } from './auth-control';
+import { ForecastTrendChart } from './forecast-trend-chart';
+import type { ForecastTrendMetric } from '../lib/forecast-trend';
 
 type DashboardProps = {
   initialDashboard: DashboardData;
 };
 
-const chartLabels = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
+const chartMetrics: Array<{ label: string; value: ForecastTrendMetric }> = [
+  { label: 'Temperature', value: 'temperature' },
+  { label: 'Rain chance', value: 'rain-chance' },
 ];
 
 function WeatherIcon({ condition, size = 22 }: { condition: WeatherCondition; size?: number }) {
@@ -62,7 +54,7 @@ function formatHour(value: string): string {
 export function Dashboard({ initialDashboard }: DashboardProps) {
   const [units, setUnits] = useState<UnitSystem>('metric');
   const [navigationOpen, setNavigationOpen] = useState(false);
-  const [activeMetric, setActiveMetric] = useState('Humidity');
+  const [activeMetric, setActiveMetric] = useState<ForecastTrendMetric>('temperature');
   const dashboard = initialDashboard;
   const currentTemperature = temperature(dashboard.current.temperatureC, units);
   const weatherDescription = dashboard.current.condition.replace('-', ' ');
@@ -201,51 +193,21 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
                 <h2>Overview</h2>
               </div>
               <div className="metric-tabs" role="tablist" aria-label="Chart metric">
-                {['Humidity', 'UV index', 'Rainfall', 'Pressure'].map((metric) => (
+                {chartMetrics.map((metric) => (
                   <button
-                    key={metric}
-                    className={activeMetric === metric ? 'active' : ''}
-                    onClick={() => setActiveMetric(metric)}
+                    key={metric.value}
+                    className={activeMetric === metric.value ? 'active' : ''}
+                    onClick={() => setActiveMetric(metric.value)}
                     role="tab"
-                    aria-selected={activeMetric === metric}
+                    aria-selected={activeMetric === metric.value}
                   >
-                    {metric}
+                    {metric.label}
                   </button>
                 ))}
               </div>
             </div>
-            <div className="chart-wrap" aria-label={`${activeMetric} chart for the previous year`}>
-              <svg viewBox="0 0 640 240" role="img" aria-labelledby="chart-title chart-description">
-                <title id="chart-title">{`${activeMetric} trend`}</title>
-                <desc id="chart-description">A line chart with monthly trend data.</desc>
-                {[30, 75, 120, 165].map((y) => (
-                  <line key={y} x1="42" x2="620" y1={y} y2={y} className="chart-grid" />
-                ))}
-                <path
-                  className="chart-area"
-                  d="M42 112 C80 130,95 150,130 155 S180 142,210 124 S270 78,310 71 S350 93,385 104 S430 107,460 98 S520 55,558 51 S600 67,620 78 L620 205 L42 205 Z"
-                />
-                <path
-                  className="chart-line"
-                  d="M42 112 C80 130,95 150,130 155 S180 142,210 124 S270 78,310 71 S350 93,385 104 S430 107,460 98 S520 55,558 51 S600 67,620 78"
-                />
-                <circle className="chart-dot" cx="310" cy="71" r="7" />
-                {chartLabels.map((label, index) => (
-                  <text
-                    key={label}
-                    x={42 + index * 52.5}
-                    y="229"
-                    className="chart-label"
-                    textAnchor="middle"
-                  >
-                    {label}
-                  </text>
-                ))}
-              </svg>
-              <div className="chart-tooltip">
-                <span />
-                Average 64%
-              </div>
+            <div className="chart-wrap">
+              <ForecastTrendChart daily={dashboard.daily} metric={activeMetric} />
             </div>
           </article>
 

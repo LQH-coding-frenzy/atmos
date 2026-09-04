@@ -1,0 +1,65 @@
+task:
+  id: FEAT-CHART-001
+  title: Dashboard forecast charts
+  status: REVIEW
+  objective: Render responsive dashboard forecast charts from normalized mock dashboard data.
+  depends_on: [WEB-002]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Interactive charts are browser UI and use no server-side provider credentials.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/feat-chart-001.yaml,
+        apps/web/components/dashboard.tsx,
+        apps/web/components/forecast-trend-chart.tsx,
+        apps/web/lib/forecast-trend.ts,
+        apps/web/lib/forecast-trend.test.ts,
+        apps/web/app/globals.css,
+        apps/web/package.json,
+        pnpm-lock.yaml,
+        vitest.config.ts,
+        docs/evidence/feat-chart-001/2026-09-04.md,
+      ]
+    exclude: [live provider calls, new API routes, remote Vercel deployment]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files: [apps/web/components/forecast-trend-chart.tsx, apps/web/lib/forecast-trend.ts]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until the previous Vercel deployment is retired
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run apps/web/lib/forecast-trend.test.ts,
+        corepack pnpm --filter @atmos/web build,
+      ]
+    expected:
+      [
+        daily mock forecasts map to chart data without fabricated rainfall values,
+        production build succeeds,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['none; chart uses existing client-provided dashboard data']
+    logs: ['none; chart does not log user data']
+    traces: ['none; client-only visualization']
+  evidence: [docs/evidence/feat-chart-001/2026-09-04.md, pull request checks]
+  rollback:
+    strategy: Revert the chart component and restore the prior dashboard visualization; no persisted state exists.
+  human_approval:
+    required: false
+    reason: ''
