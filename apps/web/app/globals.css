@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'maplibre-gl/dist/maplibre-gl.css';
 
 :root {
   --ink: #eef4f6;
@@ -348,6 +349,20 @@ button {
   margin: 0;
   color: #97a5ab;
   font-size: 10px;
+}
+.local-map-canvas {
+  width: 100%;
+  height: 270px;
+}
+.map-card .maplibregl-ctrl-group {
+  border: 1px solid var(--line);
+  background: #2a2d35;
+}
+.map-card .maplibregl-ctrl-group button + button {
+  border-top-color: var(--line);
+}
+.map-card .maplibregl-ctrl-icon {
+  filter: invert(1);
 }
 .overview-card,
 .forecast-card {
