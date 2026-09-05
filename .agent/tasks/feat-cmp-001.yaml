@@ -1,0 +1,58 @@
+task:
+  id: FEAT-CMP-001
+  title: Dashboard weather comparison
+  status: REVIEW
+  objective: Compare normalized dashboard current weather with a documented deterministic location fixture.
+  depends_on: [FEAT-PLAN-001]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Comparison is client-rendered presentation with no provider request.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/feat-cmp-001.yaml,
+        apps/web/app/globals.css,
+        apps/web/components/dashboard.tsx,
+        apps/web/components/weather-comparison-card.tsx,
+        apps/web/lib/weather-comparison.ts,
+        apps/web/lib/weather-comparison.test.ts,
+        docs/evidence/feat-cmp-001/2026-09-05.md,
+      ]
+    exclude: [saved locations, live comparison requests, remote Vercel deployment]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files: [apps/web/components/weather-comparison-card.tsx, apps/web/lib/weather-comparison.ts]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until the previous Vercel deployment is retired
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run apps/web/lib/weather-comparison.test.ts,
+        corepack pnpm --filter @atmos/web build,
+      ]
+    expected: [deterministic deltas are correct, production build succeeds]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['none; fixture-only comparison']
+    logs: ['none; no user data is logged']
+    traces: ['none; client-only presentation']
+  evidence: [docs/evidence/feat-cmp-001/2026-09-05.md, pull request checks]
+  rollback:
+    strategy: Revert the comparison card and fixture; no persisted state exists.
+  human_approval:
+    required: false
+    reason: ''

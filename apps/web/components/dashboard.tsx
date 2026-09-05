@@ -24,6 +24,7 @@ import { useState } from 'react';
 import { AuthControl } from './auth-control';
 import { AirQualityCard } from './air-quality-card';
 import { DashboardMap } from './dashboard-map';
+import { WeatherComparisonCard } from './weather-comparison-card';
 import { ForecastTrendChart } from './forecast-trend-chart';
 import type { ForecastTrendMetric } from '../lib/forecast-trend';
 
@@ -231,6 +232,8 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
           </article>
 
           <AirQualityCard />
+
+          <WeatherComparisonCard dashboard={dashboard} />
 
           <section className="saved-locations" id="saved" aria-label="Saved locations">
             <button className="add-location">

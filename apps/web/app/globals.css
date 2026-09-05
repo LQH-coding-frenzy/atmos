@@ -499,6 +499,29 @@ button {
 .aqi-source {
   margin: 0;
 }
+.comparison-card {
+  padding: 25px;
+}
+.comparison-card h2 {
+  margin: 5px 0 0;
+  font-size: 20px;
+}
+.comparison-temperature {
+  margin: 22px 0 5px;
+  color: #cde8ed;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+}
+.comparison-card .muted {
+  margin: 0;
+  font-size: 13px;
+}
+.comparison-source {
+  margin: 18px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+}
 .aqi-category {
   font-size: 17px;
   font-weight: 700;
