@@ -1,0 +1,59 @@
+task:
+  id: LOAD-001
+  title: Public weather k6 baseline
+  status: REVIEW
+  objective: Establish a bounded cached public-weather staging baseline with k6.
+  depends_on: [EDGE-004]
+  external_policy_checks: [owner-approved isolated staging Worker load test]
+  runtime_placement:
+    allowed: [cloudflare-worker]
+    selected: cloudflare-worker
+    reason: The baseline targets the deployed public API path.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/load-001.yaml,
+        load/k6/public-weather.js,
+        docs/evidence/load-001/2026-09-05.md,
+      ]
+    exclude:
+      [
+        production traffic,
+        authenticated routes,
+        provider stress testing,
+        remote configuration changes,
+      ]
+  inputs:
+    required_config: [BASE_URL]
+    required_secrets: []
+  outputs:
+    files: [load/k6/public-weather.js]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [none]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: not_applicable
+  validation:
+    commands:
+      [
+        docker run --rm -e BASE_URL -v $PWD/load/k6:/scripts grafana/k6 run /scripts/public-weather.js,
+      ]
+    expected: [all checks pass, p95 HTTP duration below 1 second]
+  security_checks: [none; unauthenticated public staging route only]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [k6 checks, HTTP p95, cached response rate]
+    logs: [none; load script contains no user data]
+    traces: [x-request-id response header]
+  evidence: [docs/evidence/load-001/2026-09-05.md, k6 result, pull request checks]
+  rollback:
+    strategy: Stop the load container; no deployed state changes.
+  human_approval:
+    required: true
+    reason: Owner approved isolated staging Worker load test in this session.
