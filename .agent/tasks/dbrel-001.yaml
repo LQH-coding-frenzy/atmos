@@ -1,0 +1,51 @@
+task:
+  id: DBREL-001
+  title: Expand and contract migration policy
+  status: REVIEW
+  objective: Provide an operational database migration procedure compatible with retained backend rollback targets.
+  depends_on: [DB-001]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [documentation]
+    selected: documentation
+    reason: This task codifies database release controls without mutating any runtime.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/dbrel-001.yaml,
+        docs/operations/database-migrations.md,
+        docs/evidence/dbrel-001/2026-09-05.md,
+      ]
+    exclude: [schema change, remote database apply, backup creation]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files: [docs/operations/database-migrations.md]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [none]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: not_applicable
+  validation:
+    commands: [corepack pnpm exec prettier --check docs/operations/database-migrations.md]
+    expected:
+      [runbook is formatted and covers expand, migrate, switch, contract, gates, and recovery]
+  security_checks: [none; policy documents existing RLS controls]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['none; documentation-only task']
+    logs: ['none']
+    traces: ['none']
+  evidence: [docs/evidence/dbrel-001/2026-09-05.md, pull request checks]
+  rollback:
+    strategy: Revert the documentation commit if superseded by a reviewed policy.
+  human_approval:
+    required: false
+    reason: ''
