@@ -1,0 +1,58 @@
+task:
+  id: ALERT-002
+  title: Deterministic alert evaluator
+  status: REVIEW
+  objective: Evaluate alert threshold and occurrence conditions deterministically without scheduling or delivery side effects.
+  depends_on: [ALERT-001, WX-003]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [supabase-edge-function]
+    selected: supabase-edge-function
+    reason: Alert rule evaluation is domain logic outside the Worker CPU path.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/alert-002.yaml,
+        supabase/functions/_shared/alert-evaluator.ts,
+        supabase/functions/_shared/alert-evaluator.test.ts,
+        docs/evidence/alert-002/2026-09-05.md,
+      ]
+    exclude:
+      [
+        cron schedule,
+        database rule retrieval,
+        queue publish,
+        notification delivery,
+        remote Edge Function deploy,
+      ]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files: [supabase/functions/_shared/alert-evaluator.ts]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [api-v1]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until scheduler integration begins
+  validation:
+    commands: [corepack pnpm exec vitest run supabase/functions/_shared/alert-evaluator.test.ts]
+    expected: [all conditions must match to trigger, partial match must not trigger]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['none; pure evaluator']
+    logs: ['none; evaluator does not log facts or rule details']
+    traces: ['none; no request path is introduced']
+  evidence: [docs/evidence/alert-002/2026-09-05.md, pull request checks]
+  rollback:
+    strategy: Revert the pure evaluator; no persisted state exists.
+  human_approval:
+    required: false
+    reason: ''
