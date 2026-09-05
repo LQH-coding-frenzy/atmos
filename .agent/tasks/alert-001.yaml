@@ -1,7 +1,7 @@
 task:
   id: ALERT-001
   title: Alert rule schema and RLS
-  status: REVIEW
+  status: DONE
   objective: Add user-owned alert rules with bounded rule shape, explicit grants, and CRUD ownership RLS.
   depends_on: [DB-001, RLS-001]
   external_policy_checks: [none]
