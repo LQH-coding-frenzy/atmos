@@ -1,0 +1,51 @@
+task:
+  id: OBS-006
+  title: Cloudflare Worker diagnostics runbook
+  status: REVIEW
+  objective: Document safe staging Worker diagnostics and the valid Cloudflare CPU evidence source.
+  depends_on: [EDGE-002]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [documentation]
+    selected: documentation
+    reason: This task codifies existing edge diagnostics without changing runtime telemetry.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/obs-006.yaml,
+        docs/operations/cloudflare-worker-diagnostics.md,
+        docs/evidence/obs-006/2026-09-05.md,
+      ]
+    exclude: [production telemetry export, new Worker bindings, remote configuration changes]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files: [docs/operations/cloudflare-worker-diagnostics.md]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [none]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: not_applicable
+  validation:
+    commands: [corepack pnpm exec prettier --check docs/operations/cloudflare-worker-diagnostics.md]
+    expected:
+      [runbook documents request IDs, cache state, Analytics CPU metrics, and Tail limitations]
+  security_checks: [none; documentation-only task]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['none; documents existing analytics']
+    logs: ['none; documents safe log handling']
+    traces: ['x-request-id response header']
+  evidence: [docs/evidence/obs-006/2026-09-05.md, pull request checks]
+  rollback:
+    strategy: Revert the runbook if superseded by reviewed diagnostics policy.
+  human_approval:
+    required: false
+    reason: ''
