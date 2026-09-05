@@ -1,7 +1,7 @@
 task:
   id: EDGE-004
   title: Public weather dashboard route
-  status: REVIEW
+  status: DONE
   objective: Serve normalized Open-Meteo dashboard weather through a bounded public Worker route.
   depends_on: [EDGE-002, WX-003, WX-004]
   external_policy_checks:
