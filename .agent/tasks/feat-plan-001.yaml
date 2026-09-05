@@ -1,7 +1,7 @@
 task:
   id: FEAT-PLAN-001
   title: Deterministic activity planner
-  status: REVIEW
+  status: DONE
   objective: Return deterministic activity recommendations scored from documented mock dashboard conditions.
   depends_on: [DOM-002, FUNC-001]
   external_policy_checks: [none]
