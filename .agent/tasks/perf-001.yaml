@@ -14,7 +14,10 @@ task:
       [
         .agent/status.yaml,
         .agent/tasks/perf-001.yaml,
+        packages/provider-openmeteo/src/index.ts,
         workers/gateway/wrangler.jsonc,
+        workers/gateway/src/index.ts,
+        workers/gateway/src/index.test.ts,
         docs/evidence/perf-001/2026-09-05.md,
       ]
     exclude: [production deploy, route configuration, queue publish/consumer, code-path redesign]
