@@ -1,0 +1,55 @@
+task:
+  id: PERF-001
+  title: Worker CPU measurement gate
+  status: REVIEW
+  objective: Measure staging public-weather Worker CPU p95 and enforce the 7 ms placement threshold.
+  depends_on: [EDGE-004]
+  external_policy_checks: [owner-approved isolated staging Worker deploy]
+  runtime_placement:
+    allowed: [cloudflare-worker]
+    selected: cloudflare-worker
+    reason: Measure the actual Worker runtime before retaining public weather work at the edge.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/perf-001.yaml,
+        workers/gateway/wrangler.jsonc,
+        docs/evidence/perf-001/2026-09-05.md,
+      ]
+    exclude: [production deploy, route configuration, queue publish/consumer, code-path redesign]
+  inputs:
+    required_config: [Cloudflare Wrangler OAuth session]
+    required_secrets: []
+  outputs:
+    files: [workers/gateway/wrangler.jsonc]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [atmos-gateway-staging]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: immediate staging Worker redeploy or delete
+  validation:
+    commands:
+      [
+        corepack pnpm --filter @atmos/gateway build,
+        corepack pnpm exec wrangler deploy --env staging,
+      ]
+    expected:
+      [staging Worker deployment, repeated public route measurement, CPU p95 at or below 7 ms]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [Worker CPU p95 for public weather route]
+    logs: [staging Worker tail or analytics evidence]
+    traces: [x-request-id response header]
+  evidence: [docs/evidence/perf-001/2026-09-05.md, staging URL, pull request checks]
+  rollback:
+    strategy: Delete or redeploy the isolated staging Worker; do not deploy to production.
+  human_approval:
+    required: true
+    reason: Owner approved isolated staging Worker deployment in this session.
