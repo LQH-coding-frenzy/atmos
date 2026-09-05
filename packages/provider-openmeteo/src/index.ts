@@ -155,7 +155,7 @@ function toIso(time: string): string {
 
 export class OpenMeteoProvider implements WeatherProvider {
   constructor(
-    private readonly fetcher: typeof fetch = fetch,
+    private readonly fetcher: typeof fetch = fetch.bind(globalThis),
     private readonly usageGuard = new OpenMeteoUsageGuard(),
   ) {}
 
@@ -176,7 +176,14 @@ export class OpenMeteoProvider implements WeatherProvider {
     );
     url.searchParams.set('forecast_days', '7');
 
-    const response = await this.fetcher(url, { signal: AbortSignal.timeout(5000) });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    let response: Response;
+    try {
+      response = await this.fetcher(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
     if (!response.ok) {
       throw new Error(`Open-Meteo request failed with ${response.status}`);
     }

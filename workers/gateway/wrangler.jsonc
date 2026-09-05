@@ -15,4 +15,13 @@
       },
     ],
   },
+  "env": {
+    "staging": {
+      "name": "atmos-gateway-staging",
+      "workers_dev": true,
+      "observability": {
+        "enabled": true,
+      },
+    },
+  },
 }

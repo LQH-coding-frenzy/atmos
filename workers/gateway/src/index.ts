@@ -99,11 +99,21 @@ export function createApp(
 
     try {
       const response = context.json(await weatherProvider.getDashboard(input));
-      response.headers.set('cache-control', `public, max-age=${weatherCacheTtlSeconds}`);
+      response.headers.set(
+        'cache-control',
+        `public, max-age=${weatherCacheTtlSeconds}, s-maxage=${weatherCacheTtlSeconds}`,
+      );
       response.headers.set('x-cache', 'MISS');
       await weatherCache.put(cacheKey, response.clone());
       return response;
-    } catch {
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          event: 'weather_provider_failed',
+          request_id: context.res.headers.get('x-request-id'),
+          error_type: error instanceof Error ? error.name : 'unknown',
+        }),
+      );
       return context.json(
         { error: { code: 'WEATHER_UNAVAILABLE', message: 'Weather is temporarily unavailable.' } },
         503,
