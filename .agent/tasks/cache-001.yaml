@@ -1,0 +1,55 @@
+task:
+  id: CACHE-001
+  title: Public weather Cache API layer
+  status: REVIEW
+  objective: Cache only successful normalized public dashboard weather responses in the Worker Cache API.
+  depends_on: [EDGE-004]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [cloudflare-worker]
+    selected: cloudflare-worker
+    reason: Public GET caching is a thin Worker Cache API responsibility.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/cache-001.yaml,
+        workers/gateway/src/index.ts,
+        workers/gateway/src/index.test.ts,
+        docs/evidence/cache-001/2026-09-05.md,
+      ]
+    exclude: [remote Worker deploy, stale-on-error behavior, cache purge API, durable state]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files: [workers/gateway/src/index.ts, workers/gateway/src/index.test.ts]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [gateway]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until the next Worker version is retired
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run workers/gateway/src/index.test.ts,
+        corepack pnpm --filter @atmos/gateway build,
+      ]
+    expected: [successful response is cached, hit avoids provider call, failures remain uncached]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['x-cache response header distinguishes hit and miss']
+    logs: ['none; cache path does not log coordinates']
+    traces: ['existing x-request-id header']
+  evidence: [docs/evidence/cache-001/2026-09-05.md, pull request checks]
+  rollback:
+    strategy: Revert the cache path before the next Worker version promotion.
+  human_approval:
+    required: false
+    reason: ''

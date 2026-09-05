@@ -108,4 +108,40 @@ describe('gateway', () => {
       error: { code: 'WEATHER_UNAVAILABLE', message: 'Weather is temporarily unavailable.' },
     });
   });
+
+  it('serves cached public weather without calling the provider', async () => {
+    const getDashboard = vi.fn();
+    const cache = {
+      match: vi.fn(async () =>
+        Response.json({ location: { name: 'Berlin' }, meta: { provider: 'mock' } }),
+      ),
+      put: vi.fn(),
+    };
+    const weatherApp = createApp({ getDashboard }, cache);
+
+    const response = await weatherApp.request(
+      'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405',
+    );
+
+    expect(response.headers.get('x-cache')).toBe('HIT');
+    await expect(response.json()).resolves.toMatchObject({ location: { name: 'Berlin' } });
+    expect(getDashboard).not.toHaveBeenCalled();
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
+  it('caches successful public weather responses for five minutes', async () => {
+    const getDashboard = vi.fn(
+      new MockWeatherProvider().getDashboard.bind(new MockWeatherProvider()),
+    );
+    const cache = { match: vi.fn(async () => undefined), put: vi.fn(async () => undefined) };
+    const weatherApp = createApp({ getDashboard }, cache);
+
+    const response = await weatherApp.request(
+      'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405',
+    );
+
+    expect(response.headers.get('x-cache')).toBe('MISS');
+    expect(response.headers.get('cache-control')).toBe('public, max-age=300');
+    expect(cache.put).toHaveBeenCalledTimes(1);
+  });
 });

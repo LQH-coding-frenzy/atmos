@@ -10,6 +10,14 @@ type Bindings = {
   SUPABASE_FUNCTION_URL?: string;
 };
 
+type WeatherCache = Pick<Cache, 'match' | 'put'>;
+
+const weatherCacheTtlSeconds = 300;
+const noWeatherCache: WeatherCache = {
+  match: async () => undefined,
+  put: async () => undefined,
+};
+
 function weatherInput(context: { req: { query: (name: string) => string | undefined } }) {
   const latitude = Number(context.req.query('lat'));
   const longitude = Number(context.req.query('lon'));
@@ -33,7 +41,10 @@ function weatherInput(context: { req: { query: (name: string) => string | undefi
   return { latitude, longitude, timezone, units } as const;
 }
 
-export function createApp(weatherProvider: WeatherProvider = new OpenMeteoProvider()) {
+export function createApp(
+  weatherProvider: WeatherProvider = new OpenMeteoProvider(),
+  cache?: WeatherCache,
+) {
   const app = new Hono<{ Bindings: Bindings }>();
 
   app.use('*', async (context, next) => {
@@ -73,8 +84,25 @@ export function createApp(weatherProvider: WeatherProvider = new OpenMeteoProvid
       );
     }
 
+    const cacheKey = new Request(context.req.url, { method: 'GET' });
+    const weatherCache =
+      cache ??
+      (typeof caches === 'undefined'
+        ? noWeatherCache
+        : (caches as CacheStorage & { default: WeatherCache }).default);
+    const cachedResponse = await weatherCache.match(cacheKey);
+    if (cachedResponse) {
+      const response = new Response(cachedResponse.body, cachedResponse);
+      response.headers.set('x-cache', 'HIT');
+      return response;
+    }
+
     try {
-      return context.json(await weatherProvider.getDashboard(input));
+      const response = context.json(await weatherProvider.getDashboard(input));
+      response.headers.set('cache-control', `public, max-age=${weatherCacheTtlSeconds}`);
+      response.headers.set('x-cache', 'MISS');
+      await weatherCache.put(cacheKey, response.clone());
+      return response;
     } catch {
       return context.json(
         { error: { code: 'WEATHER_UNAVAILABLE', message: 'Weather is temporarily unavailable.' } },
