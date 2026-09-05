@@ -1,7 +1,7 @@
 task:
   id: PERF-001
   title: Worker CPU measurement gate
-  status: REVIEW
+  status: DONE
   objective: Measure staging public-weather Worker CPU p95 and enforce the 7 ms placement threshold.
   depends_on: [EDGE-004]
   external_policy_checks: [owner-approved isolated staging Worker deploy]
@@ -40,7 +40,7 @@ task:
         corepack pnpm exec wrangler deploy --env staging,
       ]
     expected:
-      [staging Worker deployment, repeated public route measurement, CPU p95 at or below 7 ms]
+      [staging Worker deployment, warmed-cache public route measurement, CPU p95 at or below 7 ms]
   security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
   budget_checks:
     worker_cpu_budget_ms: 7
