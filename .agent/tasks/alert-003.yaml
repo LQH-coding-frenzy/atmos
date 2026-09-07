@@ -1,0 +1,52 @@
+task:
+  id: ALERT-003
+  title: Durable alert event schema
+  status: REVIEW
+  objective: Persist idempotent owner-visible alert events for queue delivery references.
+  depends_on: [ALERT-002]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [postgres]
+    selected: postgres
+    reason: Alert events are durable state used for idempotent queue references.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/alert-003.yaml,
+        supabase/migrations/20260907000000_alert_events.sql,
+        supabase/tests/005_alert_events_rls.sql,
+        docs/evidence/alert-003/2026-09-07.md,
+      ]
+    exclude: [queue publish, delivery consumer, remote database deploy]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files:
+      [supabase/migrations/20260907000000_alert_events.sql, supabase/tests/005_alert_events_rls.sql]
+    terraform_resources: []
+    database_changes: [additive alert_events table, idempotency constraint, RLS policy]
+    deployed_units: [postgres]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until queue publisher integration begins
+  validation:
+    commands: [corepack pnpm exec supabase db reset, corepack pnpm test:db]
+    expected: [event schema rebuilds, owner reads allow, cross-user reads and client writes deny]
+  security_checks: [rls_tests_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['none; schema-only task']
+    logs: ['none; migration does not log payloads']
+    traces: ['none; no request path is introduced']
+  evidence: [docs/evidence/alert-003/2026-09-07.md, local database test output, pull request checks]
+  rollback:
+    strategy: No consumers exist; rollback is a reviewed future drop migration.
+  human_approval:
+    required: false
+    reason: ''
