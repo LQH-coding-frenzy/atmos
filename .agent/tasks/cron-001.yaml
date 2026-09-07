@@ -1,7 +1,7 @@
 task:
   id: CRON-001
   title: Scheduled alert evaluation
-  status: REVIEW
+  status: DONE
   objective: Add coordinate-backed staged alert evaluation and Supabase Cron wiring without production mutation.
   depends_on: [ALERT-002]
   external_policy_checks: [owner-approved staging Supabase project and scheduler]
