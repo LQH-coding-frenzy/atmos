@@ -1,0 +1,19 @@
+task:
+  id: GAME-004
+  title: Duplicate queue delivery exercise
+  status: REVIEW
+  objective: Verify duplicate delivery claims are safe no-ops.
+  depends_on: [QUEUE-004]
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/game-004.yaml,
+        supabase/tests/004_notification_deliveries_rls.sql,
+        docs/evidence/game-004/2026-09-07.md,
+      ]
+    exclude: [remote queue exercise, provider delivery]
+  validation:
+    commands: [corepack pnpm exec supabase db reset, corepack pnpm test:db]
+  rollback:
+    strategy: Revert the additive test only.

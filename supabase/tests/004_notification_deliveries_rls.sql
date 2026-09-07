@@ -1,5 +1,5 @@
 begin;
-select plan(12);
+select plan(16);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, raw_app_meta_data, raw_user_meta_data, created_at, updated_at
@@ -50,6 +50,26 @@ select throws_ok(
   '42501',
   null,
   'user A cannot update a delivery'
+);
+
+reset role;
+select lives_ok(
+  $$update public.notification_deliveries set status = 'processing' where id = '30000000-0000-0000-0000-000000000001' and status in ('pending', 'retry')$$,
+  'first delivery claim succeeds'
+);
+select is(
+  (select status from public.notification_deliveries where id = '30000000-0000-0000-0000-000000000001'),
+  'processing',
+  'first delivery claim marks delivery processing'
+);
+select lives_ok(
+  $$update public.notification_deliveries set status = 'processing' where id = '30000000-0000-0000-0000-000000000001' and status in ('pending', 'retry')$$,
+  'duplicate delivery claim is a no-op'
+);
+select is(
+  (select status from public.notification_deliveries where id = '30000000-0000-0000-0000-000000000001'),
+  'processing',
+  'duplicate claim leaves delivery processing'
 );
 
 select * from finish();
