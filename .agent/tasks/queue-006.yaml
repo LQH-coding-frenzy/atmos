@@ -1,7 +1,7 @@
 task:
   id: QUEUE-006
   title: Notification delivery reconciliation
-  status: REVIEW
+  status: DONE
   objective: Re-enqueue bounded durable pending or due retry deliveries through the Worker publisher.
   depends_on: [QUEUE-002, CRON-001]
   scope:
