@@ -1,9 +1,30 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MockWeatherProvider } from '@atmos/provider-openmeteo';
 import { app, createApp } from './index';
+import worker from './index';
 
 describe('gateway', () => {
   afterEach(() => vi.unstubAllGlobals());
+  it('acks successful queue deliveries and retries failed delivery claims', async () => {
+    const ack = vi.fn();
+    const retry = vi.fn();
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 503 }));
+    vi.stubGlobal('fetch', fetcher);
+    await worker.queue(
+      {
+        messages: [
+          { body: { version: 1, event_id: 'event', delivery_id: 'first', kind: 'weather-alert', attempt_hint: 0 }, ack, retry },
+          { body: { version: 1, event_id: 'event', delivery_id: 'second', kind: 'weather-alert', attempt_hint: 0 }, ack, retry },
+        ],
+      } as unknown as MessageBatch<import('./notification-queue').NotificationQueueMessage>,
+      { SUPABASE_FUNCTION_URL: 'https://project/functions/v1/api-v1', INTERNAL_QUEUE_SECRET: 'test' },
+    );
+    expect(ack).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
   it('returns cheap health and version responses with a request ID', async () => {
     const health = await app.request('http://localhost/health');
     const version = await app.request('http://localhost/version', undefined, {

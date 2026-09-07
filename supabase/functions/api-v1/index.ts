@@ -61,6 +61,32 @@ app.get('/health', (context) => context.json({ status: 'ok' }));
 app.get('/health/dependencies', (context) => context.json({ database: 'not_configured' }, 501));
 app.get('/version', (context) => context.json({ release: context.env.RELEASE_ID ?? 'local' }));
 
+app.post('/internal/notifications/deliver', async (context) => {
+  if (context.req.header('x-internal-queue-secret') !== Deno.env.get('INTERNAL_QUEUE_SECRET')) {
+    return error(context, 'UNAUTHORIZED', 'Internal authorization is required.', 401);
+  }
+  const body = await context.req.json().catch(() => undefined) as
+    | { version?: number; event_id?: string; delivery_id?: string; kind?: string }
+    | undefined;
+  if (body?.version !== 1 || body.kind !== 'weather-alert' || !body.event_id || !body.delivery_id) {
+    return error(context, 'INVALID_MESSAGE', 'Notification message is invalid.', 400);
+  }
+  const url = Deno.env.get('SUPABASE_URL');
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!url || !key) return error(context, 'DELIVERY_UNAVAILABLE', 'Delivery is unavailable.', 503);
+  const client = createClient(url, key);
+  const { data, error: updateError } = await client
+    .from('notification_deliveries')
+    .update({ status: 'processing', updated_at: new Date().toISOString() })
+    .eq('id', body.delivery_id)
+    .eq('event_id', body.event_id)
+    .in('status', ['pending', 'retry'])
+    .select('id')
+    .maybeSingle();
+  if (updateError) return error(context, 'DELIVERY_UNAVAILABLE', 'Delivery is unavailable.', 503);
+  return context.json({ claimed: Boolean(data) });
+});
+
 app.get('/api/v1/me', async (context) => {
   const authorization = context.req.header('authorization');
   if (!authorization) {

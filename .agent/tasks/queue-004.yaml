@@ -1,0 +1,17 @@
+task:
+  id: QUEUE-004
+  title: Notification consumer Worker
+  status: REVIEW
+  objective: Consume compact notification references and claim durable delivery work through Supabase.
+  depends_on: [QUEUE-003]
+  runtime_placement:
+    allowed: [cloudflare-worker, supabase-edge-function]
+    selected: cloudflare-worker-and-supabase-edge-function
+    reason: The Worker consumes queue messages while the Edge Function owns database state.
+  scope:
+    include: [workers/gateway, supabase/functions/api-v1, docs/evidence/queue-004]
+    exclude: [provider delivery, remote deploy, paid resource creation]
+  validation:
+    commands: [corepack pnpm exec vitest run workers/gateway/src/index.test.ts workers/gateway/src/notification-queue.test.ts, corepack pnpm typecheck, corepack pnpm --filter @atmos/gateway build, corepack pnpm lint]
+  rollback:
+    strategy: Revert the consumer handler and binding before deployment.
