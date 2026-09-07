@@ -8,13 +8,18 @@ import {
   type PlannerConditions,
   type PlannerWindow,
 } from '../_shared/planner.ts';
+import {
+  evaluateAlertConditions,
+  type AlertCondition,
+  type AlertWeatherFacts,
+} from '../_shared/alert-evaluator.ts';
 
 type Bindings = {
   CORS_ORIGIN?: string;
   RELEASE_ID?: string;
 };
 
-const app = new Hono<{ Bindings: Bindings }>();
+const app = new Hono<{ Bindings: Bindings }>().basePath('/api-v1');
 
 function error(context: Context, code: string, message: string, status: 400 | 401 | 503) {
   return context.json(
@@ -178,6 +183,92 @@ app.post('/api/v1/planner/recommend', async (context) => {
       mockDashboardPlannerWindows,
     ),
   });
+});
+
+const scheduledAlertMetrics = new Set<AlertCondition['metric']>([
+  'temperature',
+  'feels-like',
+  'rain-probability',
+  'wind',
+  'thunderstorm',
+  'freeze-risk',
+  'extreme-heat',
+]);
+
+async function scheduledAlertFacts(
+  latitude: number,
+  longitude: number,
+): Promise<AlertWeatherFacts> {
+  const url = new URL('https://api.open-meteo.com/v1/forecast');
+  url.searchParams.set('latitude', String(latitude));
+  url.searchParams.set('longitude', String(longitude));
+  url.searchParams.set(
+    'current',
+    'temperature_2m,apparent_temperature,wind_speed_10m,weather_code',
+  );
+  url.searchParams.set('hourly', 'precipitation_probability');
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('weather request failed');
+  const data = (await response.json()) as {
+    current: {
+      temperature_2m: number;
+      apparent_temperature: number;
+      wind_speed_10m: number;
+      weather_code: number;
+    };
+    hourly: { precipitation_probability: number[] };
+  };
+  const temperature = data.current.temperature_2m;
+  return {
+    temperature,
+    'feels-like': data.current.apparent_temperature,
+    'rain-probability': data.hourly.precipitation_probability[0] ?? 0,
+    rainfall: 0,
+    snowfall: 0,
+    wind: data.current.wind_speed_10m,
+    gust: 0,
+    uv: 0,
+    aqi: 0,
+    'pm2.5': 0,
+    visibility: 0,
+    thunderstorm: [95, 96, 99].includes(data.current.weather_code),
+    'freeze-risk': temperature <= 0,
+    'extreme-heat': temperature >= 35,
+    'provider-severe-weather-alert': false,
+  };
+}
+
+app.post('/internal/alerts/evaluate', async (context) => {
+  const schedulerSecret = Deno.env.get('ALERT_CRON_SECRET');
+  if (!schedulerSecret || context.req.header('authorization') !== `Bearer ${schedulerSecret}`) {
+    return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+  }
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!supabaseUrl || !serviceKey)
+    return error(context, 'ALERTS_UNAVAILABLE', 'Alerts are unavailable.', 503);
+
+  const client = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+  const { data: rules, error: rulesError } = await client
+    .from('alert_rules')
+    .select('id, conditions, latitude, longitude')
+    .eq('enabled', true)
+    .not('latitude', 'is', null)
+    .not('longitude', 'is', null);
+  if (rulesError) return error(context, 'ALERTS_UNAVAILABLE', 'Alerts are unavailable.', 503);
+
+  let triggered = 0;
+  let skipped = 0;
+  for (const rule of rules ?? []) {
+    const conditions = rule.conditions as AlertCondition[];
+    if (!conditions.every((condition) => scheduledAlertMetrics.has(condition.metric))) {
+      skipped += 1;
+      continue;
+    }
+    const facts = await scheduledAlertFacts(rule.latitude as number, rule.longitude as number);
+    if (evaluateAlertConditions(conditions, facts).triggered) triggered += 1;
+  }
+  return context.json({ evaluated: (rules?.length ?? 0) - skipped, triggered, skipped });
 });
 
 app.notFound((context) =>
