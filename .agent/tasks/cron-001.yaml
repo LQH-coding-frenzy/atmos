@@ -1,7 +1,7 @@
 task:
   id: CRON-001
   title: Scheduled alert evaluation
-  status: IN_PROGRESS
+  status: REVIEW
   objective: Add coordinate-backed staged alert evaluation and Supabase Cron wiring without production mutation.
   depends_on: [ALERT-002]
   external_policy_checks: [owner-approved staging Supabase project and scheduler]
@@ -14,6 +14,7 @@ task:
       [
         .agent/status.yaml,
         .agent/tasks/cron-001.yaml,
+        supabase/functions/api-v1/index.ts,
         supabase/migrations/20260906000000_alert_rule_coordinates.sql,
         supabase/tests/003_alert_rules_rls.sql,
         docs/evidence/cron-001/2026-09-06.md,
