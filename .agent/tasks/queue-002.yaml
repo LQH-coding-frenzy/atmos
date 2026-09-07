@@ -1,7 +1,7 @@
 task:
   id: QUEUE-002
   title: Durable notification delivery schema
-  status: REVIEW
+  status: DONE
   objective: Add durable, idempotent notification delivery state with owner-visible RLS.
   depends_on: [DB-001]
   external_policy_checks: [none]
