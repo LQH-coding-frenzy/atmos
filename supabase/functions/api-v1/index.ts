@@ -106,7 +106,8 @@ app.post('/internal/notifications/reconcile', async (context) => {
   }
   const gatewayUrl = Deno.env.get('GATEWAY_URL');
   const queueSecret = Deno.env.get('INTERNAL_QUEUE_SECRET');
-  if (!gatewayUrl || !queueSecret) return error(context, 'DELIVERY_UNAVAILABLE', 'Delivery is unavailable.', 503);
+  if (!gatewayUrl || !queueSecret)
+    return error(context, 'DELIVERY_UNAVAILABLE', 'Delivery is unavailable.', 503);
   const deliveries = data ?? [];
   const published = await fetch(`${gatewayUrl}/internal/notifications/publish`, {
     method: 'POST',

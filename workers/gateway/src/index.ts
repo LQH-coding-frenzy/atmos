@@ -74,12 +74,19 @@ export function createApp(
 
   app.post('/internal/notifications/publish', async (context) => {
     if (context.req.header('x-internal-queue-secret') !== context.env.INTERNAL_QUEUE_SECRET) {
-      return context.json({ error: { code: 'UNAUTHORIZED', message: 'Internal authorization is required.' } }, 401);
+      return context.json(
+        { error: { code: 'UNAUTHORIZED', message: 'Internal authorization is required.' } },
+        401,
+      );
     }
     if (!context.env.NOTIFICATION_QUEUE) {
-      return context.json({ error: { code: 'QUEUE_UNAVAILABLE', message: 'Notification queue is unavailable.' } }, 503);
+      return context.json(
+        { error: { code: 'QUEUE_UNAVAILABLE', message: 'Notification queue is unavailable.' } },
+        503,
+      );
     }
-    const messages = await context.req.json<import('./notification-queue').NotificationQueueMessage[]>();
+    const messages =
+      await context.req.json<import('./notification-queue').NotificationQueueMessage[]>();
     await context.env.NOTIFICATION_QUEUE.sendBatch(messages.map((body) => ({ body })));
     return context.json({ published: messages.length });
   });
