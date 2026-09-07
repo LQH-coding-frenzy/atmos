@@ -1,0 +1,55 @@
+task:
+  id: QUEUE-003
+  title: Compact notification publish path
+  status: REVIEW
+  objective: Publish validated compact event and delivery references to the notification queue.
+  depends_on: [ALERT-002, QUEUE-001, QUEUE-002]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [cloudflare-worker]
+    selected: cloudflare-worker
+    reason: Cross-platform notification references are transported through the Worker queue producer.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/queue-003.yaml,
+        workers/gateway/src/notification-queue.ts,
+        workers/gateway/src/notification-queue.test.ts,
+        docs/evidence/queue-003/2026-09-07.md,
+      ]
+    exclude: [queue consumer, provider delivery, remote Worker deploy]
+  inputs:
+    required_config: [NOTIFICATION_QUEUE binding]
+    required_secrets: []
+  outputs:
+    files: [workers/gateway/src/notification-queue.ts]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [gateway]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until the next Worker version is retired
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run workers/gateway/src/notification-queue.test.ts,
+        corepack pnpm --filter @atmos/gateway build,
+      ]
+    expected: [only valid compact durable references are published]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['queue publish count after caller integration']
+    logs: ['none; queue message contains no sensitive payload']
+    traces: ['event_id and delivery_id are durable references']
+  evidence: [docs/evidence/queue-003/2026-09-07.md, pull request checks]
+  rollback:
+    strategy: Revert publisher helper before next Worker promotion.
+  human_approval:
+    required: false
+    reason: ''
