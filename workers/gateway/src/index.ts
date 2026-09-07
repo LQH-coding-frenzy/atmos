@@ -8,6 +8,7 @@ type Bindings = {
   CORS_ORIGIN?: string;
   RELEASE_ID?: string;
   SUPABASE_FUNCTION_URL?: string;
+  INTERNAL_QUEUE_SECRET?: string;
 };
 
 type WeatherCache = Pick<Cache, 'match' | 'put'>;
@@ -151,4 +152,27 @@ export function createApp(
 }
 
 export const app = createApp();
-export default app;
+
+export default {
+  fetch: app.fetch,
+  async queue(
+    batch: MessageBatch<import('./notification-queue').NotificationQueueMessage>,
+    env: Bindings,
+  ) {
+    if (!env.SUPABASE_FUNCTION_URL || !env.INTERNAL_QUEUE_SECRET) {
+      throw new Error('Queue consumer is not configured');
+    }
+    for (const message of batch.messages) {
+      const response = await fetch(`${env.SUPABASE_FUNCTION_URL}/internal/notifications/deliver`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-internal-queue-secret': env.INTERNAL_QUEUE_SECRET,
+        },
+        body: JSON.stringify(message.body),
+      });
+      if (response.ok) message.ack();
+      else message.retry();
+    }
+  },
+};

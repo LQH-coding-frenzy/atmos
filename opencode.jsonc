@@ -3,6 +3,8 @@
   "share": "disabled",
   "autoupdate": "notify",
   "snapshot": true,
+  "instructions": [".opencode/continuation-policy.md"],
+  "plugin": ["opencode-antigravity-auth@latest"],
   "provider": {
     "openrouter": {
       "options": {
@@ -27,12 +29,14 @@
   },
   "watcher": {
     "ignore": [
-      "node_modules/**",
-      ".next/**",
-      "dist/**",
-      "coverage/**",
-      "playwright-report/**",
-      "test-results/**",
+      "**/node_modules/**",
+      "**/.next/**",
+      "**/dist/**",
+      "**/coverage/**",
+      "**/playwright-report/**",
+      "**/test-results/**",
+      "**/.wrangler/**",
+      "supabase/.branches/**",
       "supabase/.temp/**",
       "weather-dashboard-rough-design-example/**",
     ],
@@ -69,6 +73,7 @@
       "terraform apply*": "deny",
       "supabase db push*": "deny",
     },
+    "question": "allow",
     "external_directory": "deny",
     "webfetch": "allow",
     "task": "allow",
@@ -81,6 +86,7 @@
     "auto": true,
     "prune": true,
     "tail_turns": 6,
+    "reserved": 8000,
   },
   "experimental": {
     "mcp_timeout": 30000,

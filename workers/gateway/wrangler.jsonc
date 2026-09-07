@@ -14,6 +14,13 @@
         "queue": "atmos-notifications",
       },
     ],
+    "consumers": [
+      {
+        "queue": "atmos-notifications",
+        "max_batch_size": 10,
+        "max_retries": 3,
+      },
+    ],
   },
   "env": {
     "staging": {
