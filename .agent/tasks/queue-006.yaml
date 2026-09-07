@@ -1,0 +1,26 @@
+task:
+  id: QUEUE-006
+  title: Notification delivery reconciliation
+  status: REVIEW
+  objective: Re-enqueue bounded durable pending or due retry deliveries through the Worker publisher.
+  depends_on: [QUEUE-002, CRON-001]
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/queue-006.yaml,
+        supabase/functions/api-v1/index.ts,
+        workers/gateway/src/index.ts,
+        docs/evidence/queue-006/2026-09-07.md,
+      ]
+    exclude: [remote deployment, remote scheduler change, provider delivery]
+  validation:
+    commands:
+      [
+        corepack pnpm typecheck,
+        corepack pnpm exec vitest run workers/gateway/src/index.test.ts workers/gateway/src/notification-queue.test.ts,
+        corepack pnpm --filter @atmos/gateway build,
+        corepack pnpm lint,
+      ]
+  rollback:
+    strategy: Revert the reconciliation endpoint and private publisher route before deployment.

@@ -86,6 +86,46 @@ app.post('/internal/notifications/deliver', async (context) => {
   return context.json({ claimed: Boolean(data) });
 });
 
+app.post('/internal/notifications/reconcile', async (context) => {
+  if (context.req.header('x-alert-cron-secret') !== Deno.env.get('ALERT_CRON_SECRET')) {
+    return error(context, 'UNAUTHORIZED', 'Internal authorization is required.', 401);
+  }
+  const url = Deno.env.get('SUPABASE_URL');
+  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!url || !key) return error(context, 'DELIVERY_UNAVAILABLE', 'Delivery is unavailable.', 503);
+  const client = createClient(url, key);
+  const now = new Date().toISOString();
+  const { data, error: reconciliationError } = await client
+    .from('notification_deliveries')
+    .select('id, event_id, kind, attempt_count')
+    .or(`status.eq.pending,and(status.eq.retry,next_attempt_at.lte.${now})`)
+    .order('created_at', { ascending: true })
+    .limit(100);
+  if (reconciliationError) {
+    return error(context, 'DELIVERY_UNAVAILABLE', 'Delivery is unavailable.', 503);
+  }
+  const gatewayUrl = Deno.env.get('GATEWAY_URL');
+  const queueSecret = Deno.env.get('INTERNAL_QUEUE_SECRET');
+  if (!gatewayUrl || !queueSecret)
+    return error(context, 'DELIVERY_UNAVAILABLE', 'Delivery is unavailable.', 503);
+  const deliveries = data ?? [];
+  const published = await fetch(`${gatewayUrl}/internal/notifications/publish`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-internal-queue-secret': queueSecret },
+    body: JSON.stringify(
+      deliveries.map((delivery) => ({
+        version: 1,
+        event_id: delivery.event_id,
+        delivery_id: delivery.id,
+        kind: delivery.kind,
+        attempt_hint: delivery.attempt_count,
+      })),
+    ),
+  });
+  if (!published.ok) return error(context, 'DELIVERY_UNAVAILABLE', 'Delivery is unavailable.', 503);
+  return context.json({ reconciled: deliveries.length });
+});
+
 app.get('/api/v1/me', async (context) => {
   const authorization = context.req.header('authorization');
   if (!authorization) {
