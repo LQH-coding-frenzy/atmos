@@ -1,7 +1,7 @@
 task:
   id: QUEUE-003
   title: Compact notification publish path
-  status: REVIEW
+  status: DONE
   objective: Publish validated compact event and delivery references to the notification queue.
   depends_on: [ALERT-002, QUEUE-001, QUEUE-002]
   external_policy_checks: [none]
