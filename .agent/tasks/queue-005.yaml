@@ -1,7 +1,7 @@
 task:
   id: QUEUE-005
   title: Queue retry and DLQ configuration
-  status: REVIEW
+  status: DONE
   objective: Bound notification retries and preserve exhausted messages in a dedicated DLQ.
   depends_on: [QUEUE-004]
   scope:
