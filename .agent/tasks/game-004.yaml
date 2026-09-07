@@ -1,7 +1,7 @@
 task:
   id: GAME-004
   title: Duplicate queue delivery exercise
-  status: REVIEW
+  status: DONE
   objective: Verify duplicate delivery claims are safe no-ops.
   depends_on: [QUEUE-004]
   scope:
