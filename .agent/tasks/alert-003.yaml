@@ -1,7 +1,7 @@
 task:
   id: ALERT-003
   title: Durable alert event schema
-  status: REVIEW
+  status: DONE
   objective: Persist idempotent owner-visible alert events for queue delivery references.
   depends_on: [ALERT-002]
   external_policy_checks: [none]
