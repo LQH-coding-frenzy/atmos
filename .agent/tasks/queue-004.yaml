@@ -12,6 +12,12 @@ task:
     include: [workers/gateway, supabase/functions/api-v1, docs/evidence/queue-004]
     exclude: [provider delivery, remote deploy, paid resource creation]
   validation:
-    commands: [corepack pnpm exec vitest run workers/gateway/src/index.test.ts workers/gateway/src/notification-queue.test.ts, corepack pnpm typecheck, corepack pnpm --filter @atmos/gateway build, corepack pnpm lint]
+    commands:
+      [
+        corepack pnpm exec vitest run workers/gateway/src/index.test.ts workers/gateway/src/notification-queue.test.ts,
+        corepack pnpm typecheck,
+        corepack pnpm --filter @atmos/gateway build,
+        corepack pnpm lint,
+      ]
   rollback:
     strategy: Revert the consumer handler and binding before deployment.

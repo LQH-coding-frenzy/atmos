@@ -155,7 +155,10 @@ export const app = createApp();
 
 export default {
   fetch: app.fetch,
-  async queue(batch: MessageBatch<import('./notification-queue').NotificationQueueMessage>, env: Bindings) {
+  async queue(
+    batch: MessageBatch<import('./notification-queue').NotificationQueueMessage>,
+    env: Bindings,
+  ) {
     if (!env.SUPABASE_FUNCTION_URL || !env.INTERNAL_QUEUE_SECRET) {
       throw new Error('Queue consumer is not configured');
     }

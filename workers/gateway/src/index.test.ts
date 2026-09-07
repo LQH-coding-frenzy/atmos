@@ -16,11 +16,34 @@ describe('gateway', () => {
     await worker.queue(
       {
         messages: [
-          { body: { version: 1, event_id: 'event', delivery_id: 'first', kind: 'weather-alert', attempt_hint: 0 }, ack, retry },
-          { body: { version: 1, event_id: 'event', delivery_id: 'second', kind: 'weather-alert', attempt_hint: 0 }, ack, retry },
+          {
+            body: {
+              version: 1,
+              event_id: 'event',
+              delivery_id: 'first',
+              kind: 'weather-alert',
+              attempt_hint: 0,
+            },
+            ack,
+            retry,
+          },
+          {
+            body: {
+              version: 1,
+              event_id: 'event',
+              delivery_id: 'second',
+              kind: 'weather-alert',
+              attempt_hint: 0,
+            },
+            ack,
+            retry,
+          },
         ],
       } as unknown as MessageBatch<import('./notification-queue').NotificationQueueMessage>,
-      { SUPABASE_FUNCTION_URL: 'https://project/functions/v1/api-v1', INTERNAL_QUEUE_SECRET: 'test' },
+      {
+        SUPABASE_FUNCTION_URL: 'https://project/functions/v1/api-v1',
+        INTERNAL_QUEUE_SECRET: 'test',
+      },
     );
     expect(ack).toHaveBeenCalledTimes(1);
     expect(retry).toHaveBeenCalledTimes(1);
