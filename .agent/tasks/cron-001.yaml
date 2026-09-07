@@ -1,0 +1,51 @@
+task:
+  id: CRON-001
+  title: Scheduled alert evaluation
+  status: IN_PROGRESS
+  objective: Add coordinate-backed staged alert evaluation and Supabase Cron wiring without production mutation.
+  depends_on: [ALERT-002]
+  external_policy_checks: [owner-approved staging Supabase project and scheduler]
+  runtime_placement:
+    allowed: [supabase-cron, supabase-edge-function]
+    selected: supabase-cron
+    reason: Alert evaluation is recurring database-adjacent work.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/cron-001.yaml,
+        supabase/migrations/20260906000000_alert_rule_coordinates.sql,
+        supabase/tests/003_alert_rules_rls.sql,
+        docs/evidence/cron-001/2026-09-06.md,
+      ]
+    exclude: [production schedule, notification delivery, queue publish]
+  inputs:
+    required_config: [staging Supabase project, ALERT_CRON_SECRET]
+    required_secrets: [ALERT_CRON_SECRET]
+  outputs:
+    files: [supabase/migrations/20260906000000_alert_rule_coordinates.sql]
+    terraform_resources: []
+    database_changes: [additive alert-rule coordinates and retrieval index]
+    deployed_units: [staging api-v1]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until staging scheduler is enabled
+  validation:
+    commands: [corepack pnpm exec supabase db reset, corepack pnpm test:db]
+    expected: [coordinate migration rebuilds locally and alert RLS remains valid]
+  security_checks: [rls_tests_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['scheduled evaluation result count after endpoint wiring']
+    logs: ['none; do not log rule conditions or coordinates']
+    traces: ['x-request-id on internal endpoint after wiring']
+  evidence: [docs/evidence/cron-001/2026-09-06.md, local database test output, pull request checks]
+  rollback:
+    strategy: Do not enable cron until endpoint validation; remove only a reviewed staging schedule.
+  human_approval:
+    required: true
+    reason: Owner approved staging project and scheduler in this session.

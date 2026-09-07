@@ -1,5 +1,5 @@
 begin;
-select plan(19);
+select plan(21);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, raw_app_meta_data, raw_user_meta_data, created_at, updated_at
@@ -13,6 +13,8 @@ insert into public.alert_rules (id, user_id, location_id, conditions, schedule, 
 
 select has_table('public', 'alert_rules', 'alert rules table exists');
 select has_column('public', 'alert_rules', 'conditions', 'alert rules retain conditions');
+select has_column('public', 'alert_rules', 'latitude', 'alert rules can retain scheduler coordinates');
+select has_column('public', 'alert_rules', 'longitude', 'alert rules can retain scheduler coordinates');
 select ok(
   (select relrowsecurity from pg_class where oid = 'public.alert_rules'::regclass),
   'alert rules RLS is enabled'
