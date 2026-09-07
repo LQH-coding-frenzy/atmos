@@ -1,7 +1,7 @@
 task:
   id: QUEUE-001
   title: Notification queue producer binding
-  status: REVIEW
+  status: DONE
   objective: Declare the stable notification queue producer binding without deploying or consuming messages.
   depends_on: [EDGE-001]
   external_policy_checks:
