@@ -1,0 +1,13 @@
+task:
+  id: QUEUE-005
+  title: Queue retry and DLQ configuration
+  status: REVIEW
+  objective: Bound notification retries and preserve exhausted messages in a dedicated DLQ.
+  depends_on: [QUEUE-004]
+  scope:
+    include: [.agent/status.yaml, .agent/tasks/queue-005.yaml, workers/gateway/wrangler.jsonc, docs/operations/notification-queue-dlq.md, docs/evidence/queue-005/2026-09-07.md]
+    exclude: [remote queue creation, remote deployment]
+  validation:
+    commands: [corepack pnpm --filter @atmos/gateway build, corepack pnpm lint, corepack pnpm typecheck]
+  rollback:
+    strategy: Revert consumer retry and DLQ configuration before deployment.
