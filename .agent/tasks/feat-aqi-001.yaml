@@ -1,7 +1,7 @@
 task:
   id: FEAT-AQI-001
   title: Dashboard air-quality panel
-  status: REVIEW
+  status: DONE
   objective: Render US and European AQI with a pollutant breakdown from a documented deterministic mock snapshot.
   depends_on: [WX-003, WEB-002]
   external_policy_checks: [none]
