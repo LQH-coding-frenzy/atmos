@@ -1,7 +1,7 @@
 task:
   id: FEAT-LOC-001
   title: Saved locations
-  status: REVIEW
+  status: DONE
   objective: Persist and expose owner-scoped saved weather locations.
   depends_on: [FUNC-002, RLS-002]
   scope:
