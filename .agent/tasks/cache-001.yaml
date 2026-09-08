@@ -1,7 +1,7 @@
 task:
   id: CACHE-001
   title: Public weather Cache API layer
-  status: REVIEW
+  status: DONE
   objective: Cache only successful normalized public dashboard weather responses in the Worker Cache API.
   depends_on: [EDGE-004]
   external_policy_checks: [none]
