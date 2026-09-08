@@ -1,0 +1,21 @@
+task:
+  id: FEAT-LOC-001
+  title: Saved locations
+  status: REVIEW
+  objective: Persist and expose owner-scoped saved weather locations.
+  depends_on: [FUNC-002, RLS-002]
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/feat-loc-001.yaml,
+        supabase/migrations/20260908000000_saved_locations.sql,
+        supabase/tests/006_saved_locations_rls.sql,
+        supabase/functions/api-v1/index.ts,
+        docs/evidence/feat-loc-001/2026-09-08.md,
+      ]
+    exclude: [remote migration, frontend integration]
+  validation:
+    commands: [corepack pnpm typecheck, corepack pnpm exec supabase db reset, corepack pnpm test:db]
+  rollback:
+    strategy: Revert the API before deployment; retain additive table until an expand/contract removal is approved.
