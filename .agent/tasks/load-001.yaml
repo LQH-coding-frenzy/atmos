@@ -1,7 +1,7 @@
 task:
   id: LOAD-001
   title: Public weather k6 baseline
-  status: REVIEW
+  status: DONE
   objective: Establish a bounded cached public-weather staging baseline with k6.
   depends_on: [EDGE-004]
   external_policy_checks: [owner-approved isolated staging Worker load test]
