@@ -1,7 +1,7 @@
 task:
   id: FEAT-CMP-001
   title: Dashboard weather comparison
-  status: REVIEW
+  status: DONE
   objective: Compare normalized dashboard current weather with a documented deterministic location fixture.
   depends_on: [FEAT-PLAN-001]
   external_policy_checks: [none]
