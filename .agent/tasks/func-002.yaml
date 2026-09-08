@@ -1,7 +1,7 @@
 task:
   id: FUNC-002
   title: Authenticated profile API
-  status: REVIEW
+  status: DONE
   objective: Return the authenticated caller's profile and preferences through the Supabase Edge Function.
   depends_on: [FUNC-001, RLS-001]
   external_policy_checks: [none]
