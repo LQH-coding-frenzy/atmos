@@ -158,6 +158,57 @@ app.get('/api/v1/me', async (context) => {
   return context.json({ profile, preferences });
 });
 
+async function authenticatedClient(context: Context) {
+  const authorization = context.req.header('authorization');
+  const url = Deno.env.get('SUPABASE_URL');
+  const key = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!authorization || !url || !key) return undefined;
+  const client = createClient(url, key, { global: { headers: { Authorization: authorization } } });
+  const { data } = await client.auth.getUser();
+  return data.user ? client : undefined;
+}
+
+app.get('/api/v1/locations', async (context) => {
+  const client = await authenticatedClient(context);
+  if (!client) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+  const { data, error: queryError } = await client
+    .from('saved_locations')
+    .select('id, name, latitude, longitude, created_at, updated_at')
+    .order('created_at', { ascending: false });
+  if (queryError)
+    return error(context, 'LOCATIONS_UNAVAILABLE', 'Saved locations are unavailable.', 503);
+  return context.json({ locations: data });
+});
+
+app.post('/api/v1/locations', async (context) => {
+  const client = await authenticatedClient(context);
+  if (!client) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+  const body = (await context.req.json().catch(() => undefined)) as
+    { name?: string; latitude?: number; longitude?: number } | undefined;
+  if (
+    !body ||
+    typeof body.name !== 'string' ||
+    body.name.length < 1 ||
+    body.name.length > 120 ||
+    !Number.isFinite(body.latitude) ||
+    !Number.isFinite(body.longitude) ||
+    body.latitude < -90 ||
+    body.latitude > 90 ||
+    body.longitude < -180 ||
+    body.longitude > 180
+  ) {
+    return error(context, 'INVALID_LOCATION', 'A valid saved location is required.', 400);
+  }
+  const { data, error: insertError } = await client
+    .from('saved_locations')
+    .insert({ name: body.name.trim(), latitude: body.latitude, longitude: body.longitude })
+    .select('id, name, latitude, longitude, created_at, updated_at')
+    .single();
+  if (insertError)
+    return error(context, 'LOCATIONS_UNAVAILABLE', 'Saved locations are unavailable.', 503);
+  return context.json({ location: data }, 201);
+});
+
 const plannerActivities = new Set<PlannerActivity>([
   'running',
   'cycling',
