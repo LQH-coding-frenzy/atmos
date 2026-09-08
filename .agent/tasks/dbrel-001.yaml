@@ -1,7 +1,7 @@
 task:
   id: DBREL-001
   title: Expand and contract migration policy
-  status: REVIEW
+  status: DONE
   objective: Provide an operational database migration procedure compatible with retained backend rollback targets.
   depends_on: [DB-001]
   external_policy_checks: [none]
