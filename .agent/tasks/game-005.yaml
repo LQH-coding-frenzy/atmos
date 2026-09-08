@@ -1,7 +1,7 @@
 task:
   id: GAME-005
   title: Notification DLQ exercise
-  status: REVIEW
+  status: DONE
   objective: Verify staging retry exhaustion routes an isolated failed notification reference to the DLQ.
   depends_on: [QUEUE-005]
   scope:
