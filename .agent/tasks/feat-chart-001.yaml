@@ -1,7 +1,7 @@
 task:
   id: FEAT-CHART-001
   title: Dashboard forecast charts
-  status: REVIEW
+  status: DONE
   objective: Render responsive dashboard forecast charts from normalized mock dashboard data.
   depends_on: [WEB-002]
   external_policy_checks: [none]
