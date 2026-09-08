@@ -1,7 +1,7 @@
 task:
   id: FEAT-MAP-001
   title: Interactive local dashboard map
-  status: REVIEW
+  status: DONE
   objective: Render an interactive MapLibre surface centered on the documented mock dashboard location.
   depends_on: [WEB-002]
   external_policy_checks: [none]
