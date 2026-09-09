@@ -1,7 +1,7 @@
 task:
   id: REL-001
   title: Release identity convention
-  status: REVIEW
+  status: DONE
   objective: Derive one validated release ID from the exact Git commit for all deployment lanes.
   depends_on: [CI-001]
   external_policy_checks: [none]
