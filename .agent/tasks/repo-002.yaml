@@ -1,0 +1,62 @@
+task:
+  id: REPO-002
+  title: Repository ownership and protection
+  status: REVIEW
+  objective: Enforce immutable protected main history while preserving the existing strict pull-request checks.
+  depends_on: [REPO-001]
+  external_policy_checks: [GitHub public repository branch-protection API available]
+  runtime_placement:
+    allowed: [github]
+    selected: github
+    reason: GitHub owns branch history, pull-request checks, and CODEOWNERS enforcement capabilities.
+  scope:
+    include:
+      [
+        GitHub main branch protection,
+        .agent/status.yaml,
+        .agent/tasks/repo-002.yaml,
+        docs/evidence/repo-002,
+      ]
+    exclude:
+      [
+        application code,
+        workflow change,
+        required approval count,
+        CODEOWNER review enforcement,
+        production deployment,
+      ]
+  inputs:
+    required_config: [main branch]
+    required_secrets: [none]
+  outputs:
+    files: [.agent/tasks/repo-002.yaml, docs/evidence/repo-002/2026-09-10.md]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [GitHub main branch protection]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: immediate GitHub protection API update
+  validation:
+    commands: [gh api repos/LQH-coding-frenzy/atmos/branches/main/protection]
+    expected:
+      [
+        force pushes disabled,
+        strict required checks preserved,
+        pull requests and admin enforcement remain required,
+      ]
+  security_checks: [manual branch-protection diff, protected pull-request checks]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [required check state]
+    logs: [GitHub branch-protection API audit trail]
+    traces: [not applicable to repository governance]
+  evidence: [docs/evidence/repo-002/2026-09-10.md, GitHub branch-protection API response]
+  rollback:
+    strategy: Re-enable force pushes only for an explicitly approved repository-recovery exception.
+  human_approval:
+    required: false
+    reason: This change strengthens history protection without creating a maintainer lockout.
