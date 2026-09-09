@@ -1,51 +1,78 @@
 task:
   id: DBREL-001
-  title: Expand and contract migration policy
-  status: DONE
-  objective: Provide an operational database migration procedure compatible with retained backend rollback targets.
+  title: Expand and contract migration release
+  status: REVIEW
+  objective: Promote the two reviewed additive migrations to staging without impairing retained backend compatibility.
   depends_on: [DB-001]
-  external_policy_checks: [none]
+  external_policy_checks: [scoped provider preflight GO, owner-approved staging migration apply]
   runtime_placement:
-    allowed: [documentation]
-    selected: documentation
-    reason: This task codifies database release controls without mutating any runtime.
+    allowed: [postgres]
+    selected: postgres
+    reason: Supabase migration history is the authoritative staging schema release boundary.
   scope:
     include:
       [
         .agent/status.yaml,
         .agent/tasks/dbrel-001.yaml,
         docs/operations/database-migrations.md,
-        docs/evidence/dbrel-001/2026-09-05.md,
+        docs/evidence/dbrel-001,
+        docs/evidence/preflight/2026-09-10.md,
+        supabase/migrations/20260907000000_alert_events.sql,
+        supabase/migrations/20260908000000_saved_locations.sql,
+        atmos-staging migration history,
       ]
-    exclude: [schema change, remote database apply, backup creation]
+    exclude:
+      [
+        production database,
+        destructive migration,
+        migration rewrite,
+        backup creation,
+        backend deployment,
+      ]
   inputs:
-    required_config: []
-    required_secrets: []
+    required_config: [staging project ref btrvybyprlcumtovdxsc]
+    required_secrets: [SUPABASE_ACCESS_TOKEN]
   outputs:
-    files: [docs/operations/database-migrations.md]
+    files: [docs/evidence/dbrel-001/2026-09-10.md, docs/evidence/preflight/2026-09-10.md]
     terraform_resources: []
-    database_changes: [none]
-    deployed_units: [none]
+    database_changes: [20260907000000_alert_events.sql, 20260908000000_saved_locations.sql]
+    deployed_units: [atmos-staging PostgreSQL]
   compatibility:
-    requires_expand_contract: false
+    requires_expand_contract: true
     stable_version_compatible: true
-    rollback_window: not_applicable
+    rollback_window: retain additive tables through the backend release window
   validation:
-    commands: [corepack pnpm exec prettier --check docs/operations/database-migrations.md]
+    commands:
+      [
+        corepack pnpm exec supabase db reset,
+        corepack pnpm test:db,
+        corepack pnpm exec supabase db push --linked --dry-run,
+        corepack pnpm exec supabase migration list --linked,
+      ]
     expected:
-      [runbook is formatted and covers expand, migrate, switch, contract, gates, and recovery]
-  security_checks: [none; policy documents existing RLS controls]
+      [
+        107 local pgTAP assertions pass,
+        dry-run lists exactly two migrations,
+        remote history matches local after apply,
+      ]
+  security_checks: [rls_tests_if_applicable, protected database checks]
   budget_checks:
     worker_cpu_budget_ms: 7
     creates_paid_resource: false
     requires_student_credit: false
   telemetry:
-    metrics: ['none; documentation-only task']
-    logs: ['none']
-    traces: ['none']
-  evidence: [docs/evidence/dbrel-001/2026-09-05.md, pull request checks]
+    metrics: [remote migration history]
+    logs: [Supabase CLI migration apply result]
+    traces: [not applicable to schema release]
+  evidence:
+    [
+      docs/evidence/dbrel-001/2026-09-10.md,
+      dry-run output,
+      post-apply migration list,
+      protected database check,
+    ]
   rollback:
-    strategy: Revert the documentation commit if superseded by a reviewed policy.
+    strategy: Retain the additive tables for stable compatibility and forward-fix defects with a new migration; do not destructively roll back staging data.
   human_approval:
-    required: false
-    reason: ''
+    required: true
+    reason: Owner approved both additive atmos-staging migrations on 2026-09-10.
