@@ -1,0 +1,29 @@
+task:
+  id: PREVIEW-001
+  title: Vercel preview workflow
+  status: REVIEW
+  objective: Build pull-request previews reproducibly from the pnpm monorepo.
+  depends_on: [CI-001]
+  external_policy_checks: [Vercel Hobby project and Git integration verified]
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Vercel owns Next.js preview builds and deployment protection.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/preview-001.yaml,
+        .gitignore,
+        apps/web/vercel.json,
+        docs/evidence/preview-001/2026-09-09.md,
+      ]
+    exclude: [production promotion, custom-domain changes, backend deployment]
+  validation:
+    commands: [corepack pnpm dlx vercel build --yes --scope 23520608-3283s-projects]
+    expected: [workspace dependencies and the Next.js application build successfully]
+  rollback:
+    strategy: Revert the Git-owned Vercel build configuration and restore the previous project build command.
+  human_approval:
+    required: false
+    reason: Existing Hobby project only; no paid resource or production promotion.
