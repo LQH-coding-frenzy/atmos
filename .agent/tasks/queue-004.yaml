@@ -1,7 +1,7 @@
 task:
   id: QUEUE-004
   title: Notification consumer Worker
-  status: REVIEW
+  status: DONE
   objective: Consume compact notification references and claim durable delivery work through Supabase.
   depends_on: [QUEUE-003]
   runtime_placement:
