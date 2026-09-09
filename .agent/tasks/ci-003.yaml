@@ -1,7 +1,7 @@
 task:
   id: CI-003
   title: Playwright local stack
-  status: REVIEW
+  status: DONE
   objective: Keep the protected Chromium smoke job independent of an unrelated mutable Google Chrome apt repository.
   depends_on: [CI-001, WEB-002, EDGE-002]
   external_policy_checks:
