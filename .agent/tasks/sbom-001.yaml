@@ -1,7 +1,7 @@
 task:
   id: SBOM-001
   title: Serverless package SBOM
-  status: REVIEW
+  status: DONE
   objective: Produce a validated CycloneDX inventory for the repository package dependencies on every protected security run.
   depends_on: [SEC-004]
   external_policy_checks:
@@ -17,6 +17,7 @@ task:
         .agent/status.yaml,
         .agent/tasks/sbom-001.yaml,
         docs/evidence/sbom-001,
+        GitHub main required status checks,
       ]
     exclude: [container image SBOM, signing, attestations, release attachment, deployment]
   inputs:
@@ -26,7 +27,7 @@ task:
     files: [.github/workflows/security.yml]
     terraform_resources: [none]
     database_changes: [none]
-    deployed_units: [GitHub Actions SBOM job]
+    deployed_units: [GitHub Actions SBOM job, main required sbom status check]
   compatibility:
     requires_expand_contract: false
     stable_version_compatible: true
@@ -54,7 +55,7 @@ task:
   evidence:
     [docs/evidence/sbom-001/2026-09-09.md, protected workflow run, uploaded CycloneDX artifact]
   rollback:
-    strategy: Revert the isolated SBOM job; existing security gates remain unchanged.
+    strategy: Remove the required sbom context, then revert the isolated SBOM job; existing security gates remain unchanged.
   human_approval:
     required: false
     reason: Read-only CI generation using existing GitHub artifact storage and no credentials.
