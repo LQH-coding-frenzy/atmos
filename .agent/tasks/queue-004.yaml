@@ -1,7 +1,7 @@
 task:
   id: QUEUE-004
   title: Notification consumer Worker
-  status: DONE
+  status: REVIEW
   objective: Consume compact notification references and claim durable delivery work through Supabase.
   depends_on: [QUEUE-003]
   runtime_placement:
@@ -14,7 +14,7 @@ task:
   validation:
     commands:
       [
-        corepack pnpm exec vitest run workers/gateway/src/index.test.ts workers/gateway/src/notification-queue.test.ts,
+        corepack pnpm exec vitest run workers/gateway/src/index.test.ts workers/gateway/src/notification-queue.test.ts supabase/functions/_shared/internal-request.test.ts,
         corepack pnpm typecheck,
         corepack pnpm --filter @atmos/gateway build,
         corepack pnpm lint,

@@ -13,6 +13,7 @@ import {
   type AlertCondition,
   type AlertWeatherFacts,
 } from '../_shared/alert-evaluator.ts';
+import { isUuid, matchesInternalSecret } from '../_shared/internal-request.ts';
 
 type Bindings = {
   CORS_ORIGIN?: string;
@@ -62,12 +63,22 @@ app.get('/health/dependencies', (context) => context.json({ database: 'not_confi
 app.get('/version', (context) => context.json({ release: context.env.RELEASE_ID ?? 'local' }));
 
 app.post('/internal/notifications/deliver', async (context) => {
-  if (context.req.header('x-internal-queue-secret') !== Deno.env.get('INTERNAL_QUEUE_SECRET')) {
+  if (
+    !matchesInternalSecret(
+      Deno.env.get('INTERNAL_QUEUE_SECRET'),
+      context.req.header('x-internal-queue-secret'),
+    )
+  ) {
     return error(context, 'UNAUTHORIZED', 'Internal authorization is required.', 401);
   }
   const body = (await context.req.json().catch(() => undefined)) as
     { version?: number; event_id?: string; delivery_id?: string; kind?: string } | undefined;
-  if (body?.version !== 1 || body.kind !== 'weather-alert' || !body.event_id || !body.delivery_id) {
+  if (
+    body?.version !== 1 ||
+    body.kind !== 'weather-alert' ||
+    !isUuid(body.event_id) ||
+    !isUuid(body.delivery_id)
+  ) {
     return error(context, 'INVALID_MESSAGE', 'Notification message is invalid.', 400);
   }
   const url = Deno.env.get('SUPABASE_URL');
