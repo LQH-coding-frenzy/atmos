@@ -37,3 +37,4 @@ backups/
 docs/evidence/generated/
 
 .vercel/
+/supabase/functions/api-[0-9a-f]*/
