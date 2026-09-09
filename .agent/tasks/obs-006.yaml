@@ -1,7 +1,7 @@
 task:
   id: OBS-006
   title: Cloudflare Worker diagnostics runbook
-  status: REVIEW
+  status: DONE
   objective: Document safe staging Worker diagnostics and the valid Cloudflare CPU evidence source.
   depends_on: [EDGE-002]
   external_policy_checks: [none]
