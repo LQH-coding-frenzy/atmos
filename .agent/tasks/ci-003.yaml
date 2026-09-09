@@ -1,0 +1,55 @@
+task:
+  id: CI-003
+  title: Playwright local stack
+  status: DONE
+  objective: Keep the protected Chromium smoke job independent of an unrelated mutable Google Chrome apt repository.
+  depends_on: [CI-001, WEB-002, EDGE-002]
+  external_policy_checks:
+    [GitHub hosted runner and Playwright Chromium remain within the existing Actions plan]
+  runtime_placement:
+    allowed: [github-actions]
+    selected: github-actions
+    reason: The failure occurs while preparing the isolated protected browser-test runner.
+  scope:
+    include:
+      [
+        .github/workflows/e2e.yml,
+        .agent/status.yaml,
+        .agent/tasks/ci-003.yaml,
+        docs/evidence/ci-003,
+      ]
+    exclude: [application code, browser version change, test weakening, production deployment]
+  inputs:
+    required_config: [ubuntu-24.04 GitHub runner]
+    required_secrets: [none]
+  outputs:
+    files: [.github/workflows/e2e.yml]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [protected Playwright job]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: immediate workflow revert
+  validation:
+    commands: [corepack pnpm test:e2e, protected Playwright job]
+    expected:
+      [
+        Playwright installs bundled Chromium dependencies without querying the Google Chrome apt source,
+        smoke test passes,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [Playwright job status and duration]
+    logs: [dependency installation and browser smoke output]
+    traces: [Playwright trace on first retry]
+  evidence: [docs/evidence/ci-003/2026-09-10.md, protected workflow run]
+  rollback:
+    strategy: Revert the runner-local apt-source removal; no persistent runner or application state exists.
+  human_approval:
+    required: false
+    reason: Ephemeral CI runner correction with no credentials, production mutation, or weakened test.
