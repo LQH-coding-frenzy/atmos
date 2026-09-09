@@ -1,7 +1,7 @@
 task:
   id: PREVIEW-001
   title: Vercel preview workflow
-  status: REVIEW
+  status: DONE
   objective: Build pull-request previews reproducibly from the pnpm monorepo.
   depends_on: [CI-001]
   external_policy_checks: [Vercel Hobby project and Git integration verified]
