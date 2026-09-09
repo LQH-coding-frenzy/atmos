@@ -2,7 +2,7 @@ import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { OpenMeteoProvider } from '@atmos/provider-openmeteo';
-import type { WeatherProvider } from '@atmos/contracts';
+import type { Dashboard, WeatherProvider } from '@atmos/contracts';
 import { assertNotificationMessage, type NotificationQueueMessage } from './notification-queue';
 import { createCorrelation } from './correlation';
 
@@ -24,6 +24,7 @@ type GatewayEnvironment = { Bindings: Bindings; Variables: Variables };
 type WeatherCache = Pick<Cache, 'match' | 'put'>;
 
 const weatherCacheTtlSeconds = 300;
+const staleWeatherCacheTtlSeconds = 3600;
 const noWeatherCache: WeatherCache = {
   match: async () => undefined,
   put: async () => undefined,
@@ -59,6 +60,17 @@ function weatherInput(context: { req: { query: (name: string) => string | undefi
   }
 
   return { latitude, longitude, timezone, units } as const;
+}
+
+function weatherCacheKeys(url: string) {
+  const freshUrl = new URL(url);
+  freshUrl.searchParams.delete('__atmos_cache_tier');
+  const staleUrl = new URL(freshUrl);
+  staleUrl.searchParams.set('__atmos_cache_tier', 'stale');
+  return {
+    fresh: new Request(freshUrl, { method: 'GET' }),
+    stale: new Request(staleUrl, { method: 'GET' }),
+  };
 }
 
 export function createApp(
@@ -131,37 +143,51 @@ export function createApp(
       );
     }
 
-    const cacheKey = new Request(context.req.url, { method: 'GET' });
+    const cacheKeys = weatherCacheKeys(context.req.url);
     const weatherCache =
       cache ??
       (typeof caches === 'undefined'
         ? noWeatherCache
         : (caches as CacheStorage & { default: WeatherCache }).default);
-    const cachedResponse = await weatherCache.match(cacheKey);
-    if (cachedResponse) {
-      const response = new Response(cachedResponse.body, cachedResponse);
-      response.headers.set('x-cache', 'HIT');
-      return response;
+    let staleResponse: Response | undefined;
+    try {
+      const cachedResponse = await weatherCache.match(cacheKeys.fresh);
+      if (cachedResponse) {
+        const response = new Response(cachedResponse.body, cachedResponse);
+        response.headers.set('x-cache', 'HIT');
+        return response;
+      }
+      staleResponse = await weatherCache.match(cacheKeys.stale);
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          event: 'weather_cache_read_failed',
+          request_id: context.get('requestId'),
+          trace_id: context.get('traceparent').split('-')[1],
+          error_type: error instanceof Error ? error.name : 'unknown',
+        }),
+      );
     }
 
+    let dashboard: Dashboard;
     try {
-      const response = context.json(await weatherProvider.getDashboard(input));
-      response.headers.set(
-        'cache-control',
-        `public, max-age=${weatherCacheTtlSeconds}, s-maxage=${weatherCacheTtlSeconds}`,
-      );
-      response.headers.set('x-cache', 'MISS');
-      await weatherCache.put(cacheKey, response.clone());
-      return response;
+      dashboard = await weatherProvider.getDashboard(input);
     } catch (error) {
       console.warn(
         JSON.stringify({
           event: 'weather_provider_failed',
           request_id: context.get('requestId'),
           trace_id: context.get('traceparent').split('-')[1],
+          cache_status: staleResponse ? 'STALE' : 'MISS',
           error_type: error instanceof Error ? error.name : 'unknown',
         }),
       );
+      if (staleResponse) {
+        const response = new Response(staleResponse.body, staleResponse);
+        response.headers.set('cache-control', 'private, no-store');
+        response.headers.set('x-cache', 'STALE');
+        return response;
+      }
       return gatewayError(
         context,
         'WEATHER_UNAVAILABLE',
@@ -169,6 +195,49 @@ export function createApp(
         503,
       );
     }
+
+    const response = context.json(dashboard);
+    response.headers.set(
+      'cache-control',
+      `public, max-age=${weatherCacheTtlSeconds}, s-maxage=${weatherCacheTtlSeconds}`,
+    );
+    response.headers.set('x-cache', 'MISS');
+    try {
+      await Promise.all([
+        weatherCache.put(
+          cacheKeys.fresh,
+          Response.json(
+            { ...dashboard, meta: { ...dashboard.meta, cached: true, stale: false } },
+            {
+              headers: {
+                'cache-control': `public, max-age=${weatherCacheTtlSeconds}, s-maxage=${weatherCacheTtlSeconds}`,
+              },
+            },
+          ),
+        ),
+        weatherCache.put(
+          cacheKeys.stale,
+          Response.json(
+            { ...dashboard, meta: { ...dashboard.meta, cached: true, stale: true } },
+            {
+              headers: {
+                'cache-control': `public, max-age=0, s-maxage=${staleWeatherCacheTtlSeconds}`,
+              },
+            },
+          ),
+        ),
+      ]);
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          event: 'weather_cache_write_failed',
+          request_id: context.get('requestId'),
+          trace_id: context.get('traceparent').split('-')[1],
+          error_type: error instanceof Error ? error.name : 'unknown',
+        }),
+      );
+    }
+    return response;
   });
 
   app.all('/api/*', async (context) => {

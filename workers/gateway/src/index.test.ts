@@ -4,7 +4,10 @@ import { app, createApp } from './index';
 import worker from './index';
 
 describe('gateway', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
   it('acks successful queue deliveries and retries failed delivery claims', async () => {
     const ack = vi.fn();
     const retry = vi.fn();
@@ -226,6 +229,54 @@ describe('gateway', () => {
     });
   });
 
+  it('serves the bounded stale tier when the weather provider fails', async () => {
+    const staleDashboard = await new MockWeatherProvider().getDashboard({
+      latitude: 52.52,
+      longitude: 13.405,
+      timezone: 'Europe/Berlin',
+      units: 'metric',
+    });
+    const cache = {
+      match: vi.fn(async (request: Request) =>
+        request.url.includes('__atmos_cache_tier=stale')
+          ? Response.json({
+              ...staleDashboard,
+              meta: { ...staleDashboard.meta, cached: true, stale: true },
+            })
+          : undefined,
+      ),
+      put: vi.fn(),
+    };
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const weatherApp = createApp(
+      {
+        getDashboard: async () => {
+          throw new Error('sensitive upstream response');
+        },
+      },
+      cache,
+    );
+
+    const response = await weatherApp.request(
+      'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405',
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-cache')).toBe('STALE');
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    await expect(response.json()).resolves.toMatchObject({
+      location: { name: 'Berlin' },
+      meta: { cached: true, stale: true },
+    });
+    expect(warning).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(warning.mock.calls[0]?.[0]))).toMatchObject({
+      event: 'weather_provider_failed',
+      cache_status: 'STALE',
+      error_type: 'Error',
+    });
+    expect(warning.mock.calls[0]?.[0]).not.toContain('sensitive upstream response');
+  });
+
   it('serves cached public weather without calling the provider', async () => {
     const getDashboard = vi.fn();
     const cache = {
@@ -250,15 +301,48 @@ describe('gateway', () => {
     const getDashboard = vi.fn(
       new MockWeatherProvider().getDashboard.bind(new MockWeatherProvider()),
     );
-    const cache = { match: vi.fn(async () => undefined), put: vi.fn(async () => undefined) };
+    const cache = {
+      match: vi.fn(async () => undefined),
+      put: vi.fn(async (request: Request, response: Response) => {
+        void request;
+        void response;
+      }),
+    };
     const weatherApp = createApp({ getDashboard }, cache);
+
+    const response = await weatherApp.request(
+      'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405&__atmos_cache_tier=stale',
+    );
+
+    expect(response.headers.get('x-cache')).toBe('MISS');
+    expect(response.headers.get('cache-control')).toBe('public, max-age=300, s-maxage=300');
+    expect(cache.put).toHaveBeenCalledTimes(2);
+    expect(cache.put.mock.calls[0]?.[0].url).not.toContain('__atmos_cache_tier');
+    expect(cache.put.mock.calls[1]?.[0].url).toContain('__atmos_cache_tier=stale');
+    await expect(cache.put.mock.calls[0]?.[1].clone().json()).resolves.toMatchObject({
+      meta: { cached: true, stale: false },
+    });
+    await expect(cache.put.mock.calls[1]?.[1].clone().json()).resolves.toMatchObject({
+      meta: { cached: true, stale: true },
+    });
+  });
+
+  it('returns live weather when cache writes fail', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const weatherApp = createApp(new MockWeatherProvider(), {
+      match: vi.fn(async () => undefined),
+      put: vi.fn(async () => Promise.reject(new Error('cache unavailable'))),
+    });
 
     const response = await weatherApp.request(
       'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405',
     );
 
+    expect(response.status).toBe(200);
     expect(response.headers.get('x-cache')).toBe('MISS');
-    expect(response.headers.get('cache-control')).toBe('public, max-age=300, s-maxage=300');
-    expect(cache.put).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(warning.mock.calls[0]?.[0]))).toMatchObject({
+      event: 'weather_cache_write_failed',
+      error_type: 'Error',
+    });
   });
 });

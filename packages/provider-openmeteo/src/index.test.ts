@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   MockWeatherProvider,
   OpenMeteoProvider,
@@ -8,6 +8,8 @@ import {
 } from './index';
 
 describe('weather providers', () => {
+  afterEach(() => vi.useRealTimers());
+
   it('returns deterministic mock dashboard data', async () => {
     const dashboard = await new MockWeatherProvider().getDashboard({
       latitude: 52.52,
@@ -62,6 +64,30 @@ describe('weather providers', () => {
 
     expect(dashboard.current.condition).toBe('partly-cloudy');
     expect(dashboard.daily[0]?.highC).toBe(23);
+  });
+
+  it('aborts an unresponsive provider after five seconds without retrying', async () => {
+    vi.useFakeTimers();
+    const fetcher = vi.fn(
+      async (_url: URL | RequestInfo, init?: RequestInit): Promise<Response> =>
+        new Promise((_, reject) => {
+          init?.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Request timed out', 'AbortError')),
+          );
+        }),
+    );
+    const request = new OpenMeteoProvider(fetcher).getDashboard({
+      latitude: 52.52,
+      longitude: 13.405,
+      timezone: 'Europe/Berlin',
+      units: 'metric',
+    });
+    const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+
+    await vi.advanceTimersByTimeAsync(5000);
+
+    await rejection;
+    expect(fetcher).toHaveBeenCalledOnce();
   });
 
   it('reports warnings and rejects requests beyond a quota', () => {
