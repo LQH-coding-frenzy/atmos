@@ -25,6 +25,8 @@ jobs:
       - name: Enable Corepack and install
         run: corepack enable && pnpm install --frozen-lockfile
       - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+        run: |
+          sudo rm -f /etc/apt/sources.list.d/google-chrome.list
+          pnpm exec playwright install --with-deps chromium
       - name: Run browser smoke tests
         run: pnpm test:e2e
