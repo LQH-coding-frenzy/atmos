@@ -1,0 +1,75 @@
+task:
+  id: OBS-001
+  title: Cross-system correlation
+  status: REVIEW
+  objective: Validate and propagate bounded request IDs and W3C trace context across Worker and Edge Function boundaries.
+  depends_on: [EDGE-003, FUNC-001]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [cloudflare-worker, supabase-edge-function]
+    selected: cloudflare-worker-and-supabase-edge-function
+    reason: Both server-side boundaries must preserve one request and trace identity across proxy and internal calls.
+  scope:
+    include:
+      [
+        workers/gateway/src,
+        supabase/functions/_shared/correlation.ts,
+        supabase/functions/api-v1/index.ts,
+        .agent/status.yaml,
+        .agent/tasks/obs-001.yaml,
+        docs/evidence/obs-001,
+      ]
+    exclude:
+      [
+        remote deployment,
+        telemetry vendor,
+        trace export,
+        durable correlation storage,
+        user identifiers,
+      ]
+  inputs:
+    required_config: [none]
+    required_secrets: [none]
+  outputs:
+    files:
+      [
+        workers/gateway/src/correlation.ts,
+        supabase/functions/_shared/correlation.ts,
+        supabase/functions/_shared/correlation.test.ts,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [gateway and api-v1 source only]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: before backend deployment
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run workers/gateway/src/index.test.ts supabase/functions/_shared/correlation.test.ts,
+        corepack pnpm typecheck,
+        corepack pnpm --filter @atmos/gateway build,
+        corepack pnpm lint,
+      ]
+    expected:
+      [
+        valid identifiers are preserved,
+        invalid identifiers are regenerated,
+        proxy and internal calls propagate both identifiers,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [none; propagation base only]
+    logs: [request_id and trace_id on sanitized provider failures]
+    traces: [W3C traceparent propagated without vendor export]
+  evidence: [docs/evidence/obs-001/2026-09-09.md]
+  rollback:
+    strategy: Revert correlation middleware and propagation before backend deployment; generated identifiers carry no durable state.
+  human_approval:
+    required: false
+    reason: Source-only telemetry foundation with no provider, credential, or remote mutation.

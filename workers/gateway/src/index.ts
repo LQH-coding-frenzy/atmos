@@ -1,9 +1,10 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { OpenMeteoProvider } from '@atmos/provider-openmeteo';
 import type { WeatherProvider } from '@atmos/contracts';
 import { assertNotificationMessage, type NotificationQueueMessage } from './notification-queue';
+import { createCorrelation } from './correlation';
 
 type Bindings = {
   CORS_ORIGIN?: string;
@@ -13,6 +14,13 @@ type Bindings = {
   NOTIFICATION_QUEUE?: Queue<NotificationQueueMessage>;
 };
 
+type Variables = {
+  requestId: string;
+  traceparent: string;
+};
+
+type GatewayEnvironment = { Bindings: Bindings; Variables: Variables };
+
 type WeatherCache = Pick<Cache, 'match' | 'put'>;
 
 const weatherCacheTtlSeconds = 300;
@@ -20,6 +28,15 @@ const noWeatherCache: WeatherCache = {
   match: async () => undefined,
   put: async () => undefined,
 };
+
+function gatewayError(
+  context: Context<GatewayEnvironment>,
+  code: string,
+  message: string,
+  status: 400 | 401 | 404 | 503,
+) {
+  return context.json({ error: { code, message, request_id: context.get('requestId') } }, status);
+}
 
 function weatherInput(context: { req: { query: (name: string) => string | undefined } }) {
   const latitude = Number(context.req.query('lat'));
@@ -48,11 +65,17 @@ export function createApp(
   weatherProvider: WeatherProvider = new OpenMeteoProvider(),
   cache?: WeatherCache,
 ) {
-  const app = new Hono<{ Bindings: Bindings }>();
+  const app = new Hono<GatewayEnvironment>();
 
   app.use('*', async (context, next) => {
-    const requestId = context.req.header('x-request-id') ?? crypto.randomUUID();
-    context.header('x-request-id', requestId);
+    const correlation = createCorrelation(
+      context.req.header('x-request-id'),
+      context.req.header('traceparent'),
+    );
+    context.set('requestId', correlation.requestId);
+    context.set('traceparent', correlation.traceparent);
+    context.header('x-request-id', correlation.requestId);
+    context.header('traceparent', correlation.traceparent);
     await next();
   });
 
@@ -64,7 +87,7 @@ export function createApp(
         return origin === allowedOrigin ? origin : undefined;
       },
       allowMethods: ['GET', 'OPTIONS', 'POST'],
-      allowHeaders: ['Authorization', 'Content-Type', 'X-Request-Id'],
+      allowHeaders: ['Authorization', 'Content-Type', 'Traceparent', 'X-Request-Id'],
       maxAge: 86400,
     }),
   );
@@ -78,31 +101,19 @@ export function createApp(
       !context.env.INTERNAL_QUEUE_SECRET ||
       context.req.header('x-internal-queue-secret') !== context.env.INTERNAL_QUEUE_SECRET
     ) {
-      return context.json(
-        { error: { code: 'UNAUTHORIZED', message: 'Internal authorization is required.' } },
-        401,
-      );
+      return gatewayError(context, 'UNAUTHORIZED', 'Internal authorization is required.', 401);
     }
     if (!context.env.NOTIFICATION_QUEUE) {
-      return context.json(
-        { error: { code: 'QUEUE_UNAVAILABLE', message: 'Notification queue is unavailable.' } },
-        503,
-      );
+      return gatewayError(context, 'QUEUE_UNAVAILABLE', 'Notification queue is unavailable.', 503);
     }
     const messages = await context.req.json<unknown>().catch(() => undefined);
     if (!Array.isArray(messages) || messages.length === 0 || messages.length > 100) {
-      return context.json(
-        { error: { code: 'INVALID_MESSAGE', message: 'Notification batch is invalid.' } },
-        400,
-      );
+      return gatewayError(context, 'INVALID_MESSAGE', 'Notification batch is invalid.', 400);
     }
     try {
       messages.forEach((message) => assertNotificationMessage(message as NotificationQueueMessage));
     } catch {
-      return context.json(
-        { error: { code: 'INVALID_MESSAGE', message: 'Notification batch is invalid.' } },
-        400,
-      );
+      return gatewayError(context, 'INVALID_MESSAGE', 'Notification batch is invalid.', 400);
     }
     const notificationMessages = messages as NotificationQueueMessage[];
     await context.env.NOTIFICATION_QUEUE.sendBatch(notificationMessages.map((body) => ({ body })));
@@ -112,13 +123,10 @@ export function createApp(
   app.get('/api/v1/weather/dashboard', async (context) => {
     const input = weatherInput(context);
     if (!input) {
-      return context.json(
-        {
-          error: {
-            code: 'INVALID_LOCATION',
-            message: 'Valid latitude and longitude query parameters are required.',
-          },
-        },
+      return gatewayError(
+        context,
+        'INVALID_LOCATION',
+        'Valid latitude and longitude query parameters are required.',
         400,
       );
     }
@@ -149,12 +157,15 @@ export function createApp(
       console.warn(
         JSON.stringify({
           event: 'weather_provider_failed',
-          request_id: context.res.headers.get('x-request-id'),
+          request_id: context.get('requestId'),
+          trace_id: context.get('traceparent').split('-')[1],
           error_type: error instanceof Error ? error.name : 'unknown',
         }),
       );
-      return context.json(
-        { error: { code: 'WEATHER_UNAVAILABLE', message: 'Weather is temporarily unavailable.' } },
+      return gatewayError(
+        context,
+        'WEATHER_UNAVAILABLE',
+        'Weather is temporarily unavailable.',
         503,
       );
     }
@@ -163,10 +174,7 @@ export function createApp(
   app.all('/api/*', async (context) => {
     const functionUrl = context.env?.SUPABASE_FUNCTION_URL;
     if (!functionUrl) {
-      return context.json(
-        { error: { code: 'API_UNAVAILABLE', message: 'API is temporarily unavailable.' } },
-        503,
-      );
+      return gatewayError(context, 'API_UNAVAILABLE', 'API is temporarily unavailable.', 503);
     }
 
     const target = new URL(
@@ -175,16 +183,12 @@ export function createApp(
     );
     target.search = new URL(context.req.url).search;
     const request = new Request(target, context.req.raw);
-    request.headers.set(
-      'x-request-id',
-      context.res.headers.get('x-request-id') ?? crypto.randomUUID(),
-    );
+    request.headers.set('x-request-id', context.get('requestId'));
+    request.headers.set('traceparent', context.get('traceparent'));
     return fetch(request);
   });
 
-  app.notFound((context) =>
-    context.json({ error: { code: 'NOT_FOUND', message: 'Route not found.' } }, 404),
-  );
+  app.notFound((context) => gatewayError(context, 'NOT_FOUND', 'Route not found.', 404));
 
   return app;
 }
@@ -201,11 +205,14 @@ export default {
       throw new Error('Queue consumer is not configured');
     }
     for (const message of batch.messages) {
+      const correlation = createCorrelation(undefined, undefined);
       const response = await fetch(`${env.SUPABASE_FUNCTION_URL}/internal/notifications/deliver`, {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
           'x-internal-queue-secret': env.INTERNAL_QUEUE_SECRET,
+          'x-request-id': correlation.requestId,
+          traceparent: correlation.traceparent,
         },
         body: JSON.stringify(message.body),
       });

@@ -14,13 +14,19 @@ import {
   type AlertWeatherFacts,
 } from '../_shared/alert-evaluator.ts';
 import { isUuid, matchesInternalSecret } from '../_shared/internal-request.ts';
+import { createCorrelation } from '../_shared/correlation.ts';
 
 type Bindings = {
   CORS_ORIGIN?: string;
   RELEASE_ID?: string;
 };
 
-const app = new Hono<{ Bindings: Bindings }>().basePath('/api-v1');
+type Variables = {
+  requestId: string;
+  traceparent: string;
+};
+
+const app = new Hono<{ Bindings: Bindings; Variables: Variables }>().basePath('/api-v1');
 
 function error(context: Context, code: string, message: string, status: 400 | 401 | 503) {
   return context.json(
@@ -39,8 +45,14 @@ function error(context: Context, code: string, message: string, status: 400 | 40
 }
 
 app.use('*', async (context, next) => {
-  const requestId = context.req.header('x-request-id') ?? crypto.randomUUID();
-  context.header('x-request-id', requestId);
+  const correlation = createCorrelation(
+    context.req.header('x-request-id'),
+    context.req.header('traceparent'),
+  );
+  context.set('requestId', correlation.requestId);
+  context.set('traceparent', correlation.traceparent);
+  context.header('x-request-id', correlation.requestId);
+  context.header('traceparent', correlation.traceparent);
   await next();
 });
 
@@ -51,7 +63,7 @@ app.use(
       const allowedOrigin = context.env.CORS_ORIGIN ?? 'http://127.0.0.1:3000';
       return origin === allowedOrigin ? origin : allowedOrigin;
     },
-    allowHeaders: ['Authorization', 'Content-Type', 'X-Request-Id'],
+    allowHeaders: ['Authorization', 'Content-Type', 'Traceparent', 'X-Request-Id'],
     allowMethods: ['GET', 'OPTIONS', 'POST'],
     maxAge: 86400,
   }),
@@ -135,7 +147,12 @@ app.post('/internal/notifications/reconcile', async (context) => {
   if (deliveries.length === 0) return context.json({ reconciled: 0 });
   const published = await fetch(`${gatewayUrl}/internal/notifications/publish`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-internal-queue-secret': queueSecret },
+    headers: {
+      'content-type': 'application/json',
+      'x-internal-queue-secret': queueSecret,
+      'x-request-id': context.get('requestId'),
+      traceparent: context.get('traceparent'),
+    },
     body: JSON.stringify(
       deliveries.map((delivery) => ({
         version: 1,
@@ -455,7 +472,12 @@ app.post('/internal/alerts/evaluate', async (context) => {
     if (created?.length && queueSecret && gatewayUrl) {
       const published = await fetch(`${gatewayUrl}/internal/notifications/publish`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-internal-queue-secret': queueSecret },
+        headers: {
+          'content-type': 'application/json',
+          'x-internal-queue-secret': queueSecret,
+          'x-request-id': context.get('requestId'),
+          traceparent: context.get('traceparent'),
+        },
         body: JSON.stringify(
           created.map((delivery) => ({
             version: 1,
