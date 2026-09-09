@@ -1,7 +1,7 @@
 task:
   id: DBREL-001
   title: Expand and contract migration release
-  status: REVIEW
+  status: DONE
   objective: Promote the two reviewed additive migrations to staging without impairing retained backend compatibility.
   depends_on: [DB-001]
   external_policy_checks: [scoped provider preflight GO, owner-approved staging migration apply]
