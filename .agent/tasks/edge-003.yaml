@@ -1,7 +1,7 @@
 task:
   id: EDGE-003
   title: Request IDs CORS and security headers
-  status: REVIEW
+  status: DONE
   objective: Allow configured frontend write preflights without granting untrusted origins access to gateway responses.
   depends_on: [EDGE-002]
   external_policy_checks: [existing public frontend origin only]
