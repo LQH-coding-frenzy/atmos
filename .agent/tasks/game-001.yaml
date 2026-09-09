@@ -1,7 +1,7 @@
 task:
   id: GAME-001
   title: Weather provider outage exercise
-  status: REVIEW
+  status: DONE
   objective: Prove provider timeouts degrade to bounded stale weather or a typed sanitized error without runaway retries.
   depends_on: [CACHE-001, OBS-001]
   external_policy_checks: [Open-Meteo non-commercial usage remains unchanged]
