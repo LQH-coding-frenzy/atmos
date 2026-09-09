@@ -19,6 +19,7 @@
     "test:e2e": "playwright test",
     "test:db": "supabase test db",
     "security:local": "gitleaks git --no-banner && trivy fs --scanners vuln,secret,misconfig --exit-code 1 .",
+    "release:id": "node scripts/release-id.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
