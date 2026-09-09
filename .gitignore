@@ -36,5 +36,4 @@ Thumbs.db
 backups/
 docs/evidence/generated/
 
-.vercel
-.env*
+.vercel/
