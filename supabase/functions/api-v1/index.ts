@@ -95,6 +95,13 @@ app.post('/internal/notifications/reconcile', async (context) => {
   if (!url || !key) return error(context, 'DELIVERY_UNAVAILABLE', 'Delivery is unavailable.', 503);
   const client = createClient(url, key);
   const now = new Date().toISOString();
+  const staleBefore = new Date(Date.now() - 15 * 60_000).toISOString();
+  const { error: recoveryError } = await client
+    .from('notification_deliveries')
+    .update({ status: 'retry', next_attempt_at: now, updated_at: now })
+    .eq('status', 'processing')
+    .lt('updated_at', staleBefore);
+  if (recoveryError) return error(context, 'DELIVERY_UNAVAILABLE', 'Delivery is unavailable.', 503);
   const { data, error: reconciliationError } = await client
     .from('notification_deliveries')
     .select('id, event_id, kind, attempt_count')
@@ -165,13 +172,13 @@ async function authenticatedClient(context: Context) {
   if (!authorization || !url || !key) return undefined;
   const client = createClient(url, key, { global: { headers: { Authorization: authorization } } });
   const { data } = await client.auth.getUser();
-  return data.user ? client : undefined;
+  return data.user ? { client, user: data.user } : undefined;
 }
 
 app.get('/api/v1/locations', async (context) => {
-  const client = await authenticatedClient(context);
-  if (!client) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
-  const { data, error: queryError } = await client
+  const authenticated = await authenticatedClient(context);
+  if (!authenticated) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+  const { data, error: queryError } = await authenticated.client
     .from('saved_locations')
     .select('id, name, latitude, longitude, created_at, updated_at')
     .order('created_at', { ascending: false });
@@ -181,8 +188,8 @@ app.get('/api/v1/locations', async (context) => {
 });
 
 app.post('/api/v1/locations', async (context) => {
-  const client = await authenticatedClient(context);
-  if (!client) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+  const authenticated = await authenticatedClient(context);
+  if (!authenticated) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
   const body = (await context.req.json().catch(() => undefined)) as
     { name?: string; latitude?: number; longitude?: number } | undefined;
   if (
@@ -199,9 +206,14 @@ app.post('/api/v1/locations', async (context) => {
   ) {
     return error(context, 'INVALID_LOCATION', 'A valid saved location is required.', 400);
   }
-  const { data, error: insertError } = await client
+  const { data, error: insertError } = await authenticated.client
     .from('saved_locations')
-    .insert({ name: body.name.trim(), latitude: body.latitude, longitude: body.longitude })
+    .insert({
+      user_id: authenticated.user.id,
+      name: body.name.trim(),
+      latitude: body.latitude,
+      longitude: body.longitude,
+    })
     .select('id, name, latitude, longitude, created_at, updated_at')
     .single();
   if (insertError)
@@ -367,7 +379,7 @@ app.post('/internal/alerts/evaluate', async (context) => {
   const client = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
   const { data: rules, error: rulesError } = await client
     .from('alert_rules')
-    .select('id, conditions, latitude, longitude')
+    .select('id, user_id, conditions, notification_channels, latitude, longitude')
     .eq('enabled', true)
     .not('latitude', 'is', null)
     .not('longitude', 'is', null);
@@ -375,6 +387,16 @@ app.post('/internal/alerts/evaluate', async (context) => {
 
   let triggered = 0;
   let skipped = 0;
+  const evaluatedWindow = new Date(Math.floor(Date.now() / 900_000) * 900_000).toISOString();
+  const fingerprint = async (value: unknown) => {
+    const bytes = new TextEncoder().encode(JSON.stringify(value));
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join(
+      '',
+    );
+  };
+  const queueSecret = Deno.env.get('INTERNAL_QUEUE_SECRET');
+  const gatewayUrl = Deno.env.get('GATEWAY_URL');
   for (const rule of rules ?? []) {
     const conditions = rule.conditions as AlertCondition[];
     if (!conditions.every((condition) => scheduledAlertMetrics.has(condition.metric))) {
@@ -382,7 +404,54 @@ app.post('/internal/alerts/evaluate', async (context) => {
       continue;
     }
     const facts = await scheduledAlertFacts(rule.latitude as number, rule.longitude as number);
-    if (evaluateAlertConditions(conditions, facts).triggered) triggered += 1;
+    const result = evaluateAlertConditions(conditions, facts);
+    if (!result.triggered) continue;
+    triggered += 1;
+    const conditionFingerprint = await fingerprint({ conditions, facts });
+    const { data: event, error: eventError } = await client
+      .from('alert_events')
+      .upsert(
+        {
+          user_id: rule.user_id,
+          alert_rule_id: rule.id,
+          evaluated_window: evaluatedWindow,
+          condition_fingerprint: conditionFingerprint,
+          payload: { facts, matched: result.matched },
+        },
+        { onConflict: 'alert_rule_id,evaluated_window,condition_fingerprint' },
+      )
+      .select('id')
+      .single();
+    if (eventError || !event)
+      return error(context, 'ALERTS_UNAVAILABLE', 'Alerts are unavailable.', 503);
+    const deliveries = (rule.notification_channels as string[]).map((channel) => ({
+      user_id: rule.user_id,
+      event_id: event.id,
+      kind: 'weather-alert',
+      channel,
+    }));
+    const { data: created, error: deliveryError } = await client
+      .from('notification_deliveries')
+      .upsert(deliveries, { onConflict: 'user_id,event_id,channel', ignoreDuplicates: true })
+      .select('id, event_id, kind, attempt_count');
+    if (deliveryError) return error(context, 'ALERTS_UNAVAILABLE', 'Alerts are unavailable.', 503);
+    if (created?.length && queueSecret && gatewayUrl) {
+      const published = await fetch(`${gatewayUrl}/internal/notifications/publish`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-internal-queue-secret': queueSecret },
+        body: JSON.stringify(
+          created.map((delivery) => ({
+            version: 1,
+            event_id: delivery.event_id,
+            delivery_id: delivery.id,
+            kind: delivery.kind,
+            attempt_hint: delivery.attempt_count,
+          })),
+        ),
+      });
+      if (!published.ok)
+        return error(context, 'ALERTS_UNAVAILABLE', 'Alerts are unavailable.', 503);
+    }
   }
   return context.json({ evaluated: (rules?.length ?? 0) - skipped, triggered, skipped });
 });

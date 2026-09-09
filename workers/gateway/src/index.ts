@@ -3,13 +3,14 @@ import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { OpenMeteoProvider } from '@atmos/provider-openmeteo';
 import type { WeatherProvider } from '@atmos/contracts';
+import { assertNotificationMessage, type NotificationQueueMessage } from './notification-queue';
 
 type Bindings = {
   CORS_ORIGIN?: string;
   RELEASE_ID?: string;
   SUPABASE_FUNCTION_URL?: string;
   INTERNAL_QUEUE_SECRET?: string;
-  NOTIFICATION_QUEUE?: Queue<import('./notification-queue').NotificationQueueMessage>;
+  NOTIFICATION_QUEUE?: Queue<NotificationQueueMessage>;
 };
 
 type WeatherCache = Pick<Cache, 'match' | 'put'>;
@@ -73,7 +74,10 @@ export function createApp(
   app.get('/version', (context) => context.json({ release: context.env.RELEASE_ID ?? 'local' }));
 
   app.post('/internal/notifications/publish', async (context) => {
-    if (context.req.header('x-internal-queue-secret') !== context.env.INTERNAL_QUEUE_SECRET) {
+    if (
+      !context.env.INTERNAL_QUEUE_SECRET ||
+      context.req.header('x-internal-queue-secret') !== context.env.INTERNAL_QUEUE_SECRET
+    ) {
       return context.json(
         { error: { code: 'UNAUTHORIZED', message: 'Internal authorization is required.' } },
         401,
@@ -85,10 +89,24 @@ export function createApp(
         503,
       );
     }
-    const messages =
-      await context.req.json<import('./notification-queue').NotificationQueueMessage[]>();
-    await context.env.NOTIFICATION_QUEUE.sendBatch(messages.map((body) => ({ body })));
-    return context.json({ published: messages.length });
+    const messages = await context.req.json<unknown>().catch(() => undefined);
+    if (!Array.isArray(messages) || messages.length === 0 || messages.length > 100) {
+      return context.json(
+        { error: { code: 'INVALID_MESSAGE', message: 'Notification batch is invalid.' } },
+        400,
+      );
+    }
+    try {
+      messages.forEach((message) => assertNotificationMessage(message as NotificationQueueMessage));
+    } catch {
+      return context.json(
+        { error: { code: 'INVALID_MESSAGE', message: 'Notification batch is invalid.' } },
+        400,
+      );
+    }
+    const notificationMessages = messages as NotificationQueueMessage[];
+    await context.env.NOTIFICATION_QUEUE.sendBatch(notificationMessages.map((body) => ({ body })));
+    return context.json({ published: notificationMessages.length });
   });
 
   app.get('/api/v1/weather/dashboard', async (context) => {
