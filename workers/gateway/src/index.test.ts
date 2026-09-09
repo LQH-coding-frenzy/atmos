@@ -56,8 +56,29 @@ describe('gateway', () => {
 
     expect(health.status).toBe(200);
     expect(health.headers.get('x-request-id')).toBeTruthy();
+    expect(health.headers.get('traceparent')).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/);
     await expect(health.json()).resolves.toEqual({ status: 'ok' });
     await expect(version.json()).resolves.toEqual({ release: 'abc123' });
+  });
+
+  it('preserves valid correlation headers and replaces invalid values', async () => {
+    const traceparent = '00-1234567890abcdef1234567890abcdef-1234567890abcdef-01';
+    const preserved = await app.request('http://localhost/health', {
+      headers: { 'x-request-id': 'browser_request-1', traceparent },
+    });
+    const replaced = await app.request('http://localhost/health', {
+      headers: {
+        'x-request-id': 'x'.repeat(129),
+        traceparent: `00-${'0'.repeat(32)}-${'0'.repeat(16)}-01`,
+      },
+    });
+
+    expect(preserved.headers.get('x-request-id')).toBe('browser_request-1');
+    expect(preserved.headers.get('traceparent')).toBe(traceparent);
+    expect(replaced.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/);
+    expect(replaced.headers.get('traceparent')).toMatch(
+      /^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/,
+    );
   });
 
   it('allows configured browser origins to preflight API writes', async () => {
@@ -68,6 +89,7 @@ describe('gateway', () => {
         headers: {
           origin: 'https://rainify.dpdns.org',
           'access-control-request-method': 'POST',
+          'access-control-request-headers': 'authorization,traceparent,x-request-id',
         },
       },
       { CORS_ORIGIN: 'https://rainify.dpdns.org' },
@@ -76,6 +98,7 @@ describe('gateway', () => {
     expect(response.status).toBe(204);
     expect(response.headers.get('access-control-allow-origin')).toBe('https://rainify.dpdns.org');
     expect(response.headers.get('access-control-allow-methods')).toContain('POST');
+    expect(response.headers.get('access-control-allow-headers')).toContain('Traceparent');
   });
 
   it('does not grant cross-origin access to unconfigured origins', async () => {
@@ -93,8 +116,8 @@ describe('gateway', () => {
   it('returns stable sanitized errors for unknown routes', async () => {
     const response = await app.request('http://localhost/nope');
     expect(response.status).toBe(404);
-    await expect(response.json()).resolves.toEqual({
-      error: { code: 'NOT_FOUND', message: 'Route not found.' },
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'NOT_FOUND', message: 'Route not found.', request_id: expect.any(String) },
     });
   });
 
@@ -105,14 +128,25 @@ describe('gateway', () => {
     });
     vi.stubGlobal('fetch', fetcher);
 
-    const response = await app.request('http://localhost/api/v1/me?detail=full', undefined, {
-      SUPABASE_FUNCTION_URL: 'https://project.supabase.co/functions/v1/api-v1',
-    });
+    const response = await app.request(
+      'http://localhost/api/v1/me?detail=full',
+      {
+        headers: {
+          'x-request-id': 'proxy_request-1',
+          traceparent: '00-1234567890abcdef1234567890abcdef-1234567890abcdef-01',
+        },
+      },
+      { SUPABASE_FUNCTION_URL: 'https://project.supabase.co/functions/v1/api-v1' },
+    );
 
     expect(response.status).toBe(200);
     expect(fetcher).toHaveBeenCalledOnce();
     expect(fetcher.mock.calls[0]?.[0].url).toBe(
       'https://project.supabase.co/functions/v1/api-v1/api/v1/me?detail=full',
+    );
+    expect(fetcher.mock.calls[0]?.[0].headers.get('x-request-id')).toBe('proxy_request-1');
+    expect(fetcher.mock.calls[0]?.[0].headers.get('traceparent')).toBe(
+      '00-1234567890abcdef1234567890abcdef-1234567890abcdef-01',
     );
   });
 
@@ -120,8 +154,12 @@ describe('gateway', () => {
     const response = await app.request('http://localhost/api/v1/me');
 
     expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toEqual({
-      error: { code: 'API_UNAVAILABLE', message: 'API is temporarily unavailable.' },
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'API_UNAVAILABLE',
+        message: 'API is temporarily unavailable.',
+        request_id: expect.any(String),
+      },
     });
   });
 
@@ -157,10 +195,11 @@ describe('gateway', () => {
     );
 
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toEqual({
+    await expect(response.json()).resolves.toMatchObject({
       error: {
         code: 'INVALID_LOCATION',
         message: 'Valid latitude and longitude query parameters are required.',
+        request_id: expect.any(String),
       },
     });
     expect(getDashboard).not.toHaveBeenCalled();
@@ -178,8 +217,12 @@ describe('gateway', () => {
     );
 
     expect(response.status).toBe(503);
-    await expect(response.json()).resolves.toEqual({
-      error: { code: 'WEATHER_UNAVAILABLE', message: 'Weather is temporarily unavailable.' },
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'WEATHER_UNAVAILABLE',
+        message: 'Weather is temporarily unavailable.',
+        request_id: expect.any(String),
+      },
     });
   });
 
