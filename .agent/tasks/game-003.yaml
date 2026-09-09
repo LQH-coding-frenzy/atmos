@@ -1,7 +1,7 @@
 task:
   id: GAME-003
   title: RLS attack exercise
-  status: REVIEW
+  status: DONE
   objective: Prove authenticated cross-user and owner-forgery attacks cannot read or mutate user-owned records.
   depends_on: [RLS-002]
   external_policy_checks: [none]
