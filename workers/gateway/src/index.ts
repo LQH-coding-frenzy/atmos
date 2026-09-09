@@ -61,9 +61,9 @@ export function createApp(
     cors({
       origin: (origin, context) => {
         const allowedOrigin = context.env?.CORS_ORIGIN ?? 'http://127.0.0.1:3000';
-        return origin === allowedOrigin ? origin : allowedOrigin;
+        return origin === allowedOrigin ? origin : undefined;
       },
-      allowMethods: ['GET', 'OPTIONS'],
+      allowMethods: ['GET', 'OPTIONS', 'POST'],
       allowHeaders: ['Authorization', 'Content-Type', 'X-Request-Id'],
       maxAge: 86400,
     }),

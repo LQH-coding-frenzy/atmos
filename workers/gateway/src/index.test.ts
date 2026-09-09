@@ -60,6 +60,36 @@ describe('gateway', () => {
     await expect(version.json()).resolves.toEqual({ release: 'abc123' });
   });
 
+  it('allows configured browser origins to preflight API writes', async () => {
+    const response = await app.request(
+      'http://localhost/api/v1/locations',
+      {
+        method: 'OPTIONS',
+        headers: {
+          origin: 'https://rainify.dpdns.org',
+          'access-control-request-method': 'POST',
+        },
+      },
+      { CORS_ORIGIN: 'https://rainify.dpdns.org' },
+    );
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get('access-control-allow-origin')).toBe('https://rainify.dpdns.org');
+    expect(response.headers.get('access-control-allow-methods')).toContain('POST');
+  });
+
+  it('does not grant cross-origin access to unconfigured origins', async () => {
+    const response = await app.request(
+      'http://localhost/health',
+      { headers: { origin: 'https://untrusted.example' } },
+      { CORS_ORIGIN: 'https://rainify.dpdns.org' },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('access-control-allow-origin')).toBeNull();
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+  });
+
   it('returns stable sanitized errors for unknown routes', async () => {
     const response = await app.request('http://localhost/nope');
     expect(response.status).toBe(404);

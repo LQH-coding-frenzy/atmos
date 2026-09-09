@@ -1,0 +1,65 @@
+task:
+  id: EDGE-003
+  title: Request IDs CORS and security headers
+  status: REVIEW
+  objective: Allow configured frontend write preflights without granting untrusted origins access to gateway responses.
+  depends_on: [EDGE-002]
+  external_policy_checks: [existing public frontend origin only]
+  runtime_placement:
+    allowed: [cloudflare-worker]
+    selected: cloudflare-worker
+    reason: The gateway owns browser-facing CORS, request IDs, and response security headers.
+  scope:
+    include:
+      [
+        workers/gateway/src/index.ts,
+        workers/gateway/src/index.test.ts,
+        workers/gateway/wrangler.jsonc,
+      ]
+    exclude: [remote Worker deploy, frontend CSP, dynamic preview origins, database access]
+  inputs:
+    required_config: [CORS_ORIGIN]
+    required_secrets: [none]
+  outputs:
+    files:
+      [
+        workers/gateway/src/index.ts,
+        workers/gateway/src/index.test.ts,
+        workers/gateway/wrangler.jsonc,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [gateway source configuration only]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: before Worker deployment
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run workers/gateway/src/index.test.ts,
+        corepack pnpm typecheck,
+        corepack pnpm --filter @atmos/gateway build,
+        corepack pnpm lint,
+      ]
+    expected:
+      [
+        configured origin can preflight POST,
+        unconfigured origins receive no access grant,
+        security headers remain present,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [none]
+    logs: [none; CORS denials contain no sensitive context]
+    traces: [request ID propagation remains enabled]
+  evidence: [docs/evidence/edge-003/2026-09-09.md]
+  rollback:
+    strategy: Revert the CORS callback, allowed methods, and public origin variables before deployment.
+  human_approval:
+    required: false
+    reason: Source-only correction for an existing public origin with no remote mutation.
