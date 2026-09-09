@@ -26,7 +26,7 @@ type Variables = {
   traceparent: string;
 };
 
-const app = new Hono<{ Bindings: Bindings; Variables: Variables }>().basePath('/api-v1');
+export const app = new Hono<{ Bindings: Bindings; Variables: Variables }>().basePath('/api-v1');
 
 function error(context: Context, code: string, message: string, status: 400 | 401 | 503) {
   return context.json(
@@ -72,7 +72,9 @@ app.use('*', secureHeaders());
 
 app.get('/health', (context) => context.json({ status: 'ok' }));
 app.get('/health/dependencies', (context) => context.json({ database: 'not_configured' }, 501));
-app.get('/version', (context) => context.json({ release: context.env.RELEASE_ID ?? 'local' }));
+app.get('/version', (context) =>
+  context.json({ release: context.env.RELEASE_ID ?? Deno.env.get('RELEASE_ID') ?? 'local' }),
+);
 
 app.post('/internal/notifications/deliver', async (context) => {
   if (
@@ -511,4 +513,4 @@ app.notFound((context) =>
   ),
 );
 
-Deno.serve(app.fetch);
+if (import.meta.main) Deno.serve(app.fetch);

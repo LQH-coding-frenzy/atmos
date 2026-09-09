@@ -1,0 +1,75 @@
+task:
+  id: REL-002
+  title: Versioned Supabase function deploy
+  status: REVIEW
+  objective: Deploy an immutable staging Edge Function named for the protected Git release and prove its exact version metadata.
+  depends_on: [REL-001, FUNC-001]
+  external_policy_checks: [scoped provider preflight GO, owner-approved staging function deployment]
+  runtime_placement:
+    allowed: [supabase-edge-function]
+    selected: supabase-edge-function
+    reason: Versioned authenticated and database-adjacent APIs remain in the approved Supabase runtime.
+  scope:
+    include:
+      [
+        supabase/functions/api-v1/index.ts,
+        scripts/versioned-supabase-function.mjs,
+        scripts/versioned-supabase-function.test.mjs,
+        docs/operations/versioned-supabase-functions.md,
+        atmos-staging Edge Functions,
+      ]
+    exclude:
+      [
+        production project,
+        stable function deletion,
+        Worker route change,
+        global secret change,
+        database migration,
+      ]
+  inputs:
+    required_config: [staging project ref btrvybyprlcumtovdxsc, protected Git SHA]
+    required_secrets: [SUPABASE_ACCESS_TOKEN]
+  outputs:
+    files:
+      [
+        supabase/functions/api-v1/index.ts,
+        scripts/versioned-supabase-function.mjs,
+        scripts/versioned-supabase-function.test.mjs,
+        docs/operations/versioned-supabase-functions.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [staging api-<release-id>]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: retain api-v1 and the candidate until REL-007 cleanup
+  validation:
+    commands:
+      [
+        node --test scripts/release-id.test.mjs scripts/versioned-supabase-function.test.mjs,
+        corepack pnpm typecheck,
+        corepack pnpm lint,
+        exact staging health and version smoke,
+      ]
+    expected:
+      [
+        wrapper is deterministic and secret-free,
+        staging health is 200,
+        version response equals protected release ID,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [function deployment status]
+    logs: [Supabase deployment and smoke status without credentials]
+    traces: [existing request_id and traceparent response headers]
+  evidence: [docs/evidence/rel-002/2026-09-10.md, protected PR, staging deployment and smoke output]
+  rollback:
+    strategy: Keep api-v1 unchanged and route no Worker traffic to the candidate; delete candidate only after confirming no reference.
+  human_approval:
+    required: true
+    reason: Owner approved versioned atmos-staging Edge Function deployment on 2026-09-10.
