@@ -1,7 +1,7 @@
 task:
   id: REPO-002
   title: Repository ownership and protection
-  status: REVIEW
+  status: DONE
   objective: Enforce immutable protected main history while preserving the existing strict pull-request checks.
   depends_on: [REPO-001]
   external_policy_checks: [GitHub public repository branch-protection API available]
