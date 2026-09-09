@@ -98,7 +98,12 @@ app.post('/internal/notifications/deliver', async (context) => {
 });
 
 app.post('/internal/notifications/reconcile', async (context) => {
-  if (context.req.header('x-alert-cron-secret') !== Deno.env.get('ALERT_CRON_SECRET')) {
+  if (
+    !matchesInternalSecret(
+      Deno.env.get('ALERT_CRON_SECRET'),
+      context.req.header('x-alert-cron-secret'),
+    )
+  ) {
     return error(context, 'UNAUTHORIZED', 'Internal authorization is required.', 401);
   }
   const url = Deno.env.get('SUPABASE_URL');

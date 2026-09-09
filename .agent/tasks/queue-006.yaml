@@ -1,7 +1,7 @@
 task:
   id: QUEUE-006
   title: Notification delivery reconciliation
-  status: DONE
+  status: REVIEW
   objective: Re-enqueue bounded durable pending or due retry deliveries through the Worker publisher.
   depends_on: [QUEUE-002, CRON-001]
   scope:
@@ -18,7 +18,7 @@ task:
     commands:
       [
         corepack pnpm typecheck,
-        corepack pnpm exec vitest run workers/gateway/src/index.test.ts workers/gateway/src/notification-queue.test.ts,
+        corepack pnpm exec vitest run workers/gateway/src/index.test.ts workers/gateway/src/notification-queue.test.ts supabase/functions/_shared/internal-request.test.ts,
         corepack pnpm --filter @atmos/gateway build,
         corepack pnpm lint,
       ]
