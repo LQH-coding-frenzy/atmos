@@ -1,7 +1,7 @@
 task:
   id: REL-002
   title: Versioned Supabase function deploy
-  status: REVIEW
+  status: DONE
   objective: Deploy an immutable staging Edge Function named for the protected Git release and prove its exact version metadata.
   depends_on: [REL-001, FUNC-001]
   external_policy_checks: [scoped provider preflight GO, owner-approved staging function deployment]
