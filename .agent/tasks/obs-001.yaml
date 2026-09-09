@@ -1,7 +1,7 @@
 task:
   id: OBS-001
   title: Cross-system correlation
-  status: REVIEW
+  status: DONE
   objective: Validate and propagate bounded request IDs and W3C trace context across Worker and Edge Function boundaries.
   depends_on: [EDGE-003, FUNC-001]
   external_policy_checks: [none]
