@@ -1,0 +1,56 @@
+task:
+  id: GAME-003
+  title: RLS attack exercise
+  status: REVIEW
+  objective: Prove authenticated cross-user and owner-forgery attacks cannot read or mutate user-owned records.
+  depends_on: [RLS-002]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [postgres]
+    selected: postgres
+    reason: PostgreSQL role and JWT claim simulation exercises the authoritative RLS and grant boundary.
+  scope:
+    include:
+      [
+        supabase/tests/007_rls_attack.sql,
+        .agent/status.yaml,
+        .agent/tasks/game-003.yaml,
+        docs/evidence/game-003,
+      ]
+    exclude: [migration change, policy change, remote database, service-role behavior]
+  inputs:
+    required_config: [local Supabase stack]
+    required_secrets: [none]
+  outputs:
+    files: [supabase/tests/007_rls_attack.sql]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [none]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: not applicable; validation only
+  validation:
+    commands: [corepack pnpm exec supabase db reset, corepack pnpm test:db]
+    expected:
+      [
+        all adversarial reads are empty,
+        unauthorized writes fail or affect no rows,
+        victim data remains unchanged,
+      ]
+  security_checks: [rls_tests_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [pgTAP assertion counts]
+    logs: [synthetic attack descriptions only]
+    traces: [not applicable to database validation]
+  evidence:
+    [docs/evidence/game-003/2026-09-09.md, local database test output, protected database check]
+  rollback:
+    strategy: Remove the isolated attack test; no schema, policy, or durable data changes exist.
+  human_approval:
+    required: false
+    reason: Local validation only with transaction rollback and synthetic users.
