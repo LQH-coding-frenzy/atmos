@@ -1,5 +1,5 @@
 project: atmos
-updated: 2026-09-09
+updated: 2026-09-10
 tasks:
   GOV-001: DONE
   GOV-002: DONE
@@ -50,6 +50,7 @@ tasks:
   QUEUE-005: DONE
   QUEUE-006: DONE
   GAME-003: DONE
+  GAME-001: REVIEW
   GAME-004: DONE
   GAME-005: DONE
   DBREL-001: DONE

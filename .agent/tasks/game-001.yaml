@@ -1,0 +1,70 @@
+task:
+  id: GAME-001
+  title: Weather provider outage exercise
+  status: REVIEW
+  objective: Prove provider timeouts degrade to bounded stale weather or a typed sanitized error without runaway retries.
+  depends_on: [CACHE-001, OBS-001]
+  external_policy_checks: [Open-Meteo non-commercial usage remains unchanged]
+  runtime_placement:
+    allowed: [cloudflare-worker]
+    selected: cloudflare-worker
+    reason: Public normalized weather caching and provider degradation are thin gateway responsibilities.
+  scope:
+    include:
+      [
+        workers/gateway/src/index.ts,
+        workers/gateway/src/index.test.ts,
+        packages/provider-openmeteo/src/index.test.ts,
+        .agent/status.yaml,
+        .agent/tasks/game-001.yaml,
+        docs/evidence/game-001,
+      ]
+    exclude:
+      [remote Worker deploy, retry implementation, durable cache, provider change, paid capability]
+  inputs:
+    required_config: [none]
+    required_secrets: [none]
+  outputs:
+    files:
+      [
+        workers/gateway/src/index.ts,
+        workers/gateway/src/index.test.ts,
+        packages/provider-openmeteo/src/index.test.ts,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [gateway source only]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: before Worker deployment
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run workers/gateway/src/index.test.ts packages/provider-openmeteo/src/index.test.ts,
+        corepack pnpm typecheck,
+        corepack pnpm --filter @atmos/gateway build,
+        corepack pnpm lint,
+      ]
+    expected:
+      [
+        provider aborts after five seconds,
+        stale data is bounded to one hour,
+        no stale data returns typed 503,
+        no retry fan-out occurs,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [x-cache HIT MISS or STALE]
+    logs: [sanitized weather_provider_failed event with request_id trace_id and cache_status]
+    traces: [existing W3C traceparent]
+  evidence: [docs/evidence/game-001/2026-09-10.md]
+  rollback:
+    strategy: Revert the secondary stale cache key and outage fallback before Worker deployment.
+  human_approval:
+    required: false
+    reason: Source-only resilience exercise using existing public cache capability.
