@@ -1,0 +1,64 @@
+task:
+  id: REL-001
+  title: Release identity convention
+  status: REVIEW
+  objective: Derive one validated release ID from the exact Git commit for all deployment lanes.
+  depends_on: [CI-001]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [github-actions, local-tooling]
+    selected: github-actions
+    reason: Protected delivery workflows derive immutable release metadata from their checked-out Git commit.
+  scope:
+    include:
+      [
+        scripts/release-id.mjs,
+        scripts/release-id.test.mjs,
+        package.json,
+        eslint.config.mjs,
+        docs/operations/release-identity.md,
+      ]
+    exclude: [remote deployment, platform credentials, runtime propagation, telemetry export]
+  inputs:
+    required_config: [GITHUB_SHA or VERCEL_GIT_COMMIT_SHA or local Git HEAD]
+    required_secrets: [none]
+  outputs:
+    files:
+      [
+        scripts/release-id.mjs,
+        scripts/release-id.test.mjs,
+        eslint.config.mjs,
+        docs/operations/release-identity.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [none]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: before dependent release tasks consume the convention
+  validation:
+    commands:
+      [
+        node --test scripts/release-id.test.mjs,
+        corepack pnpm release:id,
+        corepack pnpm typecheck,
+        corepack pnpm lint,
+      ]
+    expected:
+      [full Git SHAs produce one lowercase 12-character ID, malformed source metadata fails closed]
+  security_checks: [gitleaks, codeql_or_semgrep]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [release_id label convention]
+    logs: [release metadata convention]
+    traces: [propagation deferred to OBS tasks]
+  evidence: [docs/evidence/rel-001/2026-09-09.md]
+  rollback:
+    strategy: Revert the script and convention before a dependent release task is promoted.
+  human_approval:
+    required: false
+    reason: Repository-only convention with no credential or remote mutation.
