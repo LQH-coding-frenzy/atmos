@@ -116,6 +116,7 @@ app.post('/internal/notifications/reconcile', async (context) => {
   if (!gatewayUrl || !queueSecret)
     return error(context, 'DELIVERY_UNAVAILABLE', 'Delivery is unavailable.', 503);
   const deliveries = data ?? [];
+  if (deliveries.length === 0) return context.json({ reconciled: 0 });
   const published = await fetch(`${gatewayUrl}/internal/notifications/publish`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-internal-queue-secret': queueSecret },
