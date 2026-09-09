@@ -1,0 +1,60 @@
+task:
+  id: SBOM-001
+  title: Serverless package SBOM
+  status: REVIEW
+  objective: Produce a validated CycloneDX inventory for the repository package dependencies on every protected security run.
+  depends_on: [SEC-004]
+  external_policy_checks:
+    [GitHub Actions artifact retention remains within the existing repository plan]
+  runtime_placement:
+    allowed: [github-actions]
+    selected: github-actions
+    reason: The protected workflow inventories the exact checked-out commit without exposing deployment credentials.
+  scope:
+    include:
+      [
+        .github/workflows/security.yml,
+        .agent/status.yaml,
+        .agent/tasks/sbom-001.yaml,
+        docs/evidence/sbom-001,
+      ]
+    exclude: [container image SBOM, signing, attestations, release attachment, deployment]
+  inputs:
+    required_config: [github.sha]
+    required_secrets: [none]
+  outputs:
+    files: [.github/workflows/security.yml]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [GitHub Actions SBOM job]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: immediate workflow revert
+  validation:
+    commands:
+      [
+        corepack pnpm exec prettier --check .github/workflows/security.yml .agent/tasks/sbom-001.yaml,
+      ]
+    expected:
+      [
+        protected SBOM job succeeds,
+        artifact is non-empty CycloneDX JSON,
+        artifact name identifies the exact Git SHA,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [GitHub job status]
+    logs: [Trivy generation and structural verification]
+    traces: [not applicable to CI artifact generation]
+  evidence:
+    [docs/evidence/sbom-001/2026-09-09.md, protected workflow run, uploaded CycloneDX artifact]
+  rollback:
+    strategy: Revert the isolated SBOM job; existing security gates remain unchanged.
+  human_approval:
+    required: false
+    reason: Read-only CI generation using existing GitHub artifact storage and no credentials.
