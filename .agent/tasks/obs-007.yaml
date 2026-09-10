@@ -1,7 +1,7 @@
 task:
   id: OBS-007
   title: Workers Analytics Engine release dataset
-  status: REVIEW
+  status: BLOCKED
   objective: Emit bounded, non-personal Worker request and release telemetry for sampling-aware canary analysis.
   depends_on: [EDGE-002, REL-001]
   external_policy_checks:
@@ -76,8 +76,10 @@ task:
     logs: [sanitized analytics write failure only]
     traces: [existing request_id and traceparent response headers]
   evidence: [docs/evidence/obs-007/2026-09-10.md, protected PR, staging deploy and smoke output]
+  blockers:
+    - Cloudflare API code 10089 requires Analytics Engine to be enabled and its Free entitlement reconfirmed before retrying the staging upload.
   rollback:
     strategy: Redeploy the retained staging Worker version; production has no OBS-007 deployment.
   human_approval:
-    required: false
-    reason: Isolated free-tier staging Worker work is covered by the recorded scoped provider preflight; no production traffic or paid resource is affected.
+    required: true
+    reason: The deployment disproved the Analytics Engine entitlement assumption; the owner must enable and confirm the Free feature before retry.
