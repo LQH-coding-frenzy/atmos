@@ -77,7 +77,7 @@ task:
     traces: [existing request_id and traceparent response headers]
   evidence: [docs/evidence/obs-007/2026-09-10.md, protected PR, staging deploy and smoke output]
   blockers:
-    - Staging was rolled back after the first enabled deployment exposed inherited proxy headers; retry only after the protected boundary fix passes.
+    - Staging was rolled back after the first enabled deployment exposed immutable proxy response handling; retry only after the protected mutable-response fix passes.
   rollback:
     strategy: Redeploy the retained staging Worker version; production has no OBS-007 deployment.
   human_approval:

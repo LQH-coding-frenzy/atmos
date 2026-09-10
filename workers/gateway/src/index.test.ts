@@ -147,7 +147,7 @@ describe('gateway', () => {
   it('proxies API requests to the configured versioned function', async () => {
     const fetcher = vi.fn(async (request: Request) => {
       void request;
-      return new Response('ok');
+      return new Response('ok', { headers: { 'x-upstream': 'preserved' } });
     });
     vi.stubGlobal('fetch', fetcher);
 
@@ -167,6 +167,8 @@ describe('gateway', () => {
     );
 
     expect(response.status).toBe(200);
+    expect(response.headers.get('x-upstream')).toBe('preserved');
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
     expect(fetcher).toHaveBeenCalledOnce();
     expect(fetcher.mock.calls[0]?.[0].url).toBe(
       'https://project.supabase.co/functions/v1/api-v1/api/v1/me?detail=full',
@@ -179,6 +181,7 @@ describe('gateway', () => {
     expect(fetcher.mock.calls[0]?.[0].headers.get('authorization')).toBe('Bearer user-token');
     expect(fetcher.mock.calls[0]?.[0].headers.get('cf-connecting-ip')).toBeNull();
     expect(fetcher.mock.calls[0]?.[0].headers.get('cookie')).toBeNull();
+    await expect(response.text()).resolves.toBe('ok');
   });
 
   it('returns a sanitized response when no function is configured', async () => {
