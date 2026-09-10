@@ -5,6 +5,14 @@ import { OpenMeteoProvider } from '@atmos/provider-openmeteo';
 import type { Dashboard, WeatherProvider } from '@atmos/contracts';
 import { assertNotificationMessage, type NotificationQueueMessage } from './notification-queue';
 import { createCorrelation } from './correlation';
+import {
+  backendReleaseFromUrl,
+  canonicalReleaseId,
+  recordRequestAnalytics,
+  requestRouteGroup,
+  type AnalyticsProvider,
+  type RequestAnalyticsDataset,
+} from './request-analytics';
 
 type Bindings = {
   CORS_ORIGIN?: string;
@@ -12,11 +20,15 @@ type Bindings = {
   SUPABASE_FUNCTION_URL?: string;
   INTERNAL_QUEUE_SECRET?: string;
   NOTIFICATION_QUEUE?: Queue<NotificationQueueMessage>;
+  REQUEST_ANALYTICS?: RequestAnalyticsDataset;
+  CF_VERSION_METADATA?: { id: string; tag?: string; timestamp: string };
 };
 
 type Variables = {
   requestId: string;
   traceparent: string;
+  analyticsProvider?: AnalyticsProvider;
+  providerDurationMs?: number;
 };
 
 type GatewayEnvironment = { Bindings: Bindings; Variables: Variables };
@@ -91,6 +103,30 @@ export function createApp(
     await next();
   });
 
+  app.use('*', async (context, next) => {
+    const startedAt = performance.now();
+    await next();
+    const routeGroup = requestRouteGroup(context.req.method, context.req.path);
+    const releaseId = canonicalReleaseId(
+      context.env?.RELEASE_ID,
+      context.env?.CF_VERSION_METADATA?.tag,
+    );
+    recordRequestAnalytics(context.env?.REQUEST_ANALYTICS, {
+      workerVersionId: context.env?.CF_VERSION_METADATA?.id,
+      releaseId,
+      routeGroup,
+      status: context.res.status,
+      cacheStatus: context.res.headers.get('x-cache') ?? undefined,
+      backendRelease:
+        routeGroup === 'api_proxy'
+          ? backendReleaseFromUrl(context.env?.SUPABASE_FUNCTION_URL)
+          : 'none',
+      provider: context.get('analyticsProvider') ?? 'none',
+      wallDurationMs: performance.now() - startedAt,
+      providerDurationMs: context.get('providerDurationMs'),
+    });
+  });
+
   app.use(
     '*',
     cors({
@@ -106,7 +142,12 @@ export function createApp(
   app.use('*', secureHeaders());
 
   app.get('/health', (context) => context.json({ status: 'ok' }));
-  app.get('/version', (context) => context.json({ release: context.env.RELEASE_ID ?? 'local' }));
+  app.get('/version', (context) =>
+    context.json({
+      release:
+        canonicalReleaseId(context.env.RELEASE_ID, context.env.CF_VERSION_METADATA?.tag) ?? 'local',
+    }),
+  );
 
   app.post('/internal/notifications/publish', async (context) => {
     if (
@@ -128,7 +169,15 @@ export function createApp(
       return gatewayError(context, 'INVALID_MESSAGE', 'Notification batch is invalid.', 400);
     }
     const notificationMessages = messages as NotificationQueueMessage[];
-    await context.env.NOTIFICATION_QUEUE.sendBatch(notificationMessages.map((body) => ({ body })));
+    const providerStartedAt = performance.now();
+    context.set('analyticsProvider', 'cloudflare-queue');
+    try {
+      await context.env.NOTIFICATION_QUEUE.sendBatch(
+        notificationMessages.map((body) => ({ body })),
+      );
+    } finally {
+      context.set('providerDurationMs', performance.now() - providerStartedAt);
+    }
     return context.json({ published: notificationMessages.length });
   });
 
@@ -153,6 +202,7 @@ export function createApp(
     try {
       const cachedResponse = await weatherCache.match(cacheKeys.fresh);
       if (cachedResponse) {
+        context.set('analyticsProvider', 'cache');
         const response = new Response(cachedResponse.body, cachedResponse);
         response.headers.set('x-cache', 'HIT');
         return response;
@@ -170,6 +220,8 @@ export function createApp(
     }
 
     let dashboard: Dashboard;
+    const providerStartedAt = performance.now();
+    context.set('analyticsProvider', 'open-meteo');
     try {
       dashboard = await weatherProvider.getDashboard(input);
     } catch (error) {
@@ -194,6 +246,8 @@ export function createApp(
         'Weather is temporarily unavailable.',
         503,
       );
+    } finally {
+      context.set('providerDurationMs', performance.now() - providerStartedAt);
     }
 
     const response = context.json(dashboard);
@@ -254,7 +308,13 @@ export function createApp(
     const request = new Request(target, context.req.raw);
     request.headers.set('x-request-id', context.get('requestId'));
     request.headers.set('traceparent', context.get('traceparent'));
-    return fetch(request);
+    const providerStartedAt = performance.now();
+    context.set('analyticsProvider', 'supabase');
+    try {
+      return await fetch(request);
+    } finally {
+      context.set('providerDurationMs', performance.now() - providerStartedAt);
+    }
   });
 
   app.notFound((context) => gatewayError(context, 'NOT_FOUND', 'Route not found.', 404));

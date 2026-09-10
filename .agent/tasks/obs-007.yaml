@@ -1,0 +1,83 @@
+task:
+  id: OBS-007
+  title: Workers Analytics Engine release dataset
+  status: REVIEW
+  objective: Emit bounded, non-personal Worker request and release telemetry for sampling-aware canary analysis.
+  depends_on: [EDGE-002, REL-001]
+  external_policy_checks:
+    [Cloudflare staging preflight GO, Workers Analytics Engine Free entitlement]
+  runtime_placement:
+    allowed: [cloudflare-worker]
+    selected: cloudflare-worker
+    reason: Workers Analytics Engine is the native low-overhead release telemetry path on Workers Free.
+  scope:
+    include:
+      [
+        workers/gateway/src/index.ts,
+        workers/gateway/src/index.test.ts,
+        workers/gateway/src/request-analytics.ts,
+        workers/gateway/src/request-analytics.test.ts,
+        workers/gateway/wrangler.jsonc,
+        docs/operations/worker-request-analytics.md,
+        atmos-gateway-staging,
+        atmos_worker_requests_staging,
+      ]
+    exclude:
+      [
+        production Worker deployment,
+        production route,
+        WAE SQL release gate,
+        Grafana,
+        database,
+        secrets,
+      ]
+  inputs:
+    required_config: [Cloudflare account 50f15456a2d4abf3186c504f406da3fe, protected Git SHA]
+    required_secrets: [existing local Wrangler OAuth session]
+  outputs:
+    files:
+      [
+        workers/gateway/src/request-analytics.ts,
+        workers/gateway/src/request-analytics.test.ts,
+        workers/gateway/wrangler.jsonc,
+        docs/operations/worker-request-analytics.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [atmos-gateway-staging, atmos_worker_requests_staging]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: retain the previous staging Worker version and deploy it if telemetry changes affect requests
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run workers/gateway/src/request-analytics.test.ts workers/gateway/src/index.test.ts,
+        corepack pnpm --filter @atmos/gateway build,
+        corepack pnpm typecheck,
+        corepack pnpm lint,
+        bounded staging health/weather smoke and Worker CPU measurement,
+      ]
+    expected:
+      [
+        positional dataset contract passes,
+        analytics failures do not affect responses,
+        no raw user-controlled data is written,
+        staging binding is active,
+        Worker p95 CPU remains at or below 7 ms,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [bounded request wall time, error flag, provider time, release dimensions]
+    logs: [sanitized analytics write failure only]
+    traces: [existing request_id and traceparent response headers]
+  evidence: [docs/evidence/obs-007/2026-09-10.md, protected PR, staging deploy and smoke output]
+  rollback:
+    strategy: Redeploy the retained staging Worker version; production has no OBS-007 deployment.
+  human_approval:
+    required: false
+    reason: Isolated free-tier staging Worker work is covered by the recorded scoped provider preflight; no production traffic or paid resource is affected.

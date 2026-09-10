@@ -10,6 +10,15 @@
   "vars": {
     "CORS_ORIGIN": "https://rainify.dpdns.org",
   },
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA",
+  },
+  "analytics_engine_datasets": [
+    {
+      "binding": "REQUEST_ANALYTICS",
+      "dataset": "atmos_worker_requests",
+    },
+  ],
   "queues": {
     "producers": [
       {
@@ -36,6 +45,15 @@
       "vars": {
         "CORS_ORIGIN": "https://rainify.dpdns.org",
       },
+      "version_metadata": {
+        "binding": "CF_VERSION_METADATA",
+      },
+      "analytics_engine_datasets": [
+        {
+          "binding": "REQUEST_ANALYTICS",
+          "dataset": "atmos_worker_requests_staging",
+        },
+      ],
       "queues": {
         "producers": [
           {
