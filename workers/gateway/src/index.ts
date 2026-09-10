@@ -315,7 +315,8 @@ export function createApp(
     const providerStartedAt = performance.now();
     context.set('analyticsProvider', 'supabase');
     try {
-      return await fetch(request);
+      const response = await fetch(request);
+      return new Response(response.body, response);
     } finally {
       context.set('providerDurationMs', performance.now() - providerStartedAt);
     }
