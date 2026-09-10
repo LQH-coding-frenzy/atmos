@@ -155,6 +155,10 @@ describe('gateway', () => {
       'http://localhost/api/v1/me?detail=full',
       {
         headers: {
+          accept: 'application/json',
+          authorization: 'Bearer user-token',
+          'cf-connecting-ip': '192.0.2.1',
+          cookie: 'private=session',
           'x-request-id': 'proxy_request-1',
           traceparent: '00-1234567890abcdef1234567890abcdef-1234567890abcdef-01',
         },
@@ -171,6 +175,10 @@ describe('gateway', () => {
     expect(fetcher.mock.calls[0]?.[0].headers.get('traceparent')).toBe(
       '00-1234567890abcdef1234567890abcdef-1234567890abcdef-01',
     );
+    expect(fetcher.mock.calls[0]?.[0].headers.get('accept')).toBe('application/json');
+    expect(fetcher.mock.calls[0]?.[0].headers.get('authorization')).toBe('Bearer user-token');
+    expect(fetcher.mock.calls[0]?.[0].headers.get('cf-connecting-ip')).toBeNull();
+    expect(fetcher.mock.calls[0]?.[0].headers.get('cookie')).toBeNull();
   });
 
   it('returns a sanitized response when no function is configured', async () => {

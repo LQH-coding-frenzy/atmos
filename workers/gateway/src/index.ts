@@ -37,6 +37,7 @@ type WeatherCache = Pick<Cache, 'match' | 'put'>;
 
 const weatherCacheTtlSeconds = 300;
 const staleWeatherCacheTtlSeconds = 3600;
+const forwardedProxyHeaders = new Set(['accept', 'authorization', 'content-type']);
 const noWeatherCache: WeatherCache = {
   match: async () => undefined,
   put: async () => undefined,
@@ -306,6 +307,9 @@ export function createApp(
     );
     target.search = new URL(context.req.url).search;
     const request = new Request(target, context.req.raw);
+    for (const header of [...request.headers.keys()]) {
+      if (!forwardedProxyHeaders.has(header)) request.headers.delete(header);
+    }
     request.headers.set('x-request-id', context.get('requestId'));
     request.headers.set('traceparent', context.get('traceparent'));
     const providerStartedAt = performance.now();
