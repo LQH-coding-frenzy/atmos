@@ -54,14 +54,34 @@ describe('gateway', () => {
   it('returns cheap health and version responses with a request ID', async () => {
     const health = await app.request('http://localhost/health');
     const version = await app.request('http://localhost/version', undefined, {
-      RELEASE_ID: 'abc123',
+      RELEASE_ID: 'abcdef012345',
     });
 
     expect(health.status).toBe(200);
     expect(health.headers.get('x-request-id')).toBeTruthy();
     expect(health.headers.get('traceparent')).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$/);
     await expect(health.json()).resolves.toEqual({ status: 'ok' });
-    await expect(version.json()).resolves.toEqual({ release: 'abc123' });
+    await expect(version.json()).resolves.toEqual({ release: 'abcdef012345' });
+  });
+
+  it('records bounded release telemetry without changing the response', async () => {
+    const writeDataPoint = vi.fn();
+    const response = await app.request('http://localhost/health?user=private', undefined, {
+      REQUEST_ANALYTICS: { writeDataPoint },
+      CF_VERSION_METADATA: {
+        id: '7cf6db10-8f5e-4cb2-a70c-34a1d3f28193',
+        tag: 'abcdef012345',
+        timestamp: '2026-09-10T00:00:00.000Z',
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(writeDataPoint).toHaveBeenCalledOnce();
+    expect(writeDataPoint.mock.calls[0]?.[0]).toMatchObject({
+      indexes: ['7cf6db10-8f5e-4cb2-a70c-34a1d3f28193'],
+      blobs: ['abcdef012345', 'health', '2xx', 'BYPASS', 'none', 'none'],
+    });
+    expect(JSON.stringify(writeDataPoint.mock.calls[0]?.[0])).not.toContain('private');
   });
 
   it('preserves valid correlation headers and replaces invalid values', async () => {
