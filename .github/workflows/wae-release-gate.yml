@@ -1,0 +1,70 @@
+name: WAE release gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      stable_version_id:
+        description: Stable Cloudflare Worker version UUID
+        required: true
+        type: string
+      stable_release_id:
+        description: Stable 12-character Git release ID
+        required: true
+        type: string
+      candidate_version_id:
+        description: Candidate Cloudflare Worker version UUID
+        required: true
+        type: string
+      candidate_release_id:
+        description: Candidate 12-character Git release ID
+        required: true
+        type: string
+      lookback_minutes:
+        description: Bounded observation window in minutes
+        required: true
+        default: '60'
+        type: string
+      minimum_samples:
+        description: Required weighted samples per release
+        required: true
+        default: '30'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  staging-wae-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: Staging
+    steps:
+      - name: Require protected main
+        run: test "$GITHUB_REF" = "refs/heads/main"
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.14.1
+      - name: Evaluate sampling-aware release metrics
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.CLOUDFLARE_ANALYTICS_TOKEN }}
+          STABLE_VERSION_ID: ${{ inputs.stable_version_id }}
+          STABLE_RELEASE_ID: ${{ inputs.stable_release_id }}
+          CANDIDATE_VERSION_ID: ${{ inputs.candidate_version_id }}
+          CANDIDATE_RELEASE_ID: ${{ inputs.candidate_release_id }}
+          LOOKBACK_MINUTES: ${{ inputs.lookback_minutes }}
+          MINIMUM_SAMPLES: ${{ inputs.minimum_samples }}
+        run: >-
+          node scripts/wae-release-gate.mjs
+          --dataset atmos_worker_requests_staging
+          --stable-version "$STABLE_VERSION_ID"
+          --stable-release "$STABLE_RELEASE_ID"
+          --candidate-version "$CANDIDATE_VERSION_ID"
+          --candidate-release "$CANDIDATE_RELEASE_ID"
+          --lookback-minutes "$LOOKBACK_MINUTES"
+          --minimum-samples "$MINIMUM_SAMPLES"

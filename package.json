@@ -21,6 +21,7 @@
     "security:local": "gitleaks git --no-banner && trivy fs --scanners vuln,secret,misconfig --exit-code 1 .",
     "release:id": "node scripts/release-id.mjs",
     "release:supabase:stage": "node scripts/versioned-supabase-function.mjs",
+    "release:wae:gate": "node scripts/wae-release-gate.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

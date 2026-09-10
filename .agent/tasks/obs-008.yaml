@@ -1,0 +1,81 @@
+task:
+  id: OBS-008
+  title: Sampling-aware WAE release gate
+  status: REVIEW
+  objective: Query exact stable and candidate Worker release metrics and return deterministic PASS, FAIL, or INSUFFICIENT_DATA decisions.
+  depends_on: [OBS-007]
+  external_policy_checks:
+    [Workers Analytics Engine Free enabled, scoped Account Analytics Read token]
+  runtime_placement:
+    allowed: [github-actions]
+    selected: github-actions
+    reason: Protected release automation owns read-only canary decisions and evidence.
+  scope:
+    include:
+      [
+        scripts/wae-release-gate.mjs,
+        scripts/wae-release-gate.test.mjs,
+        .github/workflows/wae-release-gate.yml,
+        docs/operations/wae-release-gate.md,
+        GitHub Staging environment,
+        read-only atmos_worker_requests_staging queries,
+      ]
+    exclude:
+      [
+        Worker upload,
+        traffic promotion,
+        rollback execution,
+        production dataset,
+        Grafana synthetic,
+        database,
+      ]
+  inputs:
+    required_config: [CLOUDFLARE_ACCOUNT_ID, exact stable/candidate Worker and release IDs]
+    required_secrets: [CLOUDFLARE_ANALYTICS_TOKEN]
+  outputs:
+    files:
+      [
+        scripts/wae-release-gate.mjs,
+        scripts/wae-release-gate.test.mjs,
+        .github/workflows/wae-release-gate.yml,
+        docs/operations/wae-release-gate.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [protected WAE release gate workflow]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Workflow removal or Git revert; it has no write permission or deployment side effect.
+  validation:
+    commands:
+      [
+        node --test scripts/wae-release-gate.test.mjs,
+        corepack pnpm typecheck,
+        corepack pnpm lint,
+        protected workflow against distinct staging release samples,
+      ]
+    expected:
+      [
+        sampled counts and quantiles are weighted,
+        exact identities are required,
+        malformed inputs fail before query,
+        low samples hold,
+        threshold regressions fail,
+        healthy candidate passes,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy, token never printed]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [weighted sample count, error rate, p95 wall duration]
+    logs: [sanitized gate JSON and GitHub step summary]
+    traces: [workflow run ID and exact release identities]
+  evidence: [docs/evidence/obs-008/2026-09-10.md, protected PR, staging workflow run]
+  rollback:
+    strategy: The read-only job cannot promote; FAIL is reserved for REL-006 rollback and INSUFFICIENT_DATA holds.
+  human_approval:
+    required: true
+    reason: Owner approved creating the scoped 90-day Account Analytics Read token and protected Staging environment on 2026-09-10.
