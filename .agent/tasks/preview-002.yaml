@@ -1,0 +1,59 @@
+task:
+  id: PREVIEW-002
+  title: Worker staging preview version
+  status: REVIEW
+  objective: Upload and smoke an exact inactive staging Worker version through its provider preview URL.
+  depends_on: [CI-001, EDGE-001]
+  external_policy_checks: [Cloudflare Workers Free staging entitlement verified]
+  runtime_placement:
+    allowed: [cloudflare-worker]
+    selected: cloudflare-worker
+    reason: Cloudflare version previews exercise the exact Worker bundle without changing active traffic.
+  scope:
+    include:
+      [workers/gateway/wrangler.jsonc, atmos-gateway-staging inactive version, version preview URL]
+    exclude:
+      [production Worker, traffic deployment, route change, GitHub deployment credential, database]
+  inputs:
+    required_config: [protected 12-character Git release ID, staging preview alias]
+    required_secrets: [existing local Wrangler OAuth session]
+  outputs:
+    files: [workers/gateway/wrangler.jsonc, docs/operations/worker-staging-preview.md]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [inactive atmos-gateway-staging Worker version]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Active staging traffic is unchanged; delete the inactive version if validation fails.
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run workers/gateway/src/index.test.ts workers/gateway/src/request-analytics.test.ts,
+        corepack pnpm --filter @atmos/gateway build,
+        corepack pnpm --filter @atmos/gateway exec wrangler versions upload --env staging --dry-run,
+        exact preview health/version/weather/auth smoke,
+      ]
+    expected:
+      [
+        preview URL is explicit,
+        uploaded release matches protected Git SHA,
+        public routes succeed,
+        protected routes remain unauthorized without credentials,
+        active staging version is unchanged,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy, no provider credential in logs]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [none; preview URLs do not provide normal Worker analytics]
+    logs: [sanitized Wrangler version identity and bounded smoke statuses]
+    traces: [unavailable on Cloudflare version preview URLs]
+  evidence: [docs/evidence/preview-002/2026-09-11.md, protected PR, preview URL smoke output]
+  rollback:
+    strategy: Delete the inactive failed version; no deployment rollback is required because preview upload does not change traffic.
+  human_approval:
+    required: false
+    reason: Existing Workers Free staging service and OAuth session only; no production exposure, secret creation, or paid resource.
