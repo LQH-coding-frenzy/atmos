@@ -130,4 +130,19 @@ test('queries the account endpoint without exposing the token in errors', async 
     }),
     (error) => error.message === 'WAE SQL query failed with HTTP 403.',
   );
+  await assert.rejects(
+    queryWae({
+      accountId: 'a'.repeat(32),
+      token: 'test-token',
+      query: 'SELECT 1',
+      fetcher: async () =>
+        Response.json(
+          { errors: [{ code: 6003, message: 'provider detail' }, { code: 6111 }] },
+          { status: 400 },
+        ),
+    }),
+    (error) =>
+      error.message === 'WAE SQL query failed with HTTP 400 (Cloudflare codes 6003,6111).' &&
+      !error.message.includes('provider detail'),
+  );
 });
