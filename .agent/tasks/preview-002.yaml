@@ -1,7 +1,7 @@
 task:
   id: PREVIEW-002
   title: Worker staging preview version
-  status: REVIEW
+  status: DONE
   objective: Upload and smoke an exact inactive staging Worker version through its provider preview URL.
   depends_on: [CI-001, EDGE-001]
   external_policy_checks: [Cloudflare Workers Free staging entitlement verified]
@@ -25,7 +25,7 @@ task:
   compatibility:
     requires_expand_contract: false
     stable_version_compatible: true
-    rollback_window: Active staging traffic is unchanged; delete the inactive version if validation fails.
+    rollback_window: Active staging traffic is unchanged; never deploy a failed version and repoint its alias to a corrected upload.
   validation:
     commands:
       [
@@ -53,7 +53,7 @@ task:
     traces: [unavailable on Cloudflare version preview URLs]
   evidence: [docs/evidence/preview-002/2026-09-11.md, protected PR, preview URL smoke output]
   rollback:
-    strategy: Delete the inactive failed version; no deployment rollback is required because preview upload does not change traffic.
+    strategy: Never deploy a failed version and repoint its alias to a corrected upload; Cloudflare retains inactive versions and no deployment rollback is required.
   human_approval:
     required: false
     reason: Existing Workers Free staging service and OAuth session only; no production exposure, secret creation, or paid resource.
