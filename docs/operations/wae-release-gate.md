@@ -14,7 +14,7 @@ Counts and error rates use `_sample_interval`. The p95 uses `quantileExactWeight
 
 GitHub environment `Staging` is restricted to protected branches and contains:
 
-- secret `CLOUDFLARE_ANALYTICS_TOKEN`: account-owned `Account Analytics Read` only, expiring December 10, 2026;
+- secret `CLOUDFLARE_ANALYTICS_TOKEN`: user token scoped to the Atmos account with `Account Analytics Read` only, expiring December 12, 2026;
 - variable `CLOUDFLARE_ACCOUNT_ID`: the non-secret account identifier.
 
 Rotate the token before expiry. Never reuse a Worker deployment token for SQL reads.

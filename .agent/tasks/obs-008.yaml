@@ -1,11 +1,11 @@
 task:
   id: OBS-008
   title: Sampling-aware WAE release gate
-  status: REVIEW
+  status: DONE
   objective: Query exact stable and candidate Worker release metrics and return deterministic PASS, FAIL, or INSUFFICIENT_DATA decisions.
   depends_on: [OBS-007]
   external_policy_checks:
-    [Workers Analytics Engine Free enabled, scoped Account Analytics Read token]
+    [Workers Analytics Engine Free enabled, scoped user Account Analytics Read token]
   runtime_placement:
     allowed: [github-actions]
     selected: github-actions
@@ -78,4 +78,4 @@ task:
     strategy: The read-only job cannot promote; FAIL is reserved for REL-006 rollback and INSUFFICIENT_DATA holds.
   human_approval:
     required: true
-    reason: Owner approved creating the scoped 90-day Account Analytics Read token and protected Staging environment on 2026-09-10.
+    reason: Owner approved creating the scoped expiring Account Analytics Read token and protected Staging environment on 2026-09-10.
