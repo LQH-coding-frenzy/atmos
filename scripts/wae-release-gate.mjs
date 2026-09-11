@@ -142,7 +142,18 @@ export async function queryWae({ accountId, token, query, fetcher = fetch }) {
       signal: AbortSignal.timeout(30_000),
     },
   );
-  if (!response.ok) throw new Error(`WAE SQL query failed with HTTP ${response.status}.`);
+  if (!response.ok) {
+    const payload = await response.json().catch(() => undefined);
+    const codes = Array.isArray(payload?.errors)
+      ? payload.errors
+          .map((error) => error?.code)
+          .filter((code) => Number.isInteger(code))
+          .join(',')
+      : '';
+    throw new Error(
+      `WAE SQL query failed with HTTP ${response.status}${codes ? ` (Cloudflare codes ${codes})` : ''}.`,
+    );
+  }
   return rowsFromWaeResponse(await response.json());
 }
 
