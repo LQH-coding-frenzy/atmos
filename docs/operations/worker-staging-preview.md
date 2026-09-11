@@ -13,6 +13,7 @@ corepack pnpm --filter @atmos/gateway exec wrangler versions upload \
   --preview-alias "preview-${release}" \
   --tag "${release}" \
   --message "PREVIEW-002 ${release}" \
+  --var "RELEASE_ID:${release}" \
   --strict
 ```
 
@@ -27,11 +28,11 @@ GET /health                                      -> 200
 GET /version                                     -> 200 and expected release ID
 GET /api/v1/weather/dashboard?...                -> 200
 POST /internal/notifications/publish             -> 401 without internal credentials
-GET /api/v1/profiles/me                           -> 401 without user credentials
+GET /api/v1/me                                    -> 401 without user credentials
 ```
 
 Cloudflare preview URLs do not provide normal Worker logs. Reproduce failures locally or against isolated staging and preserve only sanitized status/output evidence.
 
 ## Rollback
 
-Preview upload does not affect active traffic. If validation fails, delete the inactive version and its alias; do not deploy it. Retain the current staging deployment throughout the smoke.
+Preview upload does not affect active traffic. If validation fails, do not deploy the version; upload a corrected version and repoint the bounded alias. Wrangler and the Cloudflare dashboard currently retain inactive versions without a single-version delete action. Retain the current staging deployment throughout the smoke.
