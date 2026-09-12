@@ -19,6 +19,7 @@ task:
       [
         .agent/status.yaml,
         .agent/tasks/rel-003.yaml,
+        supabase/functions/api-v1/index.ts,
         workers/gateway/wrangler.jsonc,
         docs/operations/production-worker-canary.md,
         docs/evidence/rel-003,
