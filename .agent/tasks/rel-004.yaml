@@ -1,7 +1,7 @@
 task:
   id: REL-004
   title: Progressive production Worker rollout
-  status: IN_PROGRESS
+  status: DONE
   objective: Promote the exact production Worker candidate through 10, 25, 50, and 100 percent only when bounded WAE and Grafana synthetic gates pass.
   depends_on: [REL-003, OBS-008, SLO-001]
   external_policy_checks:

@@ -3,7 +3,7 @@ import { parseArgs } from 'node:util';
 export const expectedAtmosJobs = [
   'Atmos production frontend',
   'Atmos production edge',
-  'Atmos candidate dependencies',
+  'Atmos production dependencies',
   'Atmos production weather',
 ];
 

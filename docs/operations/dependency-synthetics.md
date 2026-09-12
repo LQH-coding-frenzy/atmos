@@ -28,12 +28,12 @@ Degraded responses use HTTP 503. Both states use `Cache-Control: no-store` so ev
 
 Keep exactly four enabled API checks in Grafana folder `Atmos` after the protected implementation reaches a zero-percent production candidate:
 
-| ID     | Check                          | Request                                                                                                                             | Assertion                                |
-| ------ | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `8192` | `Atmos production frontend`    | `GET https://rainify.dpdns.org/`                                                                                                    | status 200                               |
-| `8193` | `Atmos production edge`        | `GET https://atmos-gateway.rainify.workers.dev/health`                                                                              | status 200 and `"status":"ok"`           |
-| `8194` | `Atmos candidate dependencies` | `GET https://atmos-gateway.rainify.workers.dev/health/dependencies` with the exact non-secret Cloudflare version-override header    | status 200 and `"database":"ok"`         |
-| `8198` | `Atmos production weather`     | `GET https://atmos-gateway.rainify.workers.dev/api/v1/weather/dashboard?lat=52.52&lon=13.405&timezone=Europe%2FBerlin&units=metric` | status 200 and `"provider":"open-meteo"` |
+| ID     | Check                           | Request                                                                                                                             | Assertion                                |
+| ------ | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `8192` | `Atmos production frontend`     | `GET https://rainify.dpdns.org/`                                                                                                    | status 200                               |
+| `8193` | `Atmos production edge`         | `GET https://atmos-gateway.rainify.workers.dev/health`                                                                              | status 200 and `"status":"ok"`           |
+| `8194` | `Atmos production dependencies` | `GET https://atmos-gateway.rainify.workers.dev/health/dependencies`                                                                 | status 200 and `"database":"ok"`         |
+| `8198` | `Atmos production weather`      | `GET https://atmos-gateway.rainify.workers.dev/api/v1/weather/dashboard?lat=52.52&lon=13.405&timezone=Europe%2FBerlin&units=metric` | status 200 and `"provider":"open-meteo"` |
 
 Use one available public probe and a 15-minute frequency for every check. Do not create browser checks, a private probe, an access token, an alert, another stack, or a paid feature in SLO-001. SLO-002 owns SLO objects and alerts.
 
@@ -47,6 +47,6 @@ Apply the payload only with the existing locally supplied `GRAFANA_URL` and `GRA
 
 ## Release Gate
 
-Keep production stable at 100 percent and the new candidate at zero percent. The dependency check targets the candidate explicitly until REL-004 completes promotion. A failed or missing synthetic is `FAIL` or `INSUFFICIENT_DATA`; it never authorizes candidate traffic. WAE and external synthetic evidence must both pass before each REL-004 promotion step.
+During REL-004, keep the previous stable available for rollback and target the candidate explicitly until promotion completes. After the candidate reaches 100 percent, remove the override and use the dependency check as an ordinary production-path monitor. A failed or missing synthetic is `FAIL` or `INSUFFICIENT_DATA`; it never authorizes candidate traffic. WAE and external synthetic evidence must both pass before each REL-004 promotion step.
 
 Capture check names, IDs, probe, frequency, enabled state, latest successful execution time, and non-sensitive assertions in `docs/evidence/slo-001/2026-09-12.md`. Never record headers containing credentials; the Cloudflare version override is a non-secret immutable deployment identifier.
