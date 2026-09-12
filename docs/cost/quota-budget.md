@@ -13,7 +13,9 @@ Atmos targets zero recurring out-of-pocket cost while within free-tier quotas. P
 | Vercel Hobby            |                             provider allowance |                         70% |
 | Azure for Students      |                remaining credit and ACA grants | 70%; stop before exhaustion |
 | HCP Terraform           |                          500 managed resources |                         70% |
-| Grafana Cloud           |         free telemetry and synthetic allowance |                         70% |
+| Grafana Cloud           |                          free allowances below |       70% of each allowance |
 | Open-Meteo              | 600/min, 5,000/hour, 10,000/day, 300,000/month |                         70% |
 
 No task may silently upgrade a paid plan. Azure credit exhaustion blocks Azure work; it never authorizes pay-as-you-go.
+
+Grafana Cloud limits tracked for Atmos are 10,000 active metric series, 50 GB/month each for logs and traces, 100,000 API synthetic executions/month, and 10,000 browser synthetic executions/month.

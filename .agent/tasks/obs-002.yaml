@@ -1,0 +1,86 @@
+task:
+  id: OBS-002
+  title: Grafana Cloud Free baseline
+  status: DONE
+  objective: Establish one deletion-protected Grafana Cloud Free stack as the central Atmos observability boundary without enabling paid usage or creating credentials.
+  depends_on: [OBS-001]
+  external_policy_checks:
+    [Cloud Free current plan, no payment method required, projected synthetics below Free allowance]
+  runtime_placement:
+    allowed: [grafana-cloud]
+    selected: grafana-cloud
+    reason: Grafana Cloud is the approved central dashboard, SLO, synthetic, and supported OTLP telemetry plane.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/obs-002.yaml,
+        docs/cost/quota-budget.md,
+        docs/operations/grafana-cloud-baseline.md,
+        docs/evidence/preflight/2026-09-12.md,
+        docs/evidence/obs-002,
+        Grafana Cloud stack 1827502,
+        Atmos Grafana folder,
+      ]
+    exclude:
+      [
+        synthetic checks,
+        telemetry ingestion,
+        access policy or service-account token,
+        paid plan or payment method,
+        additional stack,
+        dashboard or alert content,
+      ]
+  inputs:
+    required_config:
+      [Grafana organization stouttortoise1569, stack stouttortoise1569, AWS Singapore region]
+    required_secrets: [none]
+  outputs:
+    files:
+      [
+        docs/operations/grafana-cloud-baseline.md,
+        docs/evidence/preflight/2026-09-12.md,
+        docs/evidence/obs-002/2026-09-12.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [deletion-protected Grafana Cloud Free stack, Atmos folder]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: The empty folder can be removed; retain the protected Free stack for dependent observability tasks.
+  validation:
+    commands:
+      [
+        verify current plan is Cloud Free with capped usage and no card required,
+        verify stack status active and deletion protection enabled,
+        verify AWS Singapore region and Atmos folder,
+        verify projected synthetic execution budget is below 70 percent,
+      ]
+    expected:
+      [
+        no billing upgrade,
+        one active protected stack,
+        projected four-check API usage is 11520 executions per 30-day month when checks finish within one minute,
+        no credential created or recorded,
+      ]
+  security_checks: [no token creation, no payment method, no secret in evidence]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [current stack usage counters]
+    logs: [none]
+    traces: [none]
+  evidence:
+    [
+      docs/evidence/obs-002/2026-09-12.md,
+      Grafana plan and stack metadata without credentials,
+      protected pull request checks,
+    ]
+  rollback:
+    strategy: Remove only the empty Atmos folder if baseline validation fails; do not disable stack deletion protection or select a paid plan.
+  human_approval:
+    required: true
+    reason: Owner approved Grafana Cloud Free setup with a hard stop before paid upgrade or quota exception on 2026-09-12.
