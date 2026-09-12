@@ -1,0 +1,107 @@
+task:
+  id: REL-004
+  title: Progressive production Worker rollout
+  status: IN_PROGRESS
+  objective: Promote the exact production Worker candidate through 10, 25, 50, and 100 percent only when bounded WAE and Grafana synthetic gates pass.
+  depends_on: [REL-003, OBS-008, SLO-001]
+  external_policy_checks:
+    [Cloudflare Workers and Analytics Engine Free, Grafana Cloud Free synthetic quota]
+  runtime_placement:
+    allowed: [github-actions, cloudflare-worker, grafana-cloud]
+    selected: [github-actions, cloudflare-worker, grafana-cloud]
+    reason: Protected read-only workflows evaluate release metrics, Cloudflare owns the traffic split, and Grafana provides independent external availability evidence.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/rel-004.yaml,
+        package.json,
+        scripts/wae-release-gate.mjs,
+        scripts/wae-release-gate.test.mjs,
+        scripts/grafana-synthetic-gate.mjs,
+        scripts/grafana-synthetic-gate.test.mjs,
+        .github/workflows/wae-release-gate.yml,
+        docs/operations/wae-release-gate.md,
+        docs/operations/production-worker-canary.md,
+        docs/evidence/rel-004,
+        production atmos-gateway deployment,
+        existing Grafana synthetics,
+      ]
+    exclude:
+      [
+        Worker or Edge Function code upload,
+        database change,
+        custom DNS,
+        secret creation or rotation,
+        paid resources,
+        version affinity,
+        automated rollback,
+        old release cleanup,
+      ]
+  inputs:
+    required_config: [exact stable and candidate Worker UUIDs and release IDs, GRAFANA_URL]
+    required_secrets:
+      [
+        existing GitHub CLOUDFLARE_ANALYTICS_TOKEN,
+        existing local GRAFANA_SERVICE_ACCOUNT_TOKEN,
+        existing Wrangler authentication,
+      ]
+  outputs:
+    files:
+      [
+        scripts/grafana-synthetic-gate.mjs,
+        scripts/grafana-synthetic-gate.test.mjs,
+        .github/workflows/wae-release-gate.yml,
+        docs/operations/production-worker-canary.md,
+        docs/evidence/rel-004/2026-09-12.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [production candidate promoted to 100 percent]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Keep stable Worker and its Supabase function available through REL-006 and the documented retention window.
+  validation:
+    commands:
+      [
+        node --test scripts/wae-release-gate.test.mjs scripts/grafana-synthetic-gate.test.mjs,
+        corepack pnpm lint,
+        corepack pnpm typecheck,
+        production exact-version smoke,
+        protected production WAE gate at each stage,
+        fresh Grafana synthetic gate at each stage,
+        deployment inventory after each stage,
+      ]
+    expected:
+      [
+        malformed or stale telemetry cannot pass,
+        fewer than 30 weighted samples holds promotion,
+        WAE regression fails promotion,
+        all four fresh synthetics are required,
+        only exact stable and candidate identities receive traffic,
+        final candidate percentage is 100,
+      ]
+  security_checks:
+    [gitleaks, codeql_or_semgrep, trivy, read-only analytics token, credentials never printed]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [weighted WAE samples, error rate, p95 wall duration, Grafana probe_success]
+    logs: [sanitized gate decisions and deployment percentages]
+    traces: [workflow run IDs and exact release identities]
+  evidence:
+    [
+      docs/evidence/rel-004/2026-09-12.md,
+      protected PR checks,
+      WAE workflow summaries,
+      Grafana gate reports,
+      Cloudflare deployment inventory,
+    ]
+  rollback:
+    strategy: On FAIL, deploy stable Worker 335f0f53-c301-4cc3-bd84-2b9b4e799b9b alone at 100 percent and retain both backend function releases.
+  human_approval:
+    required: true
+    reason: Owner explicitly authorized continuing through the fully live production service, including progressive production rollout, on 2026-09-12.

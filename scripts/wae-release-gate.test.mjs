@@ -50,6 +50,15 @@ test('builds an exact sampling-aware stable and candidate query', () => {
   assert.match(query, /quantileExactWeighted\(0\.95\)\(double1, _sample_interval\)/);
   assert.match(query, new RegExp(stable.versionId));
   assert.match(query, new RegExp(candidate.versionId));
+  assert.match(
+    buildWaeQuery({
+      dataset: 'atmos_worker_requests',
+      stable,
+      candidate,
+      lookbackMinutes: 60,
+    }),
+    /FROM atmos_worker_requests\n/,
+  );
   assert.throws(
     () =>
       buildWaeQuery({

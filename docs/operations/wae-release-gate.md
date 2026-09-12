@@ -1,6 +1,6 @@
 # WAE Release Gate
 
-OBS-008 evaluates exact stable and candidate Worker identities from the bounded Analytics Engine contract. The protected manual workflow reads only `atmos_worker_requests_staging`; it cannot upload Workers, change deployments, or mutate a dataset.
+OBS-008 evaluates exact stable and candidate Worker identities from the bounded Analytics Engine contract. The protected manual workflow accepts only `atmos_worker_requests_staging` or `atmos_worker_requests`; it cannot upload Workers, change deployments, or mutate a dataset.
 
 ## Decisions
 
@@ -21,4 +21,4 @@ Rotate the token before expiry. Never reuse a Worker deployment token for SQL re
 
 ## Invocation
 
-Dispatch `WAE release gate` from `main` with distinct stable/candidate Worker UUIDs and release IDs. The job summary records the decision, weighted samples, error rates, p95 values, and computed limits without printing the credential.
+Dispatch `WAE release gate` from `main` with the allowlisted dataset and distinct stable/candidate Worker UUIDs and release IDs. Use `atmos_worker_requests` only for an approved REL-004 production rollout. The job summary records the decision, weighted samples, error rates, p95 values, and computed limits without printing the credential.
