@@ -23,8 +23,9 @@
     "release:supabase:stage": "node scripts/versioned-supabase-function.mjs",
     "release:wae:gate": "node scripts/wae-release-gate.mjs",
     "release:synthetic:gate": "node scripts/grafana-synthetic-gate.mjs",
+    "docs:runbooks:check": "node scripts/validate-runbooks.mjs",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check . && corepack pnpm docs:runbooks:check"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

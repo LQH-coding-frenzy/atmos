@@ -1,25 +1,49 @@
 # Supabase Dependency Synthetic Failure
 
-Use this runbook when `Atmos candidate dependencies` reports a non-200 response, a coarse `degraded` state, a timeout, or no data.
+## Summary
 
-## Contain
+Use this runbook when `Atmos production dependencies` cannot complete Worker to Edge Function to PostgREST to Postgres RPC.
 
-1. Hold the production Worker candidate at its current percentage. For SLO-001 that percentage is zero; never promote on missing data.
-2. Confirm the frontend, edge `/health`, and public weather checks separately. Do not infer a total edge outage from the dependency check alone.
-3. Retry the candidate dependency request once with the exact documented Cloudflare version override. Do not loop or generate artificial keep-alive traffic.
+## User impact
 
-## Diagnose
+Database-backed and authenticated features may fail even while the frontend, edge health, and cached weather remain available.
 
-1. Confirm the candidate Worker still references the intended immutable Supabase function URL and release ID.
-2. Check the Supabase project and Edge Function status in the provider console without exposing environment values or response diagnostics in evidence.
-3. Determine whether the project is paused, the Edge Function is unavailable, the default `SUPABASE_SECRET_KEYS` entry is missing, or PostgREST/Postgres is degraded.
-4. Review only sanitized Worker request analytics and Grafana timings. Do not log or copy API keys, database URLs, row data, cookies, or JWTs.
+## Detection
 
-## Recover
+Confirm a fresh failed synthetic or `GET /health/dependencies` returning 503 with the fixed degraded envelope. Missing samples are insufficient data.
 
-1. If the Free project is paused, use the provider-supported restore action only with owner approval and keep the candidate held while restoration completes.
-2. If configuration drift is present, restore the expected hosted default secret-key environment or redeploy the exact protected Edge Function release. Secret creation or rotation requires explicit approval.
-3. If the candidate implementation is faulty, remove it from the deployment and retain stable at 100 percent. Do not delete the stable Worker or any referenced Edge Function.
-4. Require a fresh successful direct candidate smoke and a successful scheduled Grafana execution before returning the release gate to consideration.
+## Relevant dashboards/logs
 
-Record timestamps, coarse provider state, immutable release/version IDs, actions, and final check state. Do not claim enterprise availability or an SLA for the Free-tier environment.
+Use the Grafana synthetic dashboard, availability SLO, Worker and Supabase function logs, project state, and `docs/operations/dependency-synthetics.md`.
+
+## Immediate mitigation
+
+Stop backend releases. Check the frontend, edge, and weather synthetics separately, then preserve cached service while isolating the failed dependency hop.
+
+## Diagnosis
+
+Test the public health route once and correlate request ID. Distinguish project pause, function failure, PostgREST/database outage, missing publishable-key configuration, and RPC/grant regression.
+
+## Recovery
+
+Restore the existing dependency or deploy a reviewed compatible fix. Require HTTP 200 with `{ "status": "ok", "database": "ok" }` and a fresh scheduled success.
+
+## Rollback
+
+Restore the prior Worker/function pair for release regressions; preserve additive migration state and the least-privilege health RPC.
+
+## Security considerations
+
+Never replace the publishable-key probe with a privileged key, expose SQL/provider errors, broaden RPC grants, or cache the health response.
+
+## Escalation
+
+Escalate for project pause, data loss suspicion, grant/RLS changes, prolonged provider outage, or failure after rollback.
+
+## Evidence to preserve
+
+Preserve check ID/time/probe, sanitized response, request ID, project/function state, release IDs, logs without payloads, and recovery sample.
+
+## Post-incident follow-up
+
+Add the missing hop-specific test, update dependency risk, and review alert routing once an external receiver is approved.

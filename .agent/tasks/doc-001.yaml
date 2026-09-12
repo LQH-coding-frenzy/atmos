@@ -1,0 +1,77 @@
+task:
+  id: DOC-001
+  title: Production incident runbooks
+  status: DONE
+  objective: Provide actionable and validated runbooks for every incident class required by Section 33 without claiming unavailable platform capabilities.
+  depends_on: [SLO-002]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [documentation]
+    selected: documentation
+    reason: The task codifies operator response for existing and explicitly pending platform controls without changing runtime resources.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/doc-001.yaml,
+        docs/runbooks,
+        scripts/validate-runbooks.mjs,
+        package.json,
+        docs/evidence/doc-001,
+      ]
+    exclude:
+      [
+        remote platform mutation,
+        credential creation or rotation,
+        paid resources,
+        application behavior,
+        database schema or RLS,
+      ]
+  inputs:
+    required_config: [Section 33 runbook inventory, existing operations documentation]
+    required_secrets: [none]
+  outputs:
+    files:
+      [
+        docs/runbooks/README.md,
+        Section 33 required runbooks,
+        scripts/validate-runbooks.mjs,
+        docs/evidence/doc-001/2026-09-12.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [none]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Documentation-only changes can be reverted through Git.
+  validation:
+    commands:
+      [
+        corepack pnpm docs:runbooks:check,
+        corepack pnpm exec prettier --check docs/runbooks scripts/validate-runbooks.mjs package.json,
+        corepack pnpm lint,
+      ]
+    expected:
+      [
+        all 21 required files exist,
+        every runbook contains the 12 required response sections in order,
+        unavailable Azure R2 and backup controls are explicitly marked inactive,
+        commands and references point to existing Git-owned procedures,
+        no secret values or remote mutations are introduced,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy, no credentials in runbooks]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [existing Grafana synthetics and SLOs, existing WAE release metrics]
+    logs: [existing Cloudflare Vercel Supabase and future Azure platform logs]
+    traces: [request_id, release_id, provider incident timestamps]
+  evidence: [docs/evidence/doc-001/2026-09-12.md, runbook validator output, protected PR checks]
+  rollback:
+    strategy: Revert the documentation commit; no runtime resource changes require rollback.
+  human_approval:
+    required: false
+    reason: The task is documentation-only and creates no external resource, credential, cost, or production mutation.
