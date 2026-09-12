@@ -1,0 +1,116 @@
+task:
+  id: SLO-001
+  title: External availability and dependency synthetics
+  status: IN_PROGRESS
+  objective: Add a truthful, coarse Worker-to-Supabase-to-Postgres dependency check and monitor the production frontend, edge, dependency, and weather paths with bounded Grafana Cloud Free API synthetics.
+  depends_on: [OBS-002, ROUTE-001]
+  external_policy_checks:
+    [
+      Grafana Cloud Free current plan,
+      projected API synthetic usage below the 70 percent warning threshold,
+    ]
+  runtime_placement:
+    allowed: [cloudflare-worker, supabase-edge-function, postgres, grafana-cloud]
+    selected: [cloudflare-worker, supabase-edge-function, postgres, grafana-cloud]
+    reason: The Worker exposes the public coarse contract, the Edge Function performs the fixed database-adjacent query, and Grafana provides the approved external user-impact checks.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/slo-001.yaml,
+        workers/gateway/src/index.ts,
+        workers/gateway/src/index.test.ts,
+        workers/gateway/src/request-analytics.ts,
+        workers/gateway/src/request-analytics.test.ts,
+        supabase/functions/api-v1/index.ts,
+        supabase/functions/_shared/dependency-health.ts,
+        supabase/functions/_shared/dependency-health.test.ts,
+        docs/operations/dependency-synthetics.md,
+        docs/runbooks/supabase-dependency-synthetic-failure.md,
+        docs/evidence/slo-001,
+        production api-<release-id> Edge Function,
+        production atmos-gateway zero-percent candidate,
+        four Grafana Cloud API synthetics,
+      ]
+    exclude:
+      [
+        ordinary candidate traffic,
+        stable deployment change,
+        custom DNS,
+        database migration or policy change,
+        alert rules or SLO objects,
+        Grafana service account or token,
+        paid plan or payment method,
+      ]
+  inputs:
+    required_config:
+      [production frontend URL, production workers.dev URL, default SUPABASE_SECRET_KEYS entry]
+    required_secrets: [existing hosted Supabase default secret key]
+  outputs:
+    files:
+      [
+        supabase/functions/_shared/dependency-health.ts,
+        docs/operations/dependency-synthetics.md,
+        docs/runbooks/supabase-dependency-synthetic-failure.md,
+        docs/evidence/slo-001/2026-09-12.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units:
+      [
+        release-versioned Supabase Edge Function,
+        zero-percent Worker candidate,
+        four Grafana API synthetics,
+      ]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Keep stable at 100 percent and candidate at zero percent; remove the candidate deployment and disable only the four task-owned checks if validation fails.
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run supabase/functions/_shared/dependency-health.test.ts workers/gateway/src/index.test.ts workers/gateway/src/request-analytics.test.ts,
+        corepack pnpm exec eslint supabase/functions/_shared/dependency-health.ts supabase/functions/_shared/dependency-health.test.ts supabase/functions/api-v1/index.ts workers/gateway/src/index.ts workers/gateway/src/index.test.ts workers/gateway/src/request-analytics.ts workers/gateway/src/request-analytics.test.ts,
+        corepack pnpm --filter @atmos/gateway build,
+        exact version-override dependency smoke,
+        verify four successful Grafana check executions,
+      ]
+    expected:
+      [
+        dependency health executes one bounded user-table HEAD query,
+        only coarse ok or degraded state leaves the backend,
+        candidate remains at zero percent,
+        four checks use one public probe at 15-minute frequency,
+        projected API executions remain below the warning threshold,
+      ]
+  security_checks:
+    [
+      new plural Supabase secret-key environment only,
+      fixed query and no caller-controlled upstream target,
+      no row body or upstream diagnostic returned,
+      no credential forwarded by the Worker,
+      gitleaks,
+      codeql_or_semgrep,
+      trivy,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics:
+      [Grafana synthetic availability and duration, Worker health_dependencies request analytics]
+    logs: [sanitized check state only]
+    traces: [existing request_id and traceparent response headers]
+  evidence:
+    [
+      docs/evidence/slo-001/2026-09-12.md,
+      exact candidate dependency smoke,
+      Grafana check configuration and successful executions without credentials,
+      protected pull request checks,
+    ]
+  rollback:
+    strategy: Keep production stable at 100 percent, remove the zero-percent candidate if needed, and disable only the four task-owned synthetics; retain no database change.
+  human_approval:
+    required: true
+    reason: Owner approved bounded Grafana Cloud Free synthetics; production function and Worker mutation remains a separate explicit approval boundary.

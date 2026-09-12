@@ -64,6 +64,90 @@ describe('gateway', () => {
     await expect(version.json()).resolves.toEqual({ release: 'abcdef012345' });
   });
 
+  it('returns coarse dependency health from the configured Supabase function', async () => {
+    const fetcher = vi.fn(async (request: Request) => {
+      void request;
+      return Response.json({ status: 'ok', database: 'ok' });
+    });
+    const writeDataPoint = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+
+    const response = await app.request(
+      'http://localhost/health/dependencies',
+      {
+        headers: {
+          authorization: 'Bearer private-user-token',
+          cookie: 'private=session',
+          'x-request-id': 'dependency_request-1',
+          traceparent: '00-1234567890abcdef1234567890abcdef-1234567890abcdef-01',
+        },
+      },
+      {
+        SUPABASE_FUNCTION_URL: 'https://project.supabase.co/functions/v1/api-abcdef012345',
+        REQUEST_ANALYTICS: { writeDataPoint },
+        RELEASE_ID: 'abcdef012345',
+        CF_VERSION_METADATA: {
+          id: '7cf6db10-8f5e-4cb2-a70c-34a1d3f28193',
+          tag: 'abcdef012345',
+          timestamp: '2026-09-12T00:00:00.000Z',
+        },
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    await expect(response.json()).resolves.toEqual({ status: 'ok', database: 'ok' });
+    expect(fetcher).toHaveBeenCalledOnce();
+    const request = fetcher.mock.calls[0]?.[0];
+    if (!request) throw new Error('Expected dependency request');
+    expect(request.url).toBe(
+      'https://project.supabase.co/functions/v1/api-abcdef012345/health/dependencies',
+    );
+    expect(request.headers.get('x-request-id')).toBe('dependency_request-1');
+    expect(request.headers.get('traceparent')).toBe(
+      '00-1234567890abcdef1234567890abcdef-1234567890abcdef-01',
+    );
+    expect(request.headers.get('authorization')).toBeNull();
+    expect(request.headers.get('cookie')).toBeNull();
+    expect(writeDataPoint.mock.calls[0]?.[0]).toMatchObject({
+      indexes: ['7cf6db10-8f5e-4cb2-a70c-34a1d3f28193'],
+      blobs: ['abcdef012345', 'health_dependencies', '2xx', 'BYPASS', 'abcdef012345', 'supabase'],
+    });
+  });
+
+  it('fails dependency health closed without exposing upstream diagnostics', async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({ error: 'sensitive database failure' }, { status: 503 }),
+      )
+      .mockRejectedValueOnce(new Error('sensitive network failure'));
+    vi.stubGlobal('fetch', fetcher);
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const response = await app.request('http://localhost/health/dependencies', undefined, {
+        SUPABASE_FUNCTION_URL: 'https://project.supabase.co/functions/v1/api-v1',
+      });
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toEqual({
+        status: 'degraded',
+        database: 'degraded',
+      });
+    }
+  });
+
+  it('fails dependency health closed when the Supabase function is not configured', async () => {
+    for (const env of [{}, { SUPABASE_FUNCTION_URL: 'not a url' }]) {
+      const response = await app.request('http://localhost/health/dependencies', undefined, env);
+
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toEqual({
+        status: 'degraded',
+        database: 'degraded',
+      });
+    }
+  });
+
   it('records bounded release telemetry without changing the response', async () => {
     const writeDataPoint = vi.fn();
     const response = await app.request('http://localhost/health?user=private', undefined, {

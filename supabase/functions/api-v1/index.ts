@@ -15,6 +15,7 @@ import {
 } from '../_shared/alert-evaluator.ts';
 import { isUuid, matchesInternalSecret } from '../_shared/internal-request.ts';
 import { createCorrelation } from '../_shared/correlation.ts';
+import { databaseDependencyIsHealthy } from '../_shared/dependency-health.ts';
 
 type Bindings = {
   CORS_ORIGIN?: string;
@@ -71,7 +72,17 @@ app.use(
 app.use('*', secureHeaders());
 
 app.get('/health', (context) => context.json({ status: 'ok' }));
-app.get('/health/dependencies', (context) => context.json({ database: 'not_configured' }, 501));
+app.get('/health/dependencies', async (context) => {
+  const healthy = await databaseDependencyIsHealthy(
+    Deno.env.get('SUPABASE_URL'),
+    Deno.env.get('SUPABASE_SECRET_KEYS'),
+  );
+  const response = healthy
+    ? context.json({ status: 'ok', database: 'ok' })
+    : context.json({ status: 'degraded', database: 'degraded' }, 503);
+  response.headers.set('cache-control', 'no-store');
+  return response;
+});
 app.get('/version', (context) =>
   context.json({ release: context.env.RELEASE_ID ?? Deno.env.get('RELEASE_ID') ?? 'local' }),
 );
