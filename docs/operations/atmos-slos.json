@@ -1,0 +1,108 @@
+{
+  "slos": [
+    {
+      "name": "Atmos public weather availability",
+      "description": "At least 99.5% of production weather synthetic executions succeed over 28 days.",
+      "destinationDatasource": {
+        "uid": "grafanacloud-prom"
+      },
+      "objectives": [
+        {
+          "value": 0.995,
+          "window": "28d"
+        }
+      ],
+      "query": {
+        "type": "ratio",
+        "ratio": {
+          "sourceDatasourceUid": "grafanacloud-prom",
+          "successMetric": {
+            "prometheusMetric": "probe_all_success_sum{job=\"Atmos production weather\"}"
+          },
+          "totalMetric": {
+            "prometheusMetric": "probe_all_success_count{job=\"Atmos production weather\"}"
+          },
+          "groupByLabels": []
+        }
+      },
+      "alerting": {
+        "fastBurn": {
+          "annotations": [
+            {
+              "key": "name",
+              "value": "Atmos weather availability budget burn is very high"
+            },
+            {
+              "key": "description",
+              "value": "The production weather availability error budget is burning too quickly."
+            }
+          ]
+        },
+        "slowBurn": {
+          "annotations": [
+            {
+              "key": "name",
+              "value": "Atmos weather availability budget burn is high"
+            },
+            {
+              "key": "description",
+              "value": "The production weather availability error budget has a sustained burn."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Atmos public weather client latency",
+      "description": "At least 95% of production weather synthetic executions complete within 2.5 seconds over 28 days.",
+      "destinationDatasource": {
+        "uid": "grafanacloud-prom"
+      },
+      "objectives": [
+        {
+          "value": 0.95,
+          "window": "28d"
+        }
+      ],
+      "query": {
+        "type": "ratio",
+        "ratio": {
+          "sourceDatasourceUid": "grafanacloud-prom",
+          "successMetric": {
+            "prometheusMetric": "probe_all_duration_seconds_bucket{job=\"Atmos production weather\",le=\"2.5\"}"
+          },
+          "totalMetric": {
+            "prometheusMetric": "probe_all_duration_seconds_count{job=\"Atmos production weather\"}"
+          },
+          "groupByLabels": []
+        }
+      },
+      "alerting": {
+        "fastBurn": {
+          "annotations": [
+            {
+              "key": "name",
+              "value": "Atmos weather latency budget burn is very high"
+            },
+            {
+              "key": "description",
+              "value": "The production weather latency error budget is burning too quickly."
+            }
+          ]
+        },
+        "slowBurn": {
+          "annotations": [
+            {
+              "key": "name",
+              "value": "Atmos weather latency budget burn is high"
+            },
+            {
+              "key": "description",
+              "value": "The production weather latency error budget has a sustained burn."
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
