@@ -25,6 +25,8 @@ task:
         supabase/functions/api-v1/index.ts,
         supabase/functions/_shared/dependency-health.ts,
         supabase/functions/_shared/dependency-health.test.ts,
+        supabase/migrations/20260912000000_dependency_health_rpc.sql,
+        supabase/tests/008_dependency_health_rpc.sql,
         docs/operations/dependency-synthetics.md,
         docs/runbooks/supabase-dependency-synthetic-failure.md,
         docs/evidence/slo-001,
@@ -37,15 +39,15 @@ task:
         ordinary candidate traffic,
         stable deployment change,
         custom DNS,
-        database migration or policy change,
+        table or RLS policy change,
         alert rules or SLO objects,
         Grafana service account or token,
         paid plan or payment method,
       ]
   inputs:
     required_config:
-      [production frontend URL, production workers.dev URL, default SUPABASE_SECRET_KEYS entry]
-    required_secrets: [existing hosted Supabase default secret key]
+      [production frontend URL, production workers.dev URL, default SUPABASE_PUBLISHABLE_KEYS entry]
+    required_secrets: [none]
   outputs:
     files:
       [
@@ -55,7 +57,8 @@ task:
         docs/evidence/slo-001/2026-09-12.md,
       ]
     terraform_resources: [none]
-    database_changes: [none]
+    database_changes:
+      [additive public.atmos_dependency_health RPC with execute granted only to anon]
     deployed_units:
       [
         release-versioned Supabase Edge Function,
@@ -63,7 +66,7 @@ task:
         four Grafana API synthetics,
       ]
   compatibility:
-    requires_expand_contract: false
+    requires_expand_contract: true
     stable_version_compatible: true
     rollback_window: Keep stable at 100 percent and candidate at zero percent; remove the candidate deployment and disable only the four task-owned checks if validation fails.
   validation:
@@ -71,13 +74,16 @@ task:
       [
         corepack pnpm exec vitest run supabase/functions/_shared/dependency-health.test.ts workers/gateway/src/index.test.ts workers/gateway/src/request-analytics.test.ts,
         corepack pnpm exec eslint supabase/functions/_shared/dependency-health.ts supabase/functions/_shared/dependency-health.test.ts supabase/functions/api-v1/index.ts workers/gateway/src/index.ts workers/gateway/src/index.test.ts workers/gateway/src/request-analytics.ts workers/gateway/src/request-analytics.test.ts,
+        corepack pnpm exec supabase db reset,
+        corepack pnpm test:db,
+        corepack pnpm exec supabase db push --project-ref oxgwprvkotfvyacpqayx --dry-run,
         corepack pnpm --filter @atmos/gateway build,
         exact version-override dependency smoke,
         verify four successful Grafana check executions,
       ]
     expected:
       [
-        dependency health executes one bounded user-table query,
+        dependency health executes one bounded SECURITY INVOKER RPC returning only true,
         only coarse ok or degraded state leaves the backend,
         candidate remains at zero percent,
         four checks use one public probe at 15-minute frequency,
@@ -85,7 +91,7 @@ task:
       ]
   security_checks:
     [
-      new plural Supabase secret-key environment only,
+      new plural Supabase publishable-key environment only,
       fixed query and no caller-controlled upstream target,
       no row body or upstream diagnostic returned,
       no credential forwarded by the Worker,
@@ -110,7 +116,7 @@ task:
       protected pull request checks,
     ]
   rollback:
-    strategy: Keep production stable at 100 percent, remove the zero-percent candidate if needed, and disable only the four task-owned synthetics; retain no database change.
+    strategy: Keep the additive inert RPC, retain production stable at 100 percent, remove the zero-percent candidate if needed, and disable only the four task-owned synthetics.
   human_approval:
     required: true
-    reason: Owner approved bounded Grafana Cloud Free synthetics; production function and Worker mutation remains a separate explicit approval boundary.
+    reason: Owner approved bounded Grafana Cloud Free synthetics, the zero-percent production function and Worker mutation, and the additive health RPC production apply on 2026-09-12.

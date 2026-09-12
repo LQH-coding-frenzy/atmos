@@ -1,6 +1,6 @@
 type DependencyFetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
-export function defaultSupabaseSecretKey(encodedKeys: string | undefined) {
+export function defaultSupabasePublishableKey(encodedKeys: string | undefined) {
   if (!encodedKeys) return undefined;
 
   try {
@@ -15,10 +15,10 @@ export function defaultSupabaseSecretKey(encodedKeys: string | undefined) {
 
 export async function databaseDependencyIsHealthy(
   supabaseUrl: string | undefined,
-  encodedSecretKeys: string | undefined,
+  encodedPublishableKeys: string | undefined,
   fetcher: DependencyFetch = fetch,
 ) {
-  const key = defaultSupabaseSecretKey(encodedSecretKeys);
+  const key = defaultSupabasePublishableKey(encodedPublishableKeys);
   if (!supabaseUrl || !key) {
     console.warn(
       JSON.stringify({ event: 'database_dependency_unavailable', reason: 'configuration' }),
@@ -28,23 +28,20 @@ export async function databaseDependencyIsHealthy(
 
   let endpoint: URL;
   try {
-    endpoint = new URL('/rest/v1/profiles', supabaseUrl);
+    endpoint = new URL('/rest/v1/rpc/atmos_dependency_health', supabaseUrl);
   } catch {
     console.warn(
       JSON.stringify({ event: 'database_dependency_unavailable', reason: 'configuration' }),
     );
     return false;
   }
-  endpoint.searchParams.set('select', 'id');
-  endpoint.searchParams.set('limit', '1');
-
   try {
     const response = await fetcher(endpoint, {
       method: 'GET',
       headers: { accept: 'application/json', apikey: key },
       signal: AbortSignal.timeout(3_000),
     });
-    if (response.ok) return true;
+    if (response.ok && (await response.json().catch(() => undefined)) === true) return true;
     console.warn(
       JSON.stringify({
         event: 'database_dependency_unavailable',

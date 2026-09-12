@@ -75,7 +75,7 @@ app.get('/health', (context) => context.json({ status: 'ok' }));
 app.get('/health/dependencies', async (context) => {
   const healthy = await databaseDependencyIsHealthy(
     Deno.env.get('SUPABASE_URL'),
-    Deno.env.get('SUPABASE_SECRET_KEYS'),
+    Deno.env.get('SUPABASE_PUBLISHABLE_KEYS'),
   );
   const response = healthy
     ? context.json({ status: 'ok', database: 'ok' })
