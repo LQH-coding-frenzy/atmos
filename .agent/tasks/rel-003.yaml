@@ -1,7 +1,7 @@
 task:
   id: REL-003
   title: Production Worker zero-percent candidate
-  status: IN_PROGRESS
+  status: DONE
   objective: Bootstrap a rollback-safe production Worker stable version, hold a release-matched candidate at zero percent, and prove that candidate through version-override smoke.
   depends_on: [REL-002, ROUTE-001]
   external_policy_checks:
@@ -26,7 +26,7 @@ task:
         tracked additive production migrations,
         production api-<release-id> Edge Function,
         staging queue isolation,
-        production atmos-gateway stable and inactive candidate versions,
+        production atmos-gateway stable and zero-percent candidate versions,
       ]
     exclude:
       [
@@ -43,6 +43,7 @@ task:
         protected 12-character Git release ID,
         production Supabase ref oxgwprvkotfvyacpqayx,
         production workers.dev route,
+        production GATEWAY_URL,
       ]
     required_secrets:
       [
@@ -62,6 +63,7 @@ task:
     deployed_units:
       [
         isolated staging queues,
+        production api-v1,
         production api-<release-id>,
         production atmos-gateway stable deployment,
         production atmos-gateway zero-percent candidate,

@@ -11,7 +11,7 @@ REL-003 establishes the first production Worker deployment and proves a release 
 
 ## Isolate staging queues
 
-Create `atmos-notifications-staging` and `atmos-notifications-staging-dlq`, then update only the `staging` environment in `workers/gateway/wrangler.jsonc`. Upload and deploy the protected release to staging at 100 percent before assigning the original queues to production.
+Create `atmos-notifications-staging` and `atmos-notifications-staging-dlq`, then update only the `staging` environment in `workers/gateway/wrangler.jsonc`. Upload and deploy the protected release to staging at 100 percent before assigning the original queues to production. Run `wrangler triggers deploy --env staging` because queue consumers are non-versioned triggers, then explicitly remove any stale `atmos-gateway-staging` consumer from `atmos-notifications`.
 
 Require staging `/health`, `/version`, weather, and unauthenticated protected-route smoke to pass. Confirm `atmos-notifications` has no staging consumer before continuing.
 
@@ -38,13 +38,15 @@ corepack pnpm release:supabase:stage
 corepack pnpm exec supabase functions deploy api-<release-id> --project-ref oxgwprvkotfvyacpqayx --no-verify-jwt
 ```
 
-Set `CORS_ORIGIN` and one generated `INTERNAL_QUEUE_SECRET` in the production Supabase secret store. Supply that same internal secret to both Worker versions through an ephemeral secrets file, with stable referencing `api-v1` and candidate referencing `api-<release-id>`. Delete the local secrets file immediately after both uploads.
+Set `CORS_ORIGIN`, the public production `GATEWAY_URL`, and one generated `INTERNAL_QUEUE_SECRET` in the production Supabase secret store. Supply that same internal secret to both Worker versions through an ephemeral secrets file, with stable referencing `api-v1` and candidate referencing `api-<release-id>`. Delete the local secrets file immediately after both uploads.
 
 Require exact `/health` and `/version` responses from both function URLs before the Worker deployment.
 
 ## Bootstrap stable
 
-Upload the previous protected `main` release as the stable Worker version, then deploy only that version at 100 percent. Require ordinary requests to the production `workers.dev` route to return the stable release and pass bounded weather and authorization smoke.
+For a Worker that does not yet exist, `wrangler versions upload` cannot create its first version. Run `wrangler deploy --env=""` from the previous protected `main` release with the stable secrets file; this creates the Worker, deploys stable at 100 percent, and configures its `workers.dev` and queue triggers. For an existing Worker, use version upload followed by an explicit 100-percent deployment instead.
+
+Require ordinary requests to the production `workers.dev` route to return the stable release and pass bounded weather and authorization smoke.
 
 If the first deployment fails, no prior production route exists to restore. Correct the inactive version or delete the new Worker only after confirming it never received ordinary traffic.
 
