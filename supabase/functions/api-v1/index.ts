@@ -513,4 +513,11 @@ app.notFound((context) =>
   ),
 );
 
-if (import.meta.main) Deno.serve(app.fetch);
+if (import.meta.main) {
+  Deno.serve((request) =>
+    app.fetch(request, {
+      CORS_ORIGIN: Deno.env.get('CORS_ORIGIN'),
+      RELEASE_ID: Deno.env.get('RELEASE_ID'),
+    }),
+  );
+}
