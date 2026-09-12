@@ -1,0 +1,112 @@
+task:
+  id: REL-003
+  title: Production Worker zero-percent candidate
+  status: IN_PROGRESS
+  objective: Bootstrap a rollback-safe production Worker stable version, hold a release-matched candidate at zero percent, and prove that candidate through version-override smoke.
+  depends_on: [REL-002, ROUTE-001]
+  external_policy_checks:
+    [
+      Workers and Queues Free eligibility,
+      Supabase Free eligibility,
+      owner-approved production bootstrap,
+    ]
+  runtime_placement:
+    allowed: [cloudflare-worker, supabase-edge-function, postgres]
+    selected: cloudflare-worker
+    reason: The production route candidate is a Worker version that references an immutable Supabase backend release after compatible schema expansion.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/rel-003.yaml,
+        workers/gateway/wrangler.jsonc,
+        docs/operations/production-worker-canary.md,
+        docs/evidence/rel-003,
+        tracked additive production migrations,
+        production api-<release-id> Edge Function,
+        staging queue isolation,
+        production atmos-gateway stable and inactive candidate versions,
+      ]
+    exclude:
+      [
+        ordinary candidate traffic,
+        custom DNS or zone route,
+        frontend provider switch,
+        destructive or contract migration,
+        stable Worker or function deletion,
+        paid resource,
+      ]
+  inputs:
+    required_config:
+      [
+        protected 12-character Git release ID,
+        production Supabase ref oxgwprvkotfvyacpqayx,
+        production workers.dev route,
+      ]
+    required_secrets:
+      [
+        existing Supabase CLI session,
+        existing Wrangler OAuth session,
+        generated INTERNAL_QUEUE_SECRET,
+      ]
+  outputs:
+    files:
+      [
+        workers/gateway/wrangler.jsonc,
+        docs/operations/production-worker-canary.md,
+        docs/evidence/rel-003/2026-09-12.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [only tracked additive migrations absent from production history]
+    deployed_units:
+      [
+        isolated staging queues,
+        production api-<release-id>,
+        production atmos-gateway stable deployment,
+        production atmos-gateway zero-percent candidate,
+      ]
+  compatibility:
+    requires_expand_contract: true
+    stable_version_compatible: true
+    rollback_window: Retain the additive schema, stable Worker, and referenced Edge Functions through REL-007 cleanup.
+  validation:
+    commands:
+      [
+        corepack pnpm exec supabase db reset,
+        corepack pnpm test:db,
+        corepack pnpm exec supabase db push --project-ref oxgwprvkotfvyacpqayx --dry-run,
+        corepack pnpm exec vitest run workers/gateway/src/index.test.ts workers/gateway/src/request-analytics.test.ts,
+        corepack pnpm --filter @atmos/gateway build,
+        exact stable and version-override candidate health/version/weather/auth smoke,
+      ]
+    expected:
+      [
+        all production migration history matches tracked migrations,
+        staging remains healthy on isolated queues,
+        stable receives 100 percent ordinary workers.dev traffic,
+        candidate receives zero percent ordinary traffic,
+        candidate smoke returns its exact release ID,
+        protected routes remain unauthorized without credentials,
+      ]
+  security_checks: [rls_tests, gitleaks, codeql_or_semgrep, trivy, no credential output]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [Cloudflare version deployment percentages, production migration history]
+    logs: [sanitized deployment and smoke status]
+    traces: [existing request_id and traceparent response headers]
+  evidence:
+    [
+      docs/evidence/rel-003/2026-09-12.md,
+      dry-run and post-apply migration history,
+      immutable function and Worker version IDs,
+      exact stable and candidate smoke statuses,
+      protected pull request checks,
+    ]
+  rollback:
+    strategy: Keep the additive schema and Edge Functions; preserve stable at 100 percent and remove the zero-percent candidate from the deployment if smoke fails.
+  human_approval:
+    required: true
+    reason: Owner approved the Free-tier production bootstrap, generated internal secret, additive migration apply, and zero-percent candidate smoke on 2026-09-12.

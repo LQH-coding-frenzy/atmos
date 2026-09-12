@@ -60,15 +60,15 @@
         "producers": [
           {
             "binding": "NOTIFICATION_QUEUE",
-            "queue": "atmos-notifications",
+            "queue": "atmos-notifications-staging",
           },
         ],
         "consumers": [
           {
-            "queue": "atmos-notifications",
+            "queue": "atmos-notifications-staging",
             "max_batch_size": 10,
             "max_retries": 3,
-            "dead_letter_queue": "atmos-notifications-dlq",
+            "dead_letter_queue": "atmos-notifications-staging-dlq",
           },
         ],
       },

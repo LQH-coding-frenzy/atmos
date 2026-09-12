@@ -1,5 +1,5 @@
 project: atmos
-updated: 2026-09-10
+updated: 2026-09-12
 tasks:
   GOV-001: DONE
   GOV-002: DONE
@@ -65,6 +65,7 @@ tasks:
   PREVIEW-002: DONE
   REL-001: DONE
   REL-002: DONE
+  REL-003: IN_PROGRESS
   SEC-001: DONE
   SEC-002: DONE
   SEC-003: DONE
