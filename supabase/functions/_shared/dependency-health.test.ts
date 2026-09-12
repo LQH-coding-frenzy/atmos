@@ -1,16 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
-import { databaseDependencyIsHealthy, defaultSupabaseSecretKey } from './dependency-health';
+import { databaseDependencyIsHealthy, defaultSupabasePublishableKey } from './dependency-health';
 
 describe('dependency health', () => {
-  it('reads only the named default key from the current secret-key dictionary', () => {
-    expect(defaultSupabaseSecretKey('{"default":"test-key","other":"ignored"}')).toBe('test-key');
-    expect(defaultSupabaseSecretKey('{"other":"test-key"}')).toBeUndefined();
-    expect(defaultSupabaseSecretKey('invalid')).toBeUndefined();
-    expect(defaultSupabaseSecretKey(undefined)).toBeUndefined();
+  it('reads only the named default key from the current publishable-key dictionary', () => {
+    expect(defaultSupabasePublishableKey('{"default":"test-key","other":"ignored"}')).toBe(
+      'test-key',
+    );
+    expect(defaultSupabasePublishableKey('{"other":"test-key"}')).toBeUndefined();
+    expect(defaultSupabasePublishableKey('invalid')).toBeUndefined();
+    expect(defaultSupabasePublishableKey(undefined)).toBeUndefined();
   });
 
-  it('executes a bounded query without exposing the row body', async () => {
-    const fetcher = vi.fn(async () => Response.json([{ id: 'private-row-id' }]));
+  it('executes the bounded health RPC without privileged authorization', async () => {
+    const fetcher = vi.fn(async () => Response.json(true));
 
     await expect(
       databaseDependencyIsHealthy('https://project.supabase.co', '{"default":"test-key"}', fetcher),
@@ -18,7 +20,9 @@ describe('dependency health', () => {
 
     expect(fetcher).toHaveBeenCalledOnce();
     const [endpoint, init] = fetcher.mock.calls[0] ?? [];
-    expect(String(endpoint)).toBe('https://project.supabase.co/rest/v1/profiles?select=id&limit=1');
+    expect(String(endpoint)).toBe(
+      'https://project.supabase.co/rest/v1/rpc/atmos_dependency_health',
+    );
     expect(init).toMatchObject({
       method: 'GET',
       headers: { accept: 'application/json', apikey: 'test-key' },
@@ -59,6 +63,22 @@ describe('dependency health', () => {
         error_type: 'Error',
       },
     ]);
+    warning.mockRestore();
+  });
+
+  it('rejects a successful response that does not contain the fixed RPC result', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const unexpected = vi.fn(async () => Response.json({ private: 'row' }));
+
+    await expect(
+      databaseDependencyIsHealthy(
+        'https://project.supabase.co',
+        '{"default":"test-key"}',
+        unexpected,
+      ),
+    ).resolves.toBe(false);
+    expect(warning).toHaveBeenCalledOnce();
+    expect(warning.mock.calls[0]?.[0]).not.toContain('private');
     warning.mockRestore();
   });
 });
