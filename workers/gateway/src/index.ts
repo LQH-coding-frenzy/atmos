@@ -52,6 +52,14 @@ function gatewayError(
   return context.json({ error: { code, message, request_id: context.get('requestId') } }, status);
 }
 
+function dependencyHealthResponse(context: Context<GatewayEnvironment>, healthy: boolean) {
+  const response = healthy
+    ? context.json({ status: 'ok', database: 'ok' })
+    : context.json({ status: 'degraded', database: 'degraded' }, 503);
+  response.headers.set('cache-control', 'no-store');
+  return response;
+}
+
 function weatherInput(context: { req: { query: (name: string) => string | undefined } }) {
   const latitude = Number(context.req.query('lat'));
   const longitude = Number(context.req.query('lon'));
@@ -119,7 +127,7 @@ export function createApp(
       status: context.res.status,
       cacheStatus: context.res.headers.get('x-cache') ?? undefined,
       backendRelease:
-        routeGroup === 'api_proxy'
+        routeGroup === 'api_proxy' || routeGroup === 'health_dependencies'
           ? backendReleaseFromUrl(context.env?.SUPABASE_FUNCTION_URL)
           : 'none',
       provider: context.get('analyticsProvider') ?? 'none',
@@ -143,6 +151,40 @@ export function createApp(
   app.use('*', secureHeaders());
 
   app.get('/health', (context) => context.json({ status: 'ok' }));
+  app.get('/health/dependencies', async (context) => {
+    const functionUrl = context.env?.SUPABASE_FUNCTION_URL;
+    if (!functionUrl) return dependencyHealthResponse(context, false);
+
+    let target: URL;
+    try {
+      target = new URL(
+        'health/dependencies',
+        functionUrl.endsWith('/') ? functionUrl : `${functionUrl}/`,
+      );
+    } catch {
+      return dependencyHealthResponse(context, false);
+    }
+    const request = new Request(target, {
+      headers: {
+        accept: 'application/json',
+        'x-request-id': context.get('requestId'),
+        traceparent: context.get('traceparent'),
+      },
+    });
+    const providerStartedAt = performance.now();
+    context.set('analyticsProvider', 'supabase');
+    try {
+      const upstream = await fetch(request);
+      const body = (await upstream.json().catch(() => undefined)) as
+        { status?: unknown; database?: unknown } | undefined;
+      const healthy = upstream.ok && body?.status === 'ok' && body.database === 'ok';
+      return dependencyHealthResponse(context, healthy);
+    } catch {
+      return dependencyHealthResponse(context, false);
+    } finally {
+      context.set('providerDurationMs', performance.now() - providerStartedAt);
+    }
+  });
   app.get('/version', (context) =>
     context.json({
       release:
