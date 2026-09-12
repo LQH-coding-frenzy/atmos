@@ -1,0 +1,86 @@
+task:
+  id: SLO-002
+  title: Production weather SLOs and burn alerts
+  status: IN_PROGRESS
+  objective: Create truthful availability and client-perceived latency objectives for the production weather path with fast and slow error-budget burn alerts.
+  depends_on: [SLO-001]
+  external_policy_checks: [Grafana Cloud Free current plan, existing SLO API entitlement]
+  runtime_placement:
+    allowed: [grafana-cloud]
+    selected: grafana-cloud
+    reason: Grafana stores the production synthetic metrics and provides managed SLO recording rules and burn-rate alert evaluation.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/slo-002.yaml,
+        docs/operations/atmos-slos.json,
+        docs/operations/grafana-slos.md,
+        docs/evidence/slo-002,
+        Grafana Cloud SLO resources,
+        Grafana-managed burn-rate alert rules,
+      ]
+    exclude:
+      [
+        contact point or notification policy creation,
+        new credential,
+        paid plan or payment method,
+        browser synthetic,
+        application or Worker code,
+        database,
+      ]
+  inputs:
+    required_config: [GRAFANA_URL, grafanacloud-prom, production weather synthetic metrics]
+    required_secrets: [existing local-only GRAFANA_SERVICE_ACCOUNT_TOKEN]
+  outputs:
+    files:
+      [
+        docs/operations/atmos-slos.json,
+        docs/operations/grafana-slos.md,
+        docs/evidence/slo-002/2026-09-12.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units:
+      [public weather availability SLO, public weather latency SLO, fast and slow burn alerts]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Delete only the two task-owned SLOs and their generated recording and alert rules.
+  validation:
+    commands:
+      [
+        jq empty docs/operations/atmos-slos.json,
+        validate source metrics through grafanacloud-prom,
+        POST each SLO through the Grafana SLO API,
+        read back SLO resources and generated alert rules,
+      ]
+    expected:
+      [
+        availability objective is 99.5 percent over 28 days,
+        latency objective is 95 percent under 2.5 seconds over 28 days,
+        both SLIs use event counters,
+        both SLOs create fast and slow burn alerts,
+        no notification receiver or paid feature is created,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy, service-account token never printed]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [probe_all_success_sum, probe_all_success_count, probe_all_duration_seconds_bucket]
+    logs: [Grafana SLO and alert state only]
+    traces: [Grafana SLO resource UUIDs]
+  evidence:
+    [
+      docs/evidence/slo-002/2026-09-12.md,
+      protected PR checks,
+      SLO API readback,
+      generated alert-rule inventory,
+    ]
+  rollback:
+    strategy: Delete the two task-owned SLO UUIDs through the SLO API and verify their generated recording and alert rules are removed.
+  human_approval:
+    required: true
+    reason: Owner explicitly authorized continued production completion on 2026-09-12; this task uses existing Free-plan resources and creates no credential or notification destination.
