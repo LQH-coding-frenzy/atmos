@@ -77,7 +77,7 @@ task:
       ]
     expected:
       [
-        dependency health executes one bounded user-table HEAD query,
+        dependency health executes one bounded user-table query,
         only coarse ok or degraded state leaves the backend,
         candidate remains at zero percent,
         four checks use one public probe at 15-minute frequency,

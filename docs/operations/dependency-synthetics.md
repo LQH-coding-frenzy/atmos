@@ -10,7 +10,7 @@ SLO-001 uses Grafana Cloud API synthetics as the external source of truth for th
 Grafana public probe -> Cloudflare Worker -> Supabase Edge Function -> PostgREST -> public.profiles
 ```
 
-The Edge Function sends one three-second-bounded `HEAD` request for at most one `profiles.id`. It uses the hosted `SUPABASE_SECRET_KEYS` default entry only in the `apikey` header. No authorization header, row body, database result, credential, SQL error, provider response, or topology leaves the Edge Function.
+The Edge Function sends one three-second-bounded `GET` request for at most one `profiles.id` and discards the response body. It uses the hosted `SUPABASE_SECRET_KEYS` default entry only in the `apikey` header. No authorization header, row body, database result, credential, SQL error, provider response, or topology leaves the Edge Function. Failure logs contain only a fixed reason, HTTP status, or error type.
 
 The public response is always one of:
 
