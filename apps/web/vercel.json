@@ -1,6 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
+  "git": {
+    "deploymentEnabled": {
+      "main": false
+    }
+  },
   "installCommand": "corepack pnpm install --frozen-lockfile",
   "buildCommand": "corepack pnpm --filter @atmos/contracts build && corepack pnpm --filter @atmos/domain build && corepack pnpm --filter @atmos/provider-openmeteo build && corepack pnpm --filter @atmos/web build"
 }
