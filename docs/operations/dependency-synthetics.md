@@ -26,18 +26,24 @@ Degraded responses use HTTP 503. Both states use `Cache-Control: no-store` so ev
 
 ## Check Set
 
-Create exactly four API checks in Grafana folder `Atmos` after the protected implementation reaches a zero-percent production candidate:
+Keep exactly four enabled API checks in Grafana folder `Atmos` after the protected implementation reaches a zero-percent production candidate:
 
-| Check                          | Request                                                                                                                             | Assertion                                |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `Atmos production frontend`    | `GET https://rainify.dpdns.org/`                                                                                                    | status 200                               |
-| `Atmos production edge`        | `GET https://atmos-gateway.rainify.workers.dev/health`                                                                              | status 200 and `"status":"ok"`           |
-| `Atmos candidate dependencies` | `GET https://atmos-gateway.rainify.workers.dev/health/dependencies` with the exact non-secret Cloudflare version-override header    | status 200 and `"database":"ok"`         |
-| `Atmos production weather`     | `GET https://atmos-gateway.rainify.workers.dev/api/v1/weather/dashboard?lat=52.52&lon=13.405&timezone=Europe%2FBerlin&units=metric` | status 200 and `"provider":"open-meteo"` |
+| ID     | Check                          | Request                                                                                                                             | Assertion                                |
+| ------ | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `8192` | `Atmos production frontend`    | `GET https://rainify.dpdns.org/`                                                                                                    | status 200                               |
+| `8193` | `Atmos production edge`        | `GET https://atmos-gateway.rainify.workers.dev/health`                                                                              | status 200 and `"status":"ok"`           |
+| `8194` | `Atmos candidate dependencies` | `GET https://atmos-gateway.rainify.workers.dev/health/dependencies` with the exact non-secret Cloudflare version-override header    | status 200 and `"database":"ok"`         |
+| `8198` | `Atmos production weather`     | `GET https://atmos-gateway.rainify.workers.dev/api/v1/weather/dashboard?lat=52.52&lon=13.405&timezone=Europe%2FBerlin&units=metric` | status 200 and `"provider":"open-meteo"` |
 
 Use one available public probe and a 15-minute frequency for every check. Do not create browser checks, a private probe, an access token, an alert, another stack, or a paid feature in SLO-001. SLO-002 owns SLO objects and alerts.
 
-The four-check plan projects 11,520 one-minute API executions in a 30-day month, 11.52 percent of the 100,000 Cloud Free API allowance. Stop before enabling if the Grafana UI calculator disagrees or projected usage reaches the 70 percent warning threshold.
+Grafana's monthly calculator reports 2,976 executions per check and 11,904 for all four checks, 11.904 percent of the 100,000 Cloud Free API allowance. The calculator uses a 31-day month; the equivalent 30-day arithmetic is 11,520. Stop before enabling if projected usage reaches the 70 percent warning threshold.
+
+## Dashboard
+
+Dashboard `atmos-synthetics` in folder `Atmos` visualizes availability, execution counters, HTTP status, probe duration, and TLS certificate lifetime from the `grafanacloud-prom` data source. Its reproducible Grafana HTTP API payload is `docs/operations/atmos-synthetics-dashboard.json`.
+
+Apply the payload only with the existing locally supplied `GRAFANA_URL` and `GRAFANA_SERVICE_ACCOUNT_TOKEN`. Never print or commit the token. Grafana stores the dashboard as a `dashboard.grafana.app/v2beta1` resource and performs the Classic-to-V2 schema conversion; read the stored resource back after each update rather than hand-authoring unvalidated V2 panel kinds.
 
 ## Release Gate
 

@@ -1,7 +1,7 @@
 task:
   id: SLO-001
   title: External availability and dependency synthetics
-  status: IN_PROGRESS
+  status: DONE
   objective: Add a truthful, coarse Worker-to-Supabase-to-Postgres dependency check and monitor the production frontend, edge, dependency, and weather paths with bounded Grafana Cloud Free API synthetics.
   depends_on: [OBS-002, ROUTE-001]
   external_policy_checks:
@@ -28,11 +28,13 @@ task:
         supabase/migrations/20260912000000_dependency_health_rpc.sql,
         supabase/tests/008_dependency_health_rpc.sql,
         docs/operations/dependency-synthetics.md,
+        docs/operations/atmos-synthetics-dashboard.json,
         docs/runbooks/supabase-dependency-synthetic-failure.md,
         docs/evidence/slo-001,
         production api-<release-id> Edge Function,
         production atmos-gateway zero-percent candidate,
         four Grafana Cloud API synthetics,
+        Atmos synthetic monitoring dashboard,
       ]
     exclude:
       [
@@ -41,18 +43,24 @@ task:
         custom DNS,
         table or RLS policy change,
         alert rules or SLO objects,
-        Grafana service account or token,
+        Grafana service account or token creation or rotation,
         paid plan or payment method,
       ]
   inputs:
     required_config:
-      [production frontend URL, production workers.dev URL, default SUPABASE_PUBLISHABLE_KEYS entry]
-    required_secrets: [none]
+      [
+        production frontend URL,
+        production workers.dev URL,
+        default SUPABASE_PUBLISHABLE_KEYS entry,
+        GRAFANA_URL,
+      ]
+    required_secrets: [existing local-only GRAFANA_SERVICE_ACCOUNT_TOKEN]
   outputs:
     files:
       [
         supabase/functions/_shared/dependency-health.ts,
         docs/operations/dependency-synthetics.md,
+        docs/operations/atmos-synthetics-dashboard.json,
         docs/runbooks/supabase-dependency-synthetic-failure.md,
         docs/evidence/slo-001/2026-09-12.md,
       ]
@@ -64,6 +72,7 @@ task:
         release-versioned Supabase Edge Function,
         zero-percent Worker candidate,
         four Grafana API synthetics,
+        Atmos synthetic monitoring dashboard,
       ]
   compatibility:
     requires_expand_contract: true
@@ -80,6 +89,7 @@ task:
         corepack pnpm --filter @atmos/gateway build,
         exact version-override dependency smoke,
         verify four successful Grafana check executions,
+        verify the stored dashboard through the Grafana Classic and V2 APIs,
       ]
     expected:
       [
@@ -88,6 +98,7 @@ task:
         candidate remains at zero percent,
         four checks use one public probe at 15-minute frequency,
         projected API executions remain below the warning threshold,
+        dashboard queries use the linked Grafana Cloud Prometheus data source,
       ]
   security_checks:
     [
@@ -119,4 +130,4 @@ task:
     strategy: Keep the additive inert RPC, retain production stable at 100 percent, remove the zero-percent candidate if needed, and disable only the four task-owned synthetics.
   human_approval:
     required: true
-    reason: Owner approved bounded Grafana Cloud Free synthetics, the zero-percent production function and Worker mutation, and the additive health RPC production apply on 2026-09-12.
+    reason: Owner approved bounded Grafana Cloud Free synthetics, the zero-percent production function and Worker mutation, the additive health RPC production apply, and direct operation with the existing local Grafana service-account token on 2026-09-12.
