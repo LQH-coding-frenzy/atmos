@@ -11,6 +11,13 @@ Atmos uses Grafana Cloud's SLO API to turn the production weather synthetic into
 
 The latency objective is the event-based equivalent of a provider-backed p95 below 2.5 seconds. Synthetic duration includes DNS, TLS, network transit, Worker execution, cache/provider behavior, and response transfer, so it is a client-perceived SLO rather than a server-only latency claim.
 
+The active resources are:
+
+| SLO                           | UUID                    | Dashboard                                  |
+| ----------------------------- | ----------------------- | ------------------------------------------ |
+| Public weather availability   | `jcmsyyihfk6uhgi19d5m7` | `/d/grafana_slo_app-jcmsyyihfk6uhgi19d5m7` |
+| Public weather client latency | `evgiwsqi2ipq6tgr2p4nm` | `/d/grafana_slo_app-evgiwsqi2ipq6tgr2p4nm` |
+
 The API payload is `docs/operations/atmos-slos.json`. Before applying it, list existing SLOs and reject duplicate names. POST each `slos[]` entry to `/api/plugins/grafana-slo-app/resources/v1/slo` using the existing local `GRAFANA_URL` and `GRAFANA_SERVICE_ACCOUNT_TOKEN`; never print or commit the token.
 
 ## Alerts
