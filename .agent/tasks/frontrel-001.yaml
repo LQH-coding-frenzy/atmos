@@ -1,7 +1,7 @@
 task:
   id: FRONTREL-001
   title: Vercel prebuilt production flow
-  status: REVIEW
+  status: DONE
   objective: Build the frontend once, smoke the exact unaliased production artifact, and promote it with automatic failure recovery.
   depends_on: [PREVIEW-001]
   external_policy_checks:
