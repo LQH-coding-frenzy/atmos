@@ -1,7 +1,7 @@
 task:
   id: SLO-002
   title: Production weather SLOs and burn alerts
-  status: IN_PROGRESS
+  status: DONE
   objective: Create truthful availability and client-perceived latency objectives for the production weather path with fast and slow error-budget burn alerts.
   depends_on: [SLO-001]
   external_policy_checks: [Grafana Cloud Free current plan, existing SLO API entitlement]
