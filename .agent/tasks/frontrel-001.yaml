@@ -1,0 +1,72 @@
+task:
+  id: FRONTREL-001
+  title: Vercel prebuilt production flow
+  status: REVIEW
+  objective: Build the frontend once, smoke the exact unaliased production artifact, and promote it with automatic failure recovery.
+  depends_on: [PREVIEW-001]
+  external_policy_checks:
+    [Vercel Hobby non-commercial project verified, production release approved]
+  runtime_placement:
+    allowed: [github-actions, vercel-nextjs]
+    selected: github-actions
+    reason: Protected automation builds once and controls exact Vercel artifact promotion and rollback.
+  scope:
+    include:
+      [
+        apps/web response security headers,
+        .github/workflows/vercel-production.yml,
+        GitHub Production environment,
+        Vercel project atmos,
+        rainify.dpdns.org,
+      ]
+    exclude: [live gateway switch, production Worker, Supabase migration, rolling release claim]
+  inputs:
+    required_config: [VERCEL_ORG_ID, VERCEL_PROJECT_ID, VERCEL_SCOPE, PRODUCTION_URL]
+    required_secrets: [VERCEL_TOKEN]
+  outputs:
+    files:
+      [
+        apps/web/next.config.ts,
+        apps/web/vercel.json,
+        scripts/verify-frontend-response.mjs,
+        .github/workflows/vercel-production.yml,
+        docs/operations/vercel-production-release.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [smoke-tested immutable Vercel production artifact]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Vercel Hobby retains immediate previous deployment rollback; Git revert remains durable recovery.
+  validation:
+    commands:
+      [
+        node --test scripts/verify-frontend-response.test.mjs,
+        corepack pnpm exec vitest run apps/web/next-config.test.ts,
+        corepack pnpm --filter @atmos/web build,
+        protected production workflow with exact deployment and domain smoke,
+      ]
+    expected:
+      [
+        PR previews remain enabled,
+        main Git auto-deploy is disabled,
+        artifact is built once,
+        exact deployment passes response/header smoke before promotion,
+        failed post-promotion smoke restores the captured previous deployment,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy, protected environment, token never printed]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [deployment and production HTTP status]
+    logs: [sanitized exact deployment URL and Git SHA]
+    traces: [GitHub workflow run and Vercel deployment identity]
+  evidence: [docs/evidence/frontrel-001/2026-09-12.md, protected PR, protected production workflow]
+  rollback:
+    strategy: Automatically roll back to the captured previous deployment after failed promoted smoke; otherwise use Vercel rollback or Git revert.
+  human_approval:
+    required: true
+    reason: Owner approved a 90-day team-scoped Vercel token and production release execution on 2026-09-12.
