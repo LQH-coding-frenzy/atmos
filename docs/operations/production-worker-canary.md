@@ -73,3 +73,20 @@ Require candidate `/health`, `/version`, weather, and unauthenticated protected-
 ## Rollback
 
 If candidate smoke fails, deploy the stable version alone at 100 percent. Keep both Supabase functions and the additive schema. REL-007 owns function and version cleanup after the rollback window.
+
+## Progressive promotion
+
+REL-004 promotes the exact zero-percent candidate through 10, 25, 50, and 100 percent. Before the first exposure, require protected owner approval, exact candidate smoke, and a `PASS` from `scripts/grafana-synthetic-gate.mjs`.
+
+At each percentage:
+
+1. deploy only the known stable and candidate version UUIDs with explicit percentages;
+2. confirm the deployment inventory matches the requested split;
+3. collect at least 30 weighted WAE samples for each exact Worker UUID and release ID within the bounded lookback;
+4. dispatch `WAE release gate` from protected `main` against `atmos_worker_requests`;
+5. require WAE `PASS` and a fresh Grafana synthetic `PASS` before the next percentage;
+6. treat `FAIL` as an immediate manual stable-only rollback and `INSUFFICIENT_DATA` as a hold.
+
+The Grafana gate requires all four `Atmos` checks to have a successful sample no older than 30 minutes. Low organic traffic may be supplemented with bounded health requests to obtain the minimum WAE sample, but evidence must identify controlled samples rather than presenting them as user traffic.
+
+After 100 percent, run both gates once more before declaring the candidate stable. Do not delete the previous Worker or Edge Function; REL-007 owns cleanup after REL-006 establishes automated rollback.
