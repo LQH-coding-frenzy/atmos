@@ -81,8 +81,7 @@ jobs:
           DEPLOYMENT_URL: ${{ steps.candidate.outputs.url }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          status="$(pnpm dlx vercel@59.15.1 --token "$VERCEL_TOKEN" --scope "$VERCEL_SCOPE" \
-            curl / --deployment "$DEPLOYMENT_URL" -- \
+          status="$(pnpm dlx vercel@59.15.1 curl / --deployment "$DEPLOYMENT_URL" -- \
             --silent --show-error --dump-header "$RUNNER_TEMP/candidate-headers" \
             --output /dev/null --write-out '%{http_code}')"
           node scripts/verify-frontend-response.mjs "$status" "$RUNNER_TEMP/candidate-headers"
