@@ -1,7 +1,7 @@
 task:
   id: REL-006
   title: Protected Worker rollback automation
-  status: IN_PROGRESS
+  status: DONE
   objective: Provide a fail-closed production workflow that validates and restores one retained Worker version at 100 percent, then verifies the recovered public path.
   depends_on: [REL-004]
   external_policy_checks: [Cloudflare Workers Free current plan, GitHub protected environment]
