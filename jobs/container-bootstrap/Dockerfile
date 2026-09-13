@@ -9,4 +9,6 @@ LABEL org.opencontainers.image.source="${SOURCE_URL}"
 LABEL org.opencontainers.image.revision="${REVISION}"
 LABEL org.opencontainers.image.licenses="MIT"
 
-COPY release-marker.txt /atmos/release-marker.txt
+COPY --chown=65532:65532 release-marker.txt /atmos/release-marker.txt
+
+USER 65532:65532

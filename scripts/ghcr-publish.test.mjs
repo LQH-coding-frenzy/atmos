@@ -47,5 +47,6 @@ test('keeps the registry bootstrap image non-deployable and secret-free', () => 
   assert.match(dockerfile, /^FROM scratch$/m);
   assert.match(dockerfile, /org\.opencontainers\.image\.source="\$\{SOURCE_URL\}"/);
   assert.match(dockerfile, /org\.opencontainers\.image\.revision="\$\{REVISION\}"/);
+  assert.match(dockerfile, /^USER 65532:65532$/m);
   assert.doesNotMatch(dockerfile, /RUN|CMD|ENTRYPOINT|ENV|TOKEN|PASSWORD|SECRET/);
 });
