@@ -1,0 +1,77 @@
+task:
+  id: DOC-002
+  title: GAME-002 rollback postmortem
+  status: DONE
+  objective: Publish a blameless incident review of the failed initial Worker rollback, its bounded recovery, and the verified control-plane correction.
+  depends_on: [GAME-002]
+  external_policy_checks: [none]
+  runtime_placement:
+    allowed: [documentation]
+    selected: documentation
+    reason: The task analyzes preserved production evidence and existing controls without changing any runtime resource.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/doc-002.yaml,
+        docs/postmortems/2026-09-13-worker-bad-canary-rollback.md,
+        docs/evidence/game-002/2026-09-13.md,
+        existing Worker rollback implementation and runbooks,
+      ]
+    exclude:
+      [
+        provider mutation,
+        Worker traffic changes,
+        artifact deletion,
+        database schema or RLS,
+        credential creation or rotation,
+        paid resources,
+      ]
+  inputs:
+    required_config: [GAME-002 timeline and identities, WAE gate results, rollback workflow results]
+    required_secrets: [none]
+  outputs:
+    files: [docs/postmortems/2026-09-13-worker-bad-canary-rollback.md]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [none]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Documentation-only changes can be reverted through Git; failed candidate artifacts remain retained through review.
+  validation:
+    commands:
+      [
+        corepack pnpm exec prettier --check .agent/status.yaml .agent/tasks/doc-002.yaml docs/postmortems/2026-09-13-worker-bad-canary-rollback.md,
+        corepack pnpm docs:runbooks:check,
+        corepack pnpm lint,
+        git diff --check,
+      ]
+    expected:
+      [
+        impact and chronology match immutable GAME-002 evidence,
+        root cause distinguishes rollback-control failure from the intentional canary fault,
+        contributing factors explain the preflight model gap without individual blame,
+        completed and follow-up actions have owners and verification evidence,
+        no credential values or user payloads are recorded,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, no credentials or user payloads]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [WAE stable and candidate samples error rate and p95 wall duration]
+    logs: [sanitized deployment and workflow outcomes]
+    traces: [release IDs, Worker version IDs, deployment IDs, workflow run IDs]
+  evidence:
+    [
+      docs/postmortems/2026-09-13-worker-bad-canary-rollback.md,
+      docs/evidence/game-002/2026-09-13.md,
+      protected pull request checks,
+    ]
+  rollback:
+    strategy: Revert the documentation commit through protected Git; no runtime rollback is required.
+  human_approval:
+    required: false
+    reason: The task is documentation-only and changes no provider resource, secret, production traffic, data, or cost.
