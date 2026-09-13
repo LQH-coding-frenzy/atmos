@@ -1,6 +1,6 @@
 # Worker Bad Canary Game Day
 
-GAME-002 proves that real production per-version telemetry detects a controlled candidate failure and that the protected rollback restores stable-only traffic. The only fault switch is a deployment binding; requests cannot activate it.
+GAME-002 proved that real production per-version telemetry detects a controlled candidate failure and that the protected rollback restores stable-only traffic. The deployment-only source hook was removed after the exercise. A future exercise must reintroduce a bounded hook through a new protected game-day PR; no request-controlled fault switch is permitted.
 
 ## Safety Boundaries
 
@@ -11,9 +11,9 @@ GAME-002 proves that real production per-version telemetry detects a controlled 
 - Change no database schema, RLS policy, queue trigger, custom route, or frontend deployment.
 - Stop immediately if stable health, rollback-target smoke, provider inventory, or Worker CPU safety is uncertain.
 
-## Candidate Preparation
+## Historical Candidate Preparation
 
-From the exact protected commit, generate and deploy its release-mapped Supabase function, then upload a Worker version with the controlled fault binding:
+The following records the exercised procedure and is not executable from current source. After a new protected PR reintroduces the reviewed deployment-only hook, generate and deploy its release-mapped Supabase function, then upload a Worker version with the controlled fault binding:
 
 ```bash
 release_id="$(corepack pnpm --silent release:id)"
@@ -37,7 +37,7 @@ At zero percent, generate at least 30 bounded weather samples for each exact ver
 
 The rollback workflow must use Cloudflare's `wrangler rollback` command. A one-version `versions deploy` is not equivalent when a candidate changed versioned secrets; Cloudflare rejects that request with code `10220` instead of restoring the target's prior bindings.
 
-Retain the failed Worker version and its mapped Supabase function through DOC-002 incident review. The completion PR removes the source fault hook so future normal releases cannot accidentally enable it.
+Retain the failed Worker version and its mapped Supabase function through DOC-002 incident review. The completion change removed the source fault hook so normal releases cannot accidentally enable it.
 
 ## Evidence
 

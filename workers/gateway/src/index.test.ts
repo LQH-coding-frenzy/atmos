@@ -64,43 +64,6 @@ describe('gateway', () => {
     await expect(version.json()).resolves.toEqual({ release: 'abcdef012345' });
   });
 
-  it('records a sanitized deployment-controlled weather failure for game-day canaries', async () => {
-    const provider = new MockWeatherProvider();
-    const getDashboard = vi.spyOn(provider, 'getDashboard');
-    const writeDataPoint = vi.fn();
-    const gameDayApp = createApp(provider);
-
-    const response = await gameDayApp.request(
-      'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405',
-      undefined,
-      {
-        GAME_DAY_FAILURE_MODE: 'weather-503',
-        RELEASE_ID: 'abcdef012345',
-        CF_VERSION_METADATA: {
-          id: '11111111-1111-4111-8111-111111111111',
-          tag: 'abcdef012345',
-          timestamp: '2026-09-13T00:00:00Z',
-        },
-        REQUEST_ANALYTICS: { writeDataPoint },
-      },
-    );
-
-    expect(response.status).toBe(503);
-    const body = await response.json();
-    expect(body).toMatchObject({
-      error: {
-        code: 'WEATHER_UNAVAILABLE',
-        message: 'Weather is temporarily unavailable.',
-      },
-    });
-    expect(JSON.stringify(body)).not.toContain('GAME_DAY');
-    expect(getDashboard).not.toHaveBeenCalled();
-    expect(writeDataPoint.mock.calls[0]?.[0]).toMatchObject({
-      indexes: ['11111111-1111-4111-8111-111111111111'],
-      blobs: ['abcdef012345', 'weather_dashboard', '5xx', 'BYPASS', 'none', 'none'],
-    });
-  });
-
   it('returns coarse dependency health from the configured Supabase function', async () => {
     const fetcher = vi.fn(async (request: Request) => {
       void request;
