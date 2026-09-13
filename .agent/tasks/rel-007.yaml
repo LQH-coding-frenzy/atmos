@@ -1,0 +1,91 @@
+task:
+  id: REL-007
+  title: Old Supabase function cleanup guard
+  status: IN_PROGRESS
+  objective: Prevent deletion of any Supabase Edge Function referenced by a retained Worker while identifying exact unreferenced release functions for cleanup.
+  depends_on: [REL-006]
+  external_policy_checks: [Supabase Free current plan, Cloudflare Workers Free current plan]
+  runtime_placement:
+    allowed: [local-release-control]
+    selected: local-release-control
+    reason: Existing owner-authenticated provider sessions can evaluate and apply cleanup without adding a new secret or request-path compute.
+  scope:
+    include:
+      [
+        scripts/supabase-function-cleanup.mjs,
+        scripts/supabase-function-cleanup.test.mjs,
+        docs/operations/supabase-function-cleanup.md,
+        production read-only inventories,
+        exact unreferenced release cleanup,
+      ]
+    exclude:
+      [
+        database schema,
+        RLS,
+        Worker traffic,
+        api-v1 deletion,
+        retained Worker deletion,
+        secrets,
+        unrelated Edge Functions,
+      ]
+  inputs:
+    required_config:
+      [
+        production project ref oxgwprvkotfvyacpqayx,
+        live Worker deployments and versions,
+        live Supabase function inventory,
+      ]
+    required_secrets: [existing local Wrangler session, existing local Supabase CLI session]
+  outputs:
+    files:
+      [
+        scripts/supabase-function-cleanup.mjs,
+        scripts/supabase-function-cleanup.test.mjs,
+        docs/operations/supabase-function-cleanup.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units:
+      [remove only exact unreferenced api-<release> functions authorized by a fresh guard plan]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Retain api-v1 plus every function mapped by retained Worker tags, including current, previous, and one additional known-good release.
+  validation:
+    commands:
+      [
+        node --test scripts/supabase-function-cleanup.test.mjs,
+        corepack pnpm test,
+        corepack pnpm lint,
+        corepack pnpm typecheck,
+        fresh live inventory plan before and after each cleanup,
+      ]
+    expected:
+      [
+        malformed or incomplete inventories fail closed,
+        all retained Worker releases remain protected,
+        fewer than three retained release functions fail closed,
+        only exact unreferenced release functions can be authorized,
+        post-cleanup plan has no candidates,
+      ]
+  security_checks:
+    [gitleaks, codeql_or_semgrep, trivy, no credential output, exact-name confirmation]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [retained Worker release count, protected function count, cleanup candidate count]
+    logs: [function slugs and release identities only]
+    traces: [not applicable to offline release control]
+  evidence:
+    [
+      docs/evidence/rel-007/2026-09-13.md,
+      protected pull request checks,
+      pre-cleanup and post-cleanup sanitized plans,
+    ]
+  rollback:
+    strategy: Regenerate and redeploy the deterministic api-<release> wrapper from its protected Git commit; never delete api-v1 or a function mapped by a retained Worker tag.
+  human_approval:
+    required: true
+    reason: Owner authorized continued end-to-end production completion on 2026-09-13; deletion remains limited to exact guard-authorized unreferenced release functions.
