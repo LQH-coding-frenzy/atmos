@@ -1,0 +1,105 @@
+task:
+  id: GHCR-001
+  title: Immutable GHCR container publishing
+  status: IN_PROGRESS
+  objective: Publish a repository-linked Atmos OCI bootstrap image to GHCR under an exact Git SHA tag and preserve its registry digest for the hardened job-image chain.
+  depends_on: [CI-001]
+  external_policy_checks:
+    [public GitHub repository, GitHub Container Registry current free storage and bandwidth]
+  runtime_placement:
+    allowed: [github-actions, ghcr]
+    selected: github-actions
+    reason: Protected GitHub Actions can build and publish the repository-linked OCI artifact with the ephemeral GITHUB_TOKEN and no separate registry credential.
+  scope:
+    include:
+      [
+        .github/workflows/release-containers.yml,
+        jobs/container-bootstrap,
+        scripts/ghcr-publish.test.mjs,
+        docs/operations/ghcr-container-publishing.md,
+        docs/evidence/preflight/2026-09-13.md,
+        ghcr.io/lqh-coding-frenzy/atmos-jobs,
+      ]
+    exclude:
+      [
+        deployable job logic,
+        final Dockerfile hardening,
+        image vulnerability policy,
+        SBOM generation,
+        Cosign signing or verification,
+        Azure resources or deployment,
+        mutable latest tags,
+        personal access tokens,
+      ]
+  inputs:
+    required_config: [protected main Git SHA, public repository identity]
+    required_secrets: [automatic GITHUB_TOKEN only]
+  outputs:
+    files:
+      [
+        .github/workflows/release-containers.yml,
+        jobs/container-bootstrap/Dockerfile,
+        jobs/container-bootstrap/release-marker.txt,
+        scripts/ghcr-publish.test.mjs,
+        docs/operations/ghcr-container-publishing.md,
+        docs/evidence/ghcr-001/2026-09-13.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [repository-linked GHCR OCI bootstrap image]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Retain the digest-addressed bootstrap artifact until CTR-001 publishes the deployable hardened job image; remove tags only through a separately reviewed package lifecycle change.
+  validation:
+    commands:
+      [
+        node --test scripts/ghcr-publish.test.mjs,
+        docker build jobs/container-bootstrap,
+        corepack pnpm test,
+        corepack pnpm lint,
+        corepack pnpm typecheck,
+        corepack pnpm exec prettier --check .github/workflows/release-containers.yml .agent/status.yaml .agent/tasks/ghcr-001.yaml jobs/container-bootstrap scripts/ghcr-publish.test.mjs docs/operations/ghcr-container-publishing.md docs/evidence/preflight/2026-09-13.md,
+        anonymous pull or manifest inspection of the exact GHCR digest,
+        git diff --check,
+      ]
+    expected:
+      [
+        pull requests build without package write permission,
+        only protected main can publish,
+        GITHUB_TOKEN has only contents read and packages write in the publishing job,
+        image uses one full Git SHA tag and never latest,
+        an existing immutable tag fails closed instead of being overwritten,
+        OCI source and revision labels link the image to this repository and commit,
+        the published digest is exact and anonymously readable after owner sets public visibility,
+      ]
+  security_checks:
+    [
+      gitleaks,
+      codeql_or_semgrep,
+      trivy workflow/config scan,
+      full-SHA action pinning,
+      no personal registry credential,
+      no untrusted pull request package write,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [image build result and byte size]
+    logs: [sanitized image tag and digest]
+    traces: [Git SHA and GitHub workflow run ID]
+  evidence:
+    [
+      docs/evidence/preflight/2026-09-13.md,
+      docs/evidence/ghcr-001/2026-09-13.md,
+      protected pull request checks,
+      protected publish workflow run,
+      anonymous exact-digest inspection,
+    ]
+  rollback:
+    strategy: Disable or revert the publishing workflow through protected Git; retain immutable published digests unless a separately reviewed package cleanup proves no consumer references them.
+  human_approval:
+    required: true
+    reason: Owner authorized end-to-end production completion on 2026-09-13; GitHub package visibility still requires an owner-only setting after the first publish and no agent dashboard interaction is permitted.
