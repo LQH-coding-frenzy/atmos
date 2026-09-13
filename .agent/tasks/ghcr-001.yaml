@@ -1,7 +1,7 @@
 task:
   id: GHCR-001
   title: Immutable GHCR container publishing
-  status: IN_PROGRESS
+  status: DONE
   objective: Publish a repository-linked Atmos OCI bootstrap image to GHCR under an exact Git SHA tag and preserve its registry digest for the hardened job-image chain.
   depends_on: [CI-001]
   external_policy_checks:
@@ -102,4 +102,4 @@ task:
     strategy: Disable or revert the publishing workflow through protected Git; retain immutable published digests unless a separately reviewed package cleanup proves no consumer references them.
   human_approval:
     required: true
-    reason: Owner authorized end-to-end production completion on 2026-09-13; GitHub package visibility still requires an owner-only setting after the first publish and no agent dashboard interaction is permitted.
+    reason: Owner authorized end-to-end production completion on 2026-09-13; the package was anonymously readable without a dashboard change, and no agent dashboard interaction occurred.
