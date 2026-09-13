@@ -1,0 +1,128 @@
+task:
+  id: GAME-002
+  title: Controlled bad Worker canary
+  status: IN_PROGRESS
+  objective: Prove a bounded production Worker canary failure is detected by WAE and restored through the protected stable-only rollback workflow.
+  depends_on: [REL-006, OBS-006, OBS-008, SLO-001]
+  external_policy_checks:
+    [
+      Cloudflare Workers and Analytics Engine Free current plan,
+      Grafana Cloud Free current plan,
+      owner-approved controlled production game day,
+    ]
+  runtime_placement:
+    allowed: [cloudflare-worker, github-actions]
+    selected: cloudflare-worker
+    reason: The exercise must produce real per-version edge telemetry and use the existing protected control plane.
+  scope:
+    include:
+      [
+        workers/gateway/src/index.ts,
+        workers/gateway/src/index.test.ts,
+        docs/operations/worker-bad-canary-game-day.md,
+        production api-<release>,
+        production zero-percent and 10-percent candidate,
+        WAE release gate,
+        protected Worker rollback,
+      ]
+    exclude:
+      [
+        database migration,
+        RLS,
+        custom domain,
+        version affinity,
+        more than 10 percent candidate traffic,
+        paid resources,
+        secret creation or rotation,
+        user data,
+      ]
+  inputs:
+    required_config:
+      [
+        protected Git release ID,
+        stable and candidate Worker UUIDs,
+        stable and candidate release IDs,
+        production WAE dataset,
+      ]
+    required_secrets:
+      [
+        existing local Wrangler session,
+        existing local Supabase CLI session,
+        existing protected Cloudflare Production and Analytics tokens,
+      ]
+  outputs:
+    files:
+      [
+        workers/gateway/src/index.ts,
+        workers/gateway/src/index.test.ts,
+        docs/operations/worker-bad-canary-game-day.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units:
+      [
+        production api-<release> function,
+        controlled failing Worker candidate,
+        stable-only rollback deployment,
+      ]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Retain stable and failed candidate Workers plus mapped Supabase functions through incident review.
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run workers/gateway/src/index.test.ts workers/gateway/src/request-analytics.test.ts,
+        corepack pnpm --filter @atmos/gateway build,
+        corepack pnpm lint,
+        corepack pnpm typecheck,
+        zero-percent version-override smoke,
+        bounded WAE samples,
+        protected WAE FAIL run,
+        protected rollback execute run,
+        stable production smoke,
+      ]
+    expected:
+      [
+        fault mode is deployment-only and returns sanitized weather HTTP 503,
+        zero-percent candidate does not affect ordinary traffic,
+        WAE returns FAIL with sufficient samples,
+        candidate exposure never exceeds 10 percent,
+        rollback creates stable-only 100-percent deployment,
+        health version weather authorization and synthetics recover,
+      ]
+  security_checks:
+    [
+      gitleaks,
+      codeql_or_semgrep,
+      trivy,
+      no request-controlled fault activation,
+      no credential or payload evidence,
+      protected production workflow,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics:
+      [
+        candidate and stable WAE weighted samples error rate and p95 wall duration,
+        deployment percentages,
+        Grafana synthetic status,
+      ]
+    logs: [sanitized deployment annotations and workflow decisions]
+    traces: [Worker version IDs, release IDs, deployment IDs, workflow run IDs]
+  evidence:
+    [
+      docs/evidence/game-002/2026-09-13.md,
+      protected PR checks,
+      WAE FAIL run,
+      rollback run,
+      post-rollback inventory and smoke,
+    ]
+  rollback:
+    strategy: Run protected REL-006 execute mode for stable a794b540e4dc, verify stable-only 100 percent, retain failed artifacts, then remove the source-only fault hook in the completion PR.
+  human_approval:
+    required: true
+    reason: Owner authorized continued end-to-end production completion on 2026-09-13; exposure is bounded to 10 percent and immediately reversible through REL-006.
