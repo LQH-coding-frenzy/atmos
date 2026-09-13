@@ -115,8 +115,8 @@ jobs:
           STABLE_RELEASE_ID: ${{ inputs.stable_release_id }}
           FAILED_RELEASE_ID: ${{ inputs.failed_release_id }}
         run: >-
-          pnpm --filter @atmos/gateway exec wrangler versions deploy
-          "$STABLE_VERSION_ID@100"
+          pnpm --filter @atmos/gateway exec wrangler rollback
+          "$STABLE_VERSION_ID"
           --env=""
           --message "REL-006 rollback $FAILED_RELEASE_ID to $STABLE_RELEASE_ID"
           --yes

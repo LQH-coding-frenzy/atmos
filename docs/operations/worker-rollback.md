@@ -34,6 +34,8 @@ The workflow targets the retained version through `Cloudflare-Workers-Version-Ov
 
 Dispatch `mode=execute` with the same reviewed identities and `confirmation=ROLLBACK`. The workflow creates a stable-only 100-percent deployment, verifies Cloudflare created a new exact deployment, and smokes:
 
+Execution uses `wrangler rollback`, not a one-version `wrangler versions deploy`. Cloudflare requires its rollback primitive to explicitly confirm restoration when a versioned secret binding such as `SUPABASE_FUNCTION_URL` changed after the target was active. The workflow reaches that confirmation only after exact version/release validation and override smoke, and `--yes` keeps the protected run non-interactive.
+
 - `GET /health` returns status `ok`;
 - `GET /version` returns the stable release ID;
 - the bounded public weather route returns Open-Meteo data;
