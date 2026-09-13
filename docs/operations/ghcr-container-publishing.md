@@ -24,7 +24,7 @@ The source label links the package to this repository before its first publicati
 
 A protected push that changes the workflow or `jobs/**` runs validation and publication automatically. Manual dispatch is also allowed only from `main`; dispatching another ref runs validation but skips publishing.
 
-After the first successful push, the owner must set the package visibility to public in GitHub's package settings. Agents must not interact with that provider dashboard. Until an unauthenticated exact-digest inspection succeeds, do not claim the image is public or usable by Azure without credentials.
+After the first successful push, verify package visibility without credentials. If anonymous inspection fails, the owner must set the package visibility to public in GitHub's package settings; agents must not interact with that provider dashboard. Until an unauthenticated exact-digest inspection succeeds, do not claim the image is public or usable by Azure without credentials.
 
 Verify public access without registry credentials:
 
