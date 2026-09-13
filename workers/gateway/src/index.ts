@@ -17,6 +17,7 @@ import {
 type Bindings = {
   CORS_ORIGIN?: string;
   RELEASE_ID?: string;
+  GAME_DAY_FAILURE_MODE?: string;
   SUPABASE_FUNCTION_URL?: string;
   INTERNAL_QUEUE_SECRET?: string;
   NOTIFICATION_QUEUE?: Queue<NotificationQueueMessage>;
@@ -225,6 +226,14 @@ export function createApp(
   });
 
   app.get('/api/v1/weather/dashboard', async (context) => {
+    if (context.env?.GAME_DAY_FAILURE_MODE === 'weather-503') {
+      return gatewayError(
+        context,
+        'WEATHER_UNAVAILABLE',
+        'Weather is temporarily unavailable.',
+        503,
+      );
+    }
     const input = weatherInput(context);
     if (!input) {
       return gatewayError(
