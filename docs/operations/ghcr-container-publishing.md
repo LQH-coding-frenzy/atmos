@@ -1,6 +1,6 @@
 # GHCR Container Publishing
 
-GHCR-001 establishes `ghcr.io/lqh-coding-frenzy/atmos-jobs` as Atmos's repository-linked OCI package. The initial `scratch` image is a non-deployable registry bootstrap artifact. CTR-001 replaces its build context with a hardened job image; CTR-002 owns image scanning, SBOM generation, and signing; CTR-003 owns exact-digest signature verification before Azure deployment.
+GHCR-001 established `ghcr.io/lqh-coding-frenzy/atmos-jobs` as Atmos's repository-linked OCI package with a non-deployable `scratch` bootstrap artifact. CTR-001 replaces that context with the hardened runtime probe documented in `container-runtime.md`; CTR-002 owns image scanning, SBOM generation, and signing; CTR-003 owns exact-digest signature verification before Azure deployment.
 
 ## Trust Boundary
 

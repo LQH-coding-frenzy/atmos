@@ -1,2 +1,0 @@
-Atmos GHCR publishing bootstrap artifact.
-This image is not a deployable job.
