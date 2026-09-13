@@ -1,0 +1,147 @@
+name: Worker production rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Validate only or execute the rollback
+        required: true
+        default: plan
+        type: choice
+        options:
+          - plan
+          - execute
+      stable_version_id:
+        description: Retained stable Cloudflare Worker version UUID
+        required: true
+        type: string
+      stable_release_id:
+        description: Stable 12-character Git release ID
+        required: true
+        type: string
+      failed_version_id:
+        description: Current failing Cloudflare Worker version UUID
+        required: true
+        type: string
+      failed_release_id:
+        description: Failing 12-character Git release ID
+        required: true
+        type: string
+      confirmation:
+        description: PLAN for validation or ROLLBACK for execution
+        required: true
+        default: PLAN
+        type: choice
+        options:
+          - PLAN
+          - ROLLBACK
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atmos-worker-production-rollback
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: Production
+    steps:
+      - name: Require protected main
+        run: test "$GITHUB_REF" = "refs/heads/main"
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.14.1
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Validate rollback plan
+        id: plan
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          MODE: ${{ inputs.mode }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          STABLE_VERSION_ID: ${{ inputs.stable_version_id }}
+          STABLE_RELEASE_ID: ${{ inputs.stable_release_id }}
+          FAILED_VERSION_ID: ${{ inputs.failed_version_id }}
+          FAILED_RELEASE_ID: ${{ inputs.failed_release_id }}
+        run: |
+          set -euo pipefail
+          pnpm --filter @atmos/gateway exec wrangler deployments list --env="" --json > "$RUNNER_TEMP/deployments-before.json"
+          pnpm --filter @atmos/gateway exec wrangler versions list --env="" --json > "$RUNNER_TEMP/versions.json"
+          plan_json="$(node scripts/worker-rollback.mjs plan \
+            "$RUNNER_TEMP/deployments-before.json" \
+            "$RUNNER_TEMP/versions.json" \
+            "$STABLE_VERSION_ID" \
+            "$STABLE_RELEASE_ID" \
+            "$FAILED_VERSION_ID" \
+            "$FAILED_RELEASE_ID" \
+            "$MODE" \
+            "$CONFIRMATION")"
+          before_deployment_id="$(jq -r '.currentDeploymentId' <<< "$plan_json")"
+          test -n "$before_deployment_id"
+          echo "before_deployment_id=$before_deployment_id" >> "$GITHUB_OUTPUT"
+          {
+            echo '### Worker rollback plan'
+            echo
+            echo '```json'
+            echo "$plan_json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Smoke retained rollback target
+        env:
+          STABLE_VERSION_ID: ${{ inputs.stable_version_id }}
+          STABLE_RELEASE_ID: ${{ inputs.stable_release_id }}
+        run: >-
+          node scripts/worker-rollback.mjs smoke
+          https://atmos-gateway.rainify.workers.dev/
+          "$STABLE_RELEASE_ID"
+          "$STABLE_VERSION_ID"
+      - name: Deploy retained stable version
+        if: inputs.mode == 'execute'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          STABLE_VERSION_ID: ${{ inputs.stable_version_id }}
+          STABLE_RELEASE_ID: ${{ inputs.stable_release_id }}
+          FAILED_RELEASE_ID: ${{ inputs.failed_release_id }}
+        run: >-
+          pnpm --filter @atmos/gateway exec wrangler versions deploy
+          "$STABLE_VERSION_ID@100"
+          --env=""
+          --message "REL-006 rollback $FAILED_RELEASE_ID to $STABLE_RELEASE_ID"
+          --yes
+      - name: Verify rollback deployment
+        if: inputs.mode == 'execute'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PREVIOUS_DEPLOYMENT_ID: ${{ steps.plan.outputs.before_deployment_id }}
+          STABLE_VERSION_ID: ${{ inputs.stable_version_id }}
+        run: |
+          set -euo pipefail
+          pnpm --filter @atmos/gateway exec wrangler deployments list --env="" --json > "$RUNNER_TEMP/deployments-after.json"
+          node scripts/worker-rollback.mjs verify \
+            "$RUNNER_TEMP/deployments-after.json" \
+            "$PREVIOUS_DEPLOYMENT_ID" \
+            "$STABLE_VERSION_ID" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Smoke recovered production path
+        if: inputs.mode == 'execute'
+        env:
+          STABLE_RELEASE_ID: ${{ inputs.stable_release_id }}
+        run: >-
+          node scripts/worker-rollback.mjs smoke
+          https://atmos-gateway.rainify.workers.dev/
+          "$STABLE_RELEASE_ID"
+      - name: Record plan-only result
+        if: inputs.mode == 'plan'
+        run: echo 'Plan-only validation completed; production traffic was not changed.' >> "$GITHUB_STEP_SUMMARY"

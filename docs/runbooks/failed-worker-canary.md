@@ -18,7 +18,7 @@ Use the GitHub WAE gate run, Grafana synthetics/SLOs, Cloudflare deployment inve
 
 ## Immediate mitigation
 
-Stop progression and deploy the retained stable Worker version alone at 100 percent. Verify the resulting deployment inventory before more testing.
+Stop progression and run `Worker production rollback` in plan mode from protected `main`. Execute the same reviewed identities only after the plan and override-target smoke pass.
 
 ## Diagnosis
 
@@ -30,7 +30,7 @@ Require stable `/health`, `/version`, weather, authorization, WAE, and fresh syn
 
 ## Rollback
 
-Run `corepack pnpm --filter @atmos/gateway exec wrangler versions deploy <stable-version-id>@100 --message "incident rollback to stable" --yes`. Keep candidate/stable functions and additive schema for analysis.
+Dispatch the protected workflow with `mode=execute` and `confirmation=ROLLBACK`; it verifies a new stable-only 100-percent deployment. Keep candidate/stable functions and additive schema for analysis.
 
 ## Security considerations
 
