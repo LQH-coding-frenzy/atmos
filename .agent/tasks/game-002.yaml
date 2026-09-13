@@ -1,7 +1,7 @@
 task:
   id: GAME-002
   title: Controlled bad Worker canary
-  status: IN_PROGRESS
+  status: DONE
   objective: Prove a bounded production Worker canary failure is detected by WAE and restored through the protected stable-only rollback workflow.
   depends_on: [REL-006, OBS-006, OBS-008, SLO-001]
   external_policy_checks:
