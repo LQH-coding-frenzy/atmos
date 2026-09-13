@@ -1,7 +1,7 @@
 task:
   id: REL-007
   title: Old Supabase function cleanup guard
-  status: IN_PROGRESS
+  status: DONE
   objective: Prevent deletion of any Supabase Edge Function referenced by a retained Worker while identifying exact unreferenced release functions for cleanup.
   depends_on: [REL-006]
   external_policy_checks: [Supabase Free current plan, Cloudflare Workers Free current plan]
