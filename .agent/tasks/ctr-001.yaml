@@ -1,7 +1,7 @@
 task:
   id: CTR-001
   title: Hardened finite job image
-  status: IN_PROGRESS
+  status: DONE
   objective: Replace the GHCR bootstrap with a minimal digest-pinned non-root job image that validates runtime identity, emits structured completion logs, and exits deterministically.
   depends_on: [GHCR-001]
   external_policy_checks: [Docker Official Image availability, public GHCR package]
