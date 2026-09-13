@@ -1,0 +1,99 @@
+task:
+  id: REL-006
+  title: Protected Worker rollback automation
+  status: IN_PROGRESS
+  objective: Provide a fail-closed production workflow that validates and restores one retained Worker version at 100 percent, then verifies the recovered public path.
+  depends_on: [REL-004]
+  external_policy_checks: [Cloudflare Workers Free current plan, GitHub protected environment]
+  runtime_placement:
+    allowed: [github-actions, cloudflare-workers-control-plane]
+    selected: github-actions
+    reason: A protected manual workflow can validate immutable release identities and perform an auditable Cloudflare deployment rollback without runtime code.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/rel-006.yaml,
+        .github/workflows/worker-rollback.yml,
+        scripts/worker-rollback.mjs,
+        scripts/worker-rollback.test.mjs,
+        package.json,
+        docs/operations/worker-rollback.md,
+        docs/runbooks/failed-worker-canary.md,
+        docs/evidence/rel-006,
+        GitHub Production CLOUDFLARE_API_TOKEN,
+        GitHub Production CLOUDFLARE_ACCOUNT_ID,
+      ]
+    exclude:
+      [
+        automatic rollback from untrusted pull requests,
+        database migration or rollback,
+        Supabase function deletion,
+        Worker version deletion,
+        traffic mutation during plan validation,
+        paid plan or resource,
+      ]
+  inputs:
+    required_config:
+      [stable and failed Worker UUIDs, stable and failed release IDs, production Worker URL]
+    required_secrets: [GitHub Production CLOUDFLARE_API_TOKEN]
+  outputs:
+    files:
+      [
+        .github/workflows/worker-rollback.yml,
+        scripts/worker-rollback.mjs,
+        scripts/worker-rollback.test.mjs,
+        docs/operations/worker-rollback.md,
+        docs/runbooks/failed-worker-canary.md,
+        docs/evidence/rel-006/2026-09-13.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [protected Worker rollback workflow]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Retain the pre-rollback and target Worker versions plus their referenced Supabase functions and additive schema.
+  validation:
+    commands:
+      [
+        node --test scripts/worker-rollback.test.mjs,
+        corepack pnpm lint,
+        corepack pnpm typecheck,
+        dispatch plan mode from protected main,
+      ]
+    expected:
+      [
+        malformed or mismatched identities fail before mutation,
+        plan mode validates credentials and retained versions without changing traffic,
+        execute mode deploys exactly one validated stable version at 100 percent,
+        post-rollback health version weather and unauthenticated-route smoke pass,
+      ]
+  security_checks:
+    [
+      gitleaks,
+      codeql_or_semgrep,
+      trivy,
+      least-privilege Production environment secret,
+      strict input validation,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [Cloudflare deployment split, existing Grafana synthetics and SLOs]
+    logs: [GitHub workflow summary, Cloudflare deployment annotation]
+    traces: [workflow run ID, before and after deployment IDs, Worker and release IDs]
+  evidence:
+    [
+      docs/evidence/rel-006/2026-09-13.md,
+      protected PR checks,
+      protected plan-only workflow run,
+      Cloudflare deployment inventory readback,
+    ]
+  rollback:
+    strategy: Revert the workflow and helper through Git. An executed incident rollback retains the displaced version so another explicitly validated deployment can restore it.
+  human_approval:
+    required: true
+    reason: The owner approved creation and protected storage of the least-privilege Cloudflare token on 2026-09-13; execute mode additionally requires the Production environment and explicit ROLLBACK confirmation.
