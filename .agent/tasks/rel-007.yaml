@@ -62,7 +62,7 @@ task:
       ]
     expected:
       [
-        malformed or incomplete inventories fail closed,
+        malformed incomplete or possibly truncated inventories fail closed,
         all retained Worker releases remain protected,
         fewer than three retained release functions fail closed,
         only exact unreferenced release functions can be authorized,

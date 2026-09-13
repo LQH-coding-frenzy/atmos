@@ -55,6 +55,16 @@ test('fails closed when fewer than three Worker releases are retained', () => {
   assert.throws(() => evaluateFunctionCleanup(values), /At least three retained/);
 });
 
+test('fails closed when Wrangler may have truncated retained versions', () => {
+  const values = fixtures();
+  values.versions = Array.from({ length: 10 }, (_, index) => ({
+    id: `${String(index).padStart(8, '0')}-1111-4111-8111-111111111111`,
+    annotations: { 'workers/tag': String(index).padStart(12, '0') },
+  }));
+
+  assert.throws(() => evaluateFunctionCleanup(values), /may be truncated/);
+});
+
 test('fails closed when a Worker release tag is missing or malformed', () => {
   const missing = fixtures();
   delete missing.versions[0].annotations['workers/tag'];

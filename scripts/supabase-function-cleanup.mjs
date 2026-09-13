@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const releasePattern = /^[0-9a-f]{12}$/;
 const releaseFunctionPattern = /^api-([0-9a-f]{12})$/;
+const wranglerVersionListLimit = 10;
 const productionProjectRef = 'oxgwprvkotfvyacpqayx';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const execFileAsync = promisify(execFile);
@@ -32,6 +33,9 @@ function workerRelease(version) {
 
 export function evaluateFunctionCleanup({ deployments, versions, functions }) {
   const workerVersions = inventory(versions, 'Worker version inventory');
+  if (workerVersions.length >= wranglerVersionListLimit) {
+    throw new Error('Worker version inventory may be truncated by Wrangler; cleanup is blocked.');
+  }
   const workerVersionIds = unique(
     workerVersions.map((version) => version?.id),
     'Worker version inventory',
