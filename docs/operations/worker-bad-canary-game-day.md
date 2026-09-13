@@ -35,6 +35,8 @@ At zero percent, generate at least 30 bounded weather samples for each exact ver
 5. Require a new stable-only 100-percent deployment and successful health, version, weather, and authorization smoke.
 6. Confirm Grafana synthetics and production dependency health recover.
 
+The rollback workflow must use Cloudflare's `wrangler rollback` command. A one-version `versions deploy` is not equivalent when a candidate changed versioned secrets; Cloudflare rejects that request with code `10220` instead of restoring the target's prior bindings.
+
 Retain the failed Worker version and its mapped Supabase function through DOC-002 incident review. The completion PR removes the source fault hook so future normal releases cannot accidentally enable it.
 
 ## Evidence

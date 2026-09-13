@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { evaluateRollbackPlan, evaluateRollbackResult, smokeRollback } from './worker-rollback.mjs';
 
@@ -147,4 +148,14 @@ test('does not include provider response bodies in smoke errors', async () => {
       error.message === 'Rollback smoke returned HTTP 500 for /health.' &&
       !error.message.includes('sensitive provider detail'),
   );
+});
+
+test('uses the Cloudflare rollback primitive for changed version secrets', () => {
+  const workflow = readFileSync(
+    new URL('../.github/workflows/worker-rollback.yml', import.meta.url),
+    'utf8',
+  );
+
+  assert.match(workflow, /exec wrangler rollback\s+"\$STABLE_VERSION_ID"/);
+  assert.doesNotMatch(workflow, /exec wrangler versions deploy\s+"\$STABLE_VERSION_ID@100"/);
 });
