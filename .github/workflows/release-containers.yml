@@ -37,17 +37,33 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
-      - name: Build bootstrap image without registry access
+      - name: Build hardened job image without registry access
         run: >-
           docker build
           --build-arg SOURCE_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
           --build-arg REVISION="$GITHUB_SHA"
           --tag atmos-jobs:validation
-          jobs/container-bootstrap
-      - name: Verify OCI identity labels
+          jobs/runtime-probe
+      - name: Verify hardened image and OCI identity
         run: |
           test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.source" }}' atmos-jobs:validation)" = "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
           test "$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' atmos-jobs:validation)" = "$GITHUB_SHA"
+          test "$(docker image inspect --format '{{ .Config.User }}' atmos-jobs:validation)" = 'node:node'
+          test "$(docker image inspect --format '{{ json .Config.Entrypoint }}' atmos-jobs:validation)" = '["node","/app/job.mjs"]'
+      - name: Execute finite runtime contract
+        run: |
+          output="$(docker run --rm --read-only --network=none --cap-drop=ALL --security-opt=no-new-privileges \
+            --env ATMOS_JOB_ID=ci-validation \
+            --env ATMOS_RELEASE_ID="${GITHUB_SHA::12}" \
+            atmos-jobs:validation)"
+          OUTPUT="$output" node -e "const events=process.env.OUTPUT.split('\\n').map(JSON.parse);if(events.length!==2||events[0].event!=='job_started'||events[1].event!=='job_completed'||events[1].status!=='ok')process.exit(1)"
+          if docker run --rm --read-only --network=none --cap-drop=ALL --security-opt=no-new-privileges \
+            --env ATMOS_JOB_ID=ci-validation \
+            --env ATMOS_RELEASE_ID=invalid \
+            atmos-jobs:validation; then
+            echo 'Malformed runtime identity unexpectedly succeeded.' >&2
+            exit 1
+          fi
 
   publish:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -93,7 +109,7 @@ jobs:
         id: publish
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
-          context: jobs/container-bootstrap
+          context: jobs/runtime-probe
           push: true
           provenance: false
           tags: ${{ steps.metadata.outputs.tags }}

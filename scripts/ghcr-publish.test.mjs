@@ -6,10 +6,6 @@ const workflow = readFileSync(
   new URL('../.github/workflows/release-containers.yml', import.meta.url),
   'utf8',
 );
-const dockerfile = readFileSync(
-  new URL('../jobs/container-bootstrap/Dockerfile', import.meta.url),
-  'utf8',
-);
 
 test('limits GHCR writes to protected main', () => {
   assert.match(workflow, /pull_request:/);
@@ -41,12 +37,4 @@ test('pins every action and links the package to its source revision', () => {
   assert.match(workflow, /org\.opencontainers\.image\.source=/);
   assert.match(workflow, /org\.opencontainers\.image\.revision=/);
   assert.match(workflow, /persist-credentials: false/g);
-});
-
-test('keeps the registry bootstrap image non-deployable and secret-free', () => {
-  assert.match(dockerfile, /^FROM scratch$/m);
-  assert.match(dockerfile, /org\.opencontainers\.image\.source="\$\{SOURCE_URL\}"/);
-  assert.match(dockerfile, /org\.opencontainers\.image\.revision="\$\{REVISION\}"/);
-  assert.match(dockerfile, /^USER 65532:65532$/m);
-  assert.doesNotMatch(dockerfile, /RUN|CMD|ENTRYPOINT|ENV|TOKEN|PASSWORD|SECRET/);
 });

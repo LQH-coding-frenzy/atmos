@@ -1,0 +1,106 @@
+task:
+  id: CTR-001
+  title: Hardened finite job image
+  status: IN_PROGRESS
+  objective: Replace the GHCR bootstrap with a minimal digest-pinned non-root job image that validates runtime identity, emits structured completion logs, and exits deterministically.
+  depends_on: [GHCR-001]
+  external_policy_checks: [Docker Official Image availability, public GHCR package]
+  runtime_placement:
+    allowed: [github-actions, azure-container-app-job]
+    selected: azure-container-app-job
+    reason: The finite side-effect-free probe establishes the hardened runtime contract required by later bounded backup and backfill Container Apps Jobs without provisioning Azure.
+  scope:
+    include:
+      [
+        .github/workflows/release-containers.yml,
+        jobs/runtime-probe,
+        scripts/container-runtime.test.mjs,
+        scripts/ghcr-publish.test.mjs,
+        eslint.config.mjs,
+        docs/operations/container-runtime.md,
+        docs/operations/ghcr-container-publishing.md,
+        ghcr.io/lqh-coding-frenzy/atmos-jobs,
+      ]
+    exclude:
+      [
+        backup or backfill logic,
+        network or database access,
+        runtime secrets,
+        image vulnerability policy,
+        SBOM generation,
+        Cosign signing or verification,
+        Azure resources or deployment,
+        mutable tags,
+      ]
+  inputs:
+    required_config: [ATMOS_JOB_ID, ATMOS_RELEASE_ID]
+    required_secrets: [automatic GITHUB_TOKEN only for protected publication]
+  outputs:
+    files:
+      [
+        jobs/runtime-probe/Dockerfile,
+        jobs/runtime-probe/job.mjs,
+        scripts/container-runtime.test.mjs,
+        docs/operations/container-runtime.md,
+        docs/evidence/ctr-001/2026-09-13.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [hardened public GHCR runtime-probe image]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Retain the GHCR-001 bootstrap digest and each CTR-001 digest; downstream deployment must select an exact verified digest.
+  validation:
+    commands:
+      [
+        node --test scripts/container-runtime.test.mjs scripts/ghcr-publish.test.mjs,
+        docker build jobs/runtime-probe,
+        docker run with bounded job and release IDs,
+        docker image inspect for non-root user labels and entrypoint,
+        corepack pnpm test,
+        corepack pnpm lint,
+        corepack pnpm typecheck,
+        protected container validation and publication workflow,
+        anonymous exact-digest pull and runtime execution,
+        git diff --check,
+      ]
+    expected:
+      [
+        base image tag and digest are pinned,
+        runtime uses a non-root user and copies only the job source,
+        valid bounded identity emits one sanitized completion event and exits zero,
+        missing or malformed identity emits one fixed configuration error and exits non-zero,
+        image performs no network or durable-state operation,
+        protected publication retains exact Git SHA tag and digest identity,
+      ]
+  security_checks:
+    [
+      gitleaks,
+      codeql_or_semgrep,
+      trivy Dockerfile/config scan,
+      pinned base digest,
+      non-root runtime,
+      no package install or runtime secret,
+      read-only-filesystem compatible,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [container build result image size and exit status]
+    logs: [job_started job_completed and fixed job_configuration_invalid events]
+    traces: [Git SHA GHCR digest job ID and release ID]
+  evidence:
+    [
+      docs/evidence/ctr-001/2026-09-13.md,
+      protected pull request checks,
+      protected publish workflow run,
+      anonymous exact-digest execution,
+    ]
+  rollback:
+    strategy: Select the retained GHCR-001 digest or revert the runtime-image commit through protected Git; never overwrite an existing SHA tag or delete a referenced digest.
+  human_approval:
+    required: true
+    reason: Owner authorized continued end-to-end production completion on 2026-09-13; this publishes a free public image but creates no Azure resource or runtime secret.
