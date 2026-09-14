@@ -27,7 +27,7 @@ jobs:
             const variables = await fetch(`https://app.terraform.io/api/v2/workspaces/${id}/vars`, { headers });
             if (!variables.ok) throw new Error(`workspace variable request failed: ${variables.status}`);
             for (const variable of (await variables.json()).data) {
-              const { key, category, sensitive } = variable.attributes;
-              if (["TFC_AZURE_PROVIDER_AUTH", "TFC_AZURE_RUN_CLIENT_ID", "TFC_AZURE_TENANT_ID", "TFC_AZURE_SUBSCRIPTION_ID", "subscription_id", "tenant_id", "client_id"].includes(key)) console.log(JSON.stringify({ key, category, sensitive }));
+              const { key, category, sensitive, value } = variable.attributes;
+              if (["TFC_AZURE_PROVIDER_AUTH", "TFC_AZURE_RUN_CLIENT_ID", "TFC_AZURE_TENANT_ID", "TFC_AZURE_SUBSCRIPTION_ID", "subscription_id", "tenant_id", "client_id"].includes(key)) console.log(JSON.stringify({ key, category, sensitive, valuePresent: typeof value === "string" && value.length > 0, valueLength: typeof value === "string" ? value.length : 0 }));
             }
           '
