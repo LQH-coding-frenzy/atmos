@@ -1,7 +1,7 @@
 task:
   id: TF-001
   title: HCP Terraform project and workspace bootstrap
-  status: IN_PROGRESS
+  status: DONE
   objective: Create the approved HCP Terraform project and isolated remote/manual-apply workspace structure without exposing HCP credentials or enabling provider applies.
   depends_on: [GOV-001]
   external_policy_checks:
