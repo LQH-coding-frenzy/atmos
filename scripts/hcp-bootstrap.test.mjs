@@ -25,7 +25,17 @@ test('bootstraps only the approved project and missing workspaces', async () => 
     }
     if (requestUrl.pathname.endsWith('/workspaces') && options.method !== 'POST') {
       return jsonResponse({
-        data: [{ attributes: { name: existingWorkspace } }],
+        data: [
+          {
+            id: 'ws-existing',
+            attributes: {
+              name: existingWorkspace,
+              'execution-mode': 'remote',
+              'auto-apply': false,
+            },
+            relationships: { project: { data: { id: 'prj-atmos' } } },
+          },
+        ],
         links: {},
       });
     }
@@ -76,13 +86,26 @@ test('does not mutate HCP Terraform when every resource exists', async () => {
 
     if (requestUrl.pathname.endsWith('/projects')) {
       return jsonResponse({
-        data: [{ id: 'prj-atmos', attributes: { name: 'atmos-platform' } }],
+        data: [
+          {
+            id: 'prj-atmos',
+            attributes: { name: 'atmos-platform', 'default-execution-mode': 'remote' },
+          },
+        ],
         links: {},
       });
     }
     if (requestUrl.pathname.endsWith('/workspaces')) {
       return jsonResponse({
-        data: hcpBootstrapConfig.workspaces.map((name) => ({ attributes: { name } })),
+        data: hcpBootstrapConfig.workspaces.map((name) => ({
+          id: `ws-${name}`,
+          attributes: {
+            name,
+            'execution-mode': 'remote',
+            'auto-apply': false,
+          },
+          relationships: { project: { data: { id: 'prj-atmos' } } },
+        })),
         links: {},
       });
     }
@@ -93,10 +116,70 @@ test('does not mutate HCP Terraform when every resource exists', async () => {
   const result = await bootstrapHcpTerraform({ fetchImpl, token: 'test-only-value' });
 
   assert.equal(result.projectCreated, false);
+  assert.equal(result.projectUpdated, false);
   assert.deepEqual(result.createdWorkspaces, []);
+  assert.deepEqual(result.updatedWorkspaces, []);
   assert.deepEqual(result.existingWorkspaces, hcpBootstrapConfig.workspaces);
   assert.equal(
-    requests.some(({ options }) => options.method === 'POST'),
+    requests.some(({ options }) => options.method === 'POST' || options.method === 'PATCH'),
     false,
   );
+});
+
+test('reconciles an existing project and workspace to the approved settings', async () => {
+  const requests = [];
+  const fetchImpl = async (url, options) => {
+    requests.push({ url, options });
+    const requestUrl = new URL(url);
+
+    if (requestUrl.pathname.endsWith('/projects') && options.method !== 'POST') {
+      return jsonResponse({
+        data: [
+          {
+            id: 'prj-atmos',
+            attributes: { name: 'atmos-platform', 'default-execution-mode': 'local' },
+          },
+        ],
+        links: {},
+      });
+    }
+    if (requestUrl.pathname.endsWith('/projects/prj-atmos')) {
+      return jsonResponse({ data: { id: 'prj-atmos', type: 'projects' } });
+    }
+    if (requestUrl.pathname.endsWith('/workspaces') && options.method !== 'POST') {
+      return jsonResponse({
+        data: [
+          {
+            id: 'ws-existing',
+            attributes: {
+              name: hcpBootstrapConfig.workspaces[0],
+              'execution-mode': 'local',
+              'auto-apply': true,
+            },
+            relationships: { project: { data: { id: 'prj-other' } } },
+          },
+        ],
+        links: {},
+      });
+    }
+    if (requestUrl.pathname.endsWith('/workspaces/ws-existing')) {
+      return jsonResponse({ data: { id: 'ws-existing', type: 'workspaces' } });
+    }
+    if (requestUrl.pathname.endsWith('/workspaces')) {
+      return jsonResponse({ data: { id: 'ws-created', type: 'workspaces' } }, 201);
+    }
+
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  const result = await bootstrapHcpTerraform({ fetchImpl, token: 'test-only-value' });
+
+  assert.equal(result.projectUpdated, true);
+  assert.deepEqual(result.updatedWorkspaces, [hcpBootstrapConfig.workspaces[0]]);
+  const patchRequests = requests.filter(({ options }) => options.method === 'PATCH');
+  assert.equal(patchRequests.length, 2);
+  for (const request of patchRequests) {
+    const body = JSON.parse(request.options.body);
+    assert.equal(body.data.attributes['auto-apply'] ?? false, false);
+  }
 });

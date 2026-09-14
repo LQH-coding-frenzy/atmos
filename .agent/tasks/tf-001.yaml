@@ -60,7 +60,7 @@ task:
       [
         only the approved project/workspaces are created,
         all workspaces use remote execution and manual apply,
-        retries make no duplicate resources,
+        retries make no duplicate resources and reconcile only the approved execution/manual-apply/project settings,
         HCP credentials never enter logs or Git,
       ]
   security_checks:
