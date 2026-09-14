@@ -1,0 +1,102 @@
+task:
+  id: CTR-003
+  title: Exact-digest container verification gate
+  status: IN_PROGRESS
+  objective: Verify a GHCR image's exact digest, OCI revision, keyless Cosign signature, and CycloneDX attestation against the protected GitHub Actions signing identity before any Azure deployment can consume it.
+  depends_on: [CTR-002]
+  external_policy_checks:
+    [public GHCR package, Sigstore public-good verification, GitHub Actions workflow reuse]
+  runtime_placement:
+    allowed: [github-actions, ghcr]
+    selected: github-actions
+    reason: A reusable GitHub Actions gate can verify public supply-chain records before a future Azure workflow receives deployment permissions, without an Azure runtime or long-lived credential.
+  scope:
+    include:
+      [
+        .github/workflows/verify-container-supply-chain.yml,
+        scripts/container-verification.test.mjs,
+        docs/operations/container-supply-chain.md,
+        docs/evidence/ctr-003/2026-09-14.md,
+        ghcr.io/lqh-coding-frenzy/atmos-jobs,
+        Sigstore Fulcio and Rekor public services,
+      ]
+    exclude:
+      [
+        Azure provisioning or deployment,
+        package publication or signing,
+        id-token write permission,
+        signing keys passwords or personal tokens,
+        mutable image tags,
+        database schema or RLS,
+      ]
+  inputs:
+    required_config: [exact GHCR sha256 digest, expected Atmos image identity, OCI source revision]
+    required_secrets: [none]
+  outputs:
+    files:
+      [
+        .github/workflows/verify-container-supply-chain.yml,
+        scripts/container-verification.test.mjs,
+        docs/operations/container-supply-chain.md,
+        docs/evidence/ctr-003/2026-09-14.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [reusable pre-deployment verification workflow]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Retain verified immutable digests and revert the verification workflow through protected Git; future deployment workflows must remain blocked unless this gate succeeds.
+  validation:
+    commands:
+      [
+        node --test scripts/container-verification.test.mjs scripts/ghcr-publish.test.mjs,
+        protected pull request checks,
+        protected main workflow dispatch against CTR-002 exact digest,
+        Cosign exact-digest signature verification with protected workflow identity and revision claim,
+        Cosign exact-digest CycloneDX attestation verification with the same identity and revision claim,
+        corepack pnpm test,
+        corepack pnpm lint,
+        corepack pnpm typecheck,
+        git diff --check,
+      ]
+    expected:
+      [
+        non-sha256 input fails before remote fetch,
+        mutable tags cannot enter the verification command,
+        OCI source and revision must match the canonical repository and a full Git SHA,
+        signature and CycloneDX attestation must each verify against the exact digest expected issuer workflow repository ref and source revision,
+        verification uses no registry credential signing key or OIDC token minting,
+        Azure deployment workflow reuse must wait for this gate,
+      ]
+  security_checks:
+    [
+      gitleaks,
+      codeql_or_semgrep,
+      full-SHA action pinning,
+      contents-read-only permissions,
+      exact-digest-only image reference,
+      expected GitHub Actions issuer identity repository ref and SHA constraints,
+      transparency-log verification enabled,
+      no insecure Cosign flags or scanner bypass,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [verification pass fail counts]
+    logs: [digest source revision signature and attestation gate outcome]
+    traces: [Git SHA workflow run ID verified signing identity]
+  evidence:
+    [
+      docs/evidence/ctr-003/2026-09-14.md,
+      protected pull request checks,
+      protected exact-digest verification workflow run,
+      Cosign signature and attestation verification results,
+    ]
+  rollback:
+    strategy: Revert through protected Git. Do not bypass a failing verification gate; correct the artifact or signing workflow and publish a new immutable digest.
+  human_approval:
+    required: true
+    reason: Owner authorized continued end-to-end production completion on 2026-09-13. The task only verifies public artifact records and does not create a secret paid resource or Azure deployment.
