@@ -1,0 +1,35 @@
+task:
+  id: R2BACK-001
+  title: Private R2 backup storage boundary
+  status: IN_PROGRESS
+  objective: Restrict backup object credentials to the Azure backup-job workspace and define a bounded prefix smoke verification.
+  depends_on: [CF-IAC-001]
+  inputs:
+    required_config:
+      [private bucket atmos-production-backups, prefix backups/, 1 GB and 100-operation smoke bound]
+    required_secrets: [HCP atmos-azure-production R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY]
+  outputs:
+    files: [.agent/tasks/r2back-001.yaml, docs/operations/r2-backup-storage.md]
+    terraform_resources: [none; bucket is managed by CF-IAC-001]
+  validation:
+    commands: [Azure backup-job scoped write/read/delete smoke after AZ-IAC-001]
+    expected:
+      [
+        object remains under backups/smoke/,
+        is deleted after verification,
+        no credential enters Git or logs,
+      ]
+  security_checks:
+    [
+      bucket-scoped S3 credentials,
+      HCP sensitive environment variables,
+      no public R2 endpoint,
+      no local credential access,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  human_approval:
+    required: true
+    reason: Owner approved bounded R2 smoke work below 1 GB and 100 operations on 2026-09-14.
