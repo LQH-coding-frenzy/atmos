@@ -1,0 +1,81 @@
+task:
+  id: AZ-001
+  title: Azure for Students guardrails and budget
+  status: IN_PROGRESS
+  objective: Verify the Azure for Students subscription and establish an alert-only spending guardrail before any Azure resource provisioning.
+  depends_on: [GOV-003]
+  external_policy_checks:
+    [Azure for Students enabled, 100 USD remaining credit recorded, no pay-as-you-go upgrade]
+  runtime_placement:
+    allowed: [azure-control-plane]
+    selected: azure-control-plane
+    reason: The Azure Consumption budget belongs at subscription scope and creates no compute resource.
+  scope:
+    include:
+      [
+        Azure subscription budget,
+        docs/operations/azure-student-guardrails.md,
+        docs/evidence/az-001/2026-09-14.md,
+      ]
+    exclude:
+      [
+        resource groups,
+        Microsoft.App registration,
+        Container Apps,
+        Azure networking,
+        Azure Key Vault,
+        paid-tier upgrade,
+      ]
+  inputs:
+    required_config:
+      [subscription da98daf7-ab9b-44e6-9100-29129bddb315, Singapore preferred region, 10 USD budget]
+    required_secrets: [Azure CLI interactive owner session]
+  outputs:
+    files:
+      [
+        .agent/tasks/az-001.yaml,
+        docs/operations/azure-student-guardrails.md,
+        docs/evidence/az-001/2026-09-14.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [Azure subscription budget]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Retain the budget for the Azure lane; modify it only through an approved control-plane change.
+  validation:
+    commands:
+      [
+        az account show,
+        Azure Consumption budget GET,
+        protected pull request checks,
+        git diff --check,
+      ]
+    expected:
+      [
+        subscription is enabled,
+        budget is monthly 10 USD,
+        all four Owner notifications are enabled,
+        Microsoft.App remains unregistered,
+      ]
+  security_checks:
+    [
+      no client secret,
+      no pay-as-you-go upgrade,
+      role-based notification rather than recorded email address,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [Azure budget actual-cost thresholds]
+    logs: [non-secret subscription budget metadata]
+    traces: [Git SHA and Azure budget resource ID]
+  evidence: [docs/evidence/az-001/2026-09-14.md, protected pull request checks]
+  rollback:
+    strategy: Do not delete the guardrail to unblock Azure work. Correct budget configuration through an approved control-plane update.
+  human_approval:
+    required: true
+    reason: Owner authorized the alert-only 10 USD Azure budget and a maximum 10 USD initial Azure credit consumption on 2026-09-14.
