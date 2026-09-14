@@ -28,6 +28,6 @@ provider "azurerm" {
 
 resource "azurerm_container_app_environment" "production" {
   name                = "cae-atmos-prod"
-  location            = "southeastasia"
+  location            = "indonesiacentral"
   resource_group_name = "rg-atmos-prod"
 }
