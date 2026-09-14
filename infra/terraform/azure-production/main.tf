@@ -30,4 +30,11 @@ resource "azurerm_container_app_environment" "production" {
   name                = "cae-atmos-prod"
   location            = "indonesiacentral"
   resource_group_name = "rg-atmos-prod"
+
+  workload_profile {
+    name                  = "Consumption"
+    workload_profile_type = "Consumption"
+    minimum_count         = 0
+    maximum_count         = 0
+  }
 }
