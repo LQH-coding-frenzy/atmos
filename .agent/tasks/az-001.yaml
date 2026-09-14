@@ -1,7 +1,7 @@
 task:
   id: AZ-001
   title: Azure for Students guardrails and budget
-  status: IN_PROGRESS
+  status: DONE
   objective: Verify the Azure for Students subscription and establish an alert-only spending guardrail before any Azure resource provisioning.
   depends_on: [GOV-003]
   external_policy_checks:
