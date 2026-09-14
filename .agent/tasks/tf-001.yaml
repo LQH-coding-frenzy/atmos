@@ -1,0 +1,93 @@
+task:
+  id: TF-001
+  title: HCP Terraform project and workspace bootstrap
+  status: IN_PROGRESS
+  objective: Create the approved HCP Terraform project and isolated remote/manual-apply workspace structure without exposing HCP credentials or enabling provider applies.
+  depends_on: [GOV-001]
+  external_policy_checks:
+    [HCP Terraform Free, existing organization atmos_uit, protected-main GitHub Actions secret]
+  runtime_placement:
+    allowed: [github-actions, hcp-terraform]
+    selected: github-actions
+    reason: A protected manual bootstrap workflow can use an injected organization token without committing or printing it, then HCP Terraform owns later remote plans and applies.
+  scope:
+    include:
+      [
+        .github/workflows/bootstrap-hcp-terraform.yml,
+        scripts/hcp-bootstrap.mjs,
+        scripts/hcp-bootstrap.test.mjs,
+        docs/operations/terraform-bootstrap.md,
+      ]
+    exclude:
+      [
+        Terraform provider resources,
+        VCS connections,
+        provider variables,
+        auto-apply,
+        Azure infrastructure,
+        Cloudflare resources,
+        database schema,
+      ]
+  inputs:
+    required_config: [HCP organization atmos_uit, project atmos-platform, approved workspace names]
+    required_secrets: [GitHub Actions TF_ORG_TOKEN]
+  outputs:
+    files:
+      [
+        .github/workflows/bootstrap-hcp-terraform.yml,
+        scripts/hcp-bootstrap.mjs,
+        scripts/hcp-bootstrap.test.mjs,
+        docs/operations/terraform-bootstrap.md,
+        docs/evidence/tf-001/2026-09-14.md,
+      ]
+    terraform_resources: [HCP Terraform project, seven HCP Terraform workspaces]
+    database_changes: [none]
+    deployed_units: [protected HCP Terraform bootstrap workflow]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Retain project/workspaces and remote state; correct permissions or configuration and rerun idempotently rather than deleting state.
+  validation:
+    commands:
+      [
+        node --test scripts/hcp-bootstrap.test.mjs,
+        protected pull request checks,
+        protected main workflow dispatch,
+        HCP Terraform project/workspace metadata verification,
+        git diff --check,
+      ]
+    expected:
+      [
+        only the approved project/workspaces are created,
+        all workspaces use remote execution and manual apply,
+        retries make no duplicate resources,
+        HCP credentials never enter logs or Git,
+      ]
+  security_checks:
+    [
+      gitleaks,
+      HCP token injected only at runtime,
+      contents-read-only workflow permissions,
+      protected-main dispatch,
+      full-SHA action pinning,
+      no VCS connection or auto-apply,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [project/workspace creation outcome]
+    logs: [non-secret project and workspace counts]
+    traces: [Git SHA and workflow run ID]
+  evidence:
+    [
+      docs/evidence/tf-001/2026-09-14.md,
+      protected pull request checks,
+      protected main bootstrap workflow run,
+    ]
+  rollback:
+    strategy: Do not delete remote state as a retry mechanism. Revert the workflow through protected Git only if its approved resource contract is incorrect.
+  human_approval:
+    required: true
+    reason: Owner authorized the protected workflow to use an existing GitHub Environment HCP organization token solely for the fixed free-plan control-plane bootstrap on 2026-09-14.

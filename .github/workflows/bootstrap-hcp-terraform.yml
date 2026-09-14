@@ -1,0 +1,29 @@
+name: Bootstrap HCP Terraform
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atmos-hcp-terraform-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    env:
+      TF_ORG_TOKEN: ${{ secrets.TF_ORG_TOKEN }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Require the scoped HCP Terraform bootstrap token
+        run: test -n "$TF_ORG_TOKEN"
+      - name: Create approved HCP Terraform project and workspaces
+        run: node scripts/hcp-bootstrap.mjs
