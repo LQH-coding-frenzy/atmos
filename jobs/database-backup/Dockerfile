@@ -6,7 +6,8 @@ ARG REVISION
 LABEL org.opencontainers.image.source="${SOURCE_URL}"
 LABEL org.opencontainers.image.revision="${REVISION}"
 
-RUN apk add --no-cache aws-cli openssl \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache aws-cli openssl \
     && rm -f /usr/local/bin/gosu
 
 COPY backup.sh /usr/local/bin/backup
