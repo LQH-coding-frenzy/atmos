@@ -1,7 +1,7 @@
 task:
   id: CTR-003
   title: Exact-digest container verification gate
-  status: IN_PROGRESS
+  status: DONE
   objective: Verify a GHCR image's exact digest, OCI revision, keyless Cosign signature, and CycloneDX attestation against the protected GitHub Actions signing identity before any Azure deployment can consume it.
   depends_on: [CTR-002]
   external_policy_checks:
