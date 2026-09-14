@@ -1,5 +1,5 @@
 project: atmos
-updated: 2026-09-13
+updated: 2026-09-14
 tasks:
   GOV-001: DONE
   GOV-002: DONE
@@ -84,3 +84,4 @@ tasks:
   SEC-003: DONE
   SEC-004: DONE
   SBOM-001: DONE
+  TF-001: DONE
