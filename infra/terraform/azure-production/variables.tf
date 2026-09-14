@@ -9,3 +9,23 @@ variable "tenant_id" {
 variable "client_id" {
   type = string
 }
+
+variable "backup_database_url" {
+  type      = string
+  sensitive = true
+}
+
+variable "backup_encryption_key" {
+  type      = string
+  sensitive = true
+}
+
+variable "r2_access_key_id" {
+  type      = string
+  sensitive = true
+}
+
+variable "r2_secret_access_key" {
+  type      = string
+  sensitive = true
+}
