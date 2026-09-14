@@ -1,0 +1,23 @@
+task:
+  id: AZ-OIDC-001
+  title: GitHub Actions to Azure OIDC identity
+  status: DONE
+  objective: Create a client-secret-free GitHub production identity restricted to the Atmos repository and environment.
+  depends_on: [AZ-001]
+  validation:
+    commands: [az ad app federated-credential list]
+    expected:
+      [
+        issuer is GitHub Actions,
+        subject is repo:LQH-coding-frenzy/atmos:environment:production,
+        no password credential,
+      ]
+  security_checks:
+    [no client secret, exact repository/environment subject, no subscription-wide role assignment]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  evidence: [docs/evidence/az-oidc-001/2026-09-14.md]
+  rollback:
+    strategy: Remove the single federated credential and service principal only through approved Azure control-plane change.
