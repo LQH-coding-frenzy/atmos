@@ -22,9 +22,6 @@ on:
 permissions:
   contents: read
 
-env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/atmos-database-backup
-
 jobs:
   validate:
     runs-on: ubuntu-24.04
@@ -59,7 +56,8 @@ jobs:
           persist-credentials: false
       - id: build
         run: |
-          tag="$IMAGE:sha-$GITHUB_SHA"
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/atmos-database-backup"
+          tag="$image:sha-$GITHUB_SHA"
           if docker buildx imagetools inspect "$tag" >/dev/null 2>&1; then exit 1; fi
           docker build --build-arg SOURCE_URL="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --build-arg REVISION="$GITHUB_SHA" --tag "$tag" jobs/database-backup
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
