@@ -44,11 +44,21 @@ test('rejects missing malformed and oversized runtime identity without reflectio
 });
 
 test('pins a minimal base and runs only copied source as non-root', () => {
-  assert.match(dockerfile, /^FROM node:24\.14\.1-alpine3\.23@sha256:[0-9a-f]{64}$/m);
+  assert.match(dockerfile, /^FROM node:24\.21\.0-alpine3\.23@sha256:[0-9a-f]{64}$/m);
   assert.match(dockerfile, /^COPY --chown=node:node job\.mjs \/app\/job\.mjs$/m);
   assert.match(dockerfile, /^USER node:node$/m);
   assert.match(dockerfile, /^ENTRYPOINT \["node", "\/app\/job\.mjs"\]$/m);
   assert.match(dockerfile, /^ENV NODE_OPTIONS=--disable-proto=throw$/m);
-  assert.doesNotMatch(dockerfile, /^(RUN|ADD|EXPOSE)\b/m);
+  assert.ok(
+    dockerfile.includes(
+      [
+        'RUN apk add --no-cache --upgrade libcrypto3=3.5.8-r0 libssl3=3.5.8-r0 \\',
+        '    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \\',
+        '    && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack',
+      ].join('\n'),
+    ),
+  );
+  assert.equal(dockerfile.match(/^RUN\b/gm)?.length, 1);
+  assert.doesNotMatch(dockerfile, /^(ADD|EXPOSE)\b/m);
   assert.doesNotMatch(dockerfile, /TOKEN|PASSWORD|SECRET|DATABASE_URL/);
 });

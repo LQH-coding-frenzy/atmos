@@ -4,7 +4,7 @@ CTR-001 provides the finite runtime contract used to validate Atmos container ex
 
 ## Image Boundary
 
-`jobs/runtime-probe/Dockerfile` uses the official `node:24.14.1-alpine3.23` image pinned by OCI index digest. It installs no package, copies only `job.mjs`, runs as the built-in `node:node` user, and starts through an exec-form entrypoint. The process works with a read-only filesystem, no Linux capabilities, no network, and `no-new-privileges`.
+`jobs/runtime-probe/Dockerfile` uses the official `node:24.21.0-alpine3.23` image pinned by OCI index digest. It applies only pinned Alpine security updates for `libcrypto3` and `libssl3`, removes unused npm/corepack tooling, copies only `job.mjs`, runs as the built-in `node:node` user, and starts through an exec-form entrypoint. The process works with a read-only filesystem, no Linux capabilities, no network, and `no-new-privileges`.
 
 The image accepts only:
 

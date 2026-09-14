@@ -1,0 +1,113 @@
+task:
+  id: CTR-002
+  title: Scanned signed job image
+  status: IN_PROGRESS
+  objective: Scan the exact hardened image, generate a validated CycloneDX SBOM, publish the same image config, and attach keyless Cosign signature and SBOM attestation to its immutable GHCR digest.
+  depends_on: [CTR-001]
+  external_policy_checks: [public GHCR package, Sigstore public-good service, GitHub Actions OIDC]
+  runtime_placement:
+    allowed: [github-actions, ghcr]
+    selected: github-actions
+    reason: Protected GitHub Actions can scan and sign the built artifact with an ephemeral OIDC identity while GHCR stores the image signature and attestation without a long-lived signing key.
+  scope:
+    include:
+      [
+        .github/workflows/release-containers.yml,
+        jobs/runtime-probe/Dockerfile,
+        scripts/container-supply-chain.mjs,
+        scripts/container-supply-chain.test.mjs,
+        scripts/container-runtime.test.mjs,
+        docs/operations/container-supply-chain.md,
+        docs/operations/container-runtime.md,
+        docs/operations/ghcr-container-publishing.md,
+        mise.toml,
+        ghcr.io/lqh-coding-frenzy/atmos-jobs,
+        Sigstore Fulcio and Rekor public services,
+      ]
+    exclude:
+      [
+        Azure resources or deployment,
+        pre-deploy signature policy enforcement,
+        signing keys or passwords,
+        vulnerability exceptions or suppressions,
+        mutable tags,
+        database schema or RLS,
+      ]
+  inputs:
+    required_config: [protected main Git SHA, exact image tag, exact image digest]
+    required_secrets: [automatic GITHUB_TOKEN only]
+  outputs:
+    files:
+      [
+        .github/workflows/release-containers.yml,
+        jobs/runtime-probe/Dockerfile,
+        scripts/container-supply-chain.mjs,
+        scripts/container-supply-chain.test.mjs,
+        scripts/container-runtime.test.mjs,
+        docs/operations/container-supply-chain.md,
+        docs/operations/container-runtime.md,
+        docs/operations/ghcr-container-publishing.md,
+        docs/evidence/ctr-002/2026-09-13.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [signed GHCR image digest and signed CycloneDX SBOM attestation]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Retain signed and unsigned historical digests; only a digest passing CTR-003 identity and signature verification may be selected for deployment.
+  validation:
+    commands:
+      [
+        node --test scripts/container-supply-chain.test.mjs scripts/container-runtime.test.mjs scripts/ghcr-publish.test.mjs,
+        Trivy image scan with HIGH and CRITICAL failure policy,
+        Trivy CycloneDX SBOM generation and structural validation,
+        local versus remote image config digest comparison,
+        Cosign keyless exact-digest signing and CycloneDX attestation,
+        corepack pnpm test,
+        corepack pnpm lint,
+        corepack pnpm typecheck,
+        protected container workflow,
+        git diff --check,
+      ]
+    expected:
+      [
+        HIGH or CRITICAL image findings fail before push without suppression,
+        CycloneDX SBOM names the scanned image and contains components,
+        published manifest references the same config digest that Trivy scanned,
+        signature and SBOM attestation target the exact remote sha256 digest,
+        keyless signing uses GitHub OIDC and no long-lived signing secret,
+        signature or attestation failure blocks workflow success and downstream deployment,
+      ]
+  security_checks:
+    [
+      gitleaks,
+      codeql_or_semgrep,
+      Trivy image vulnerability secret and misconfiguration scan,
+      SBOM structural validation,
+      full-SHA action pinning,
+      id-token write only in protected publish job,
+      exact-digest Cosign target,
+      no vulnerability suppression,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [image size vulnerability counts SBOM component count]
+    logs: [image tag digest config digest signature and attestation outcomes]
+    traces: [Git SHA workflow run ID Fulcio identity and Rekor entries]
+  evidence:
+    [
+      docs/evidence/ctr-002/2026-09-13.md,
+      protected pull request checks,
+      protected signed-image workflow run,
+      retained CycloneDX workflow artifact,
+      signature and attestation registry references,
+    ]
+  rollback:
+    strategy: Revert workflow changes through protected Git and select a retained previously verified digest; never deploy an unsigned or policy-failing digest and never overwrite its SHA tag.
+  human_approval:
+    required: true
+    reason: Owner authorized continued end-to-end production completion on 2026-09-13; keyless signing publishes the protected workflow identity and transparency-log records but no personal signing key or paid resource.
