@@ -1,7 +1,7 @@
 task:
   id: TF-002
   title: Terraform provider pinning and module base
-  status: IN_PROGRESS
+  status: DONE
   objective: Establish a credential-free Terraform base with exact approved provider pins and a module/environment ownership layout.
   depends_on: [TF-001]
   scope:
