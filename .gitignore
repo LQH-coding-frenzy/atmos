@@ -19,7 +19,6 @@ test-results/
 *.tfstate
 *.tfstate.*
 .terraform/
-.terraform.lock.hcl
 
 # Local Supabase and editor files
 supabase/.temp/
