@@ -1,0 +1,90 @@
+name: Verify container supply chain
+
+on:
+  workflow_call:
+    inputs:
+      image_digest:
+        description: Exact sha256 digest of the Atmos job image to verify
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: Exact sha256 digest of the Atmos job image to verify
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atmos-container-verification-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      IMAGE: ghcr.io/lqh-coding-frenzy/atmos-jobs
+      DIGEST: ${{ inputs.image_digest }}
+      EXPECTED_SOURCE: https://github.com/LQH-coding-frenzy/atmos
+      EXPECTED_REPOSITORY: LQH-coding-frenzy/atmos
+      EXPECTED_REF: refs/heads/main
+      CERTIFICATE_IDENTITY: https://github.com/LQH-coding-frenzy/atmos/.github/workflows/release-containers.yml@refs/heads/main
+      CERTIFICATE_OIDC_ISSUER: https://token.actions.githubusercontent.com
+    steps:
+      - name: Reject mutable image references
+        run: |
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+      - name: Install pinned Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.0.6
+      - name: Pull exact image and verify OCI identity
+        id: identity
+        run: |
+          IMAGE_DIGEST="$IMAGE@$DIGEST"
+          docker pull "$IMAGE_DIGEST" >/dev/null
+          SOURCE="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.source" }}' "$IMAGE_DIGEST")"
+          REVISION="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$IMAGE_DIGEST")"
+          test "$SOURCE" = "$EXPECTED_SOURCE"
+          [[ "$REVISION" =~ ^[0-9a-f]{40}$ ]]
+          echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
+      - name: Verify exact digest signature and CycloneDX attestation
+        env:
+          REVISION: ${{ steps.identity.outputs.revision }}
+        run: |
+          IMAGE_DIGEST="$IMAGE@$DIGEST"
+          cosign verify \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer "$CERTIFICATE_OIDC_ISSUER" \
+            --certificate-github-workflow-repository "$EXPECTED_REPOSITORY" \
+            --certificate-github-workflow-ref "$EXPECTED_REF" \
+            --certificate-github-workflow-sha "$REVISION" \
+            "$IMAGE_DIGEST" > "$RUNNER_TEMP/cosign-signature.json"
+          cosign verify-attestation \
+            --type cyclonedx \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer "$CERTIFICATE_OIDC_ISSUER" \
+            --certificate-github-workflow-repository "$EXPECTED_REPOSITORY" \
+            --certificate-github-workflow-ref "$EXPECTED_REF" \
+            --certificate-github-workflow-sha "$REVISION" \
+            "$IMAGE_DIGEST" > "$RUNNER_TEMP/cosign-cyclonedx-attestation.json"
+          test -s "$RUNNER_TEMP/cosign-signature.json"
+          test -s "$RUNNER_TEMP/cosign-cyclonedx-attestation.json"
+      - name: Record verified deployment input
+        env:
+          REVISION: ${{ steps.identity.outputs.revision }}
+        run: |
+          {
+            echo '### Verified OCI deployment input'
+            echo
+            echo "- Image: \`$IMAGE@$DIGEST\`"
+            echo "- Source revision: \`$REVISION\`"
+            echo "- Signer workflow: \`$CERTIFICATE_IDENTITY\`"
+            echo '- Signature and CycloneDX attestation: verified through Sigstore transparency records'
+          } >> "$GITHUB_STEP_SUMMARY"

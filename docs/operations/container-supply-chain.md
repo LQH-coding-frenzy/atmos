@@ -19,6 +19,20 @@ Pull requests build, scan, generate, and structurally validate a non-published i
 
 An unsuccessful Cosign step can leave a scanned but unsigned GHCR digest. It is not deployable: CTR-003 owns signature and identity verification on the exact digest as a mandatory Azure deployment gate. Never substitute a tag, rerun against an existing SHA tag, or deploy an artifact missing either signature or SBOM attestation.
 
+## Deployment Verification
+
+`Verify container supply chain` is reusable by future Azure deployment workflows and can be dispatched from protected `main` to prove a release. It accepts only an exact `sha256:<digest>` for the fixed Atmos job package; it does not accept an image name or tag.
+
+The gate anonymously pulls `ghcr.io/lqh-coding-frenzy/atmos-jobs@<digest>`, requires its OCI source label to be this repository and its OCI revision to be a full Git SHA, then verifies both Cosign records against all of:
+
+- the exact Fulcio identity for `.github/workflows/release-containers.yml` on `refs/heads/main`;
+- GitHub Actions issuer `https://token.actions.githubusercontent.com`;
+- repository `LQH-coding-frenzy/atmos` and ref `refs/heads/main` claims;
+- the signer workflow SHA equal to the image OCI revision;
+- CycloneDX predicate type for the SBOM attestation.
+
+The verifier has only `contents: read`: it does not authenticate to GHCR, mint OIDC tokens, publish, sign, or deploy. A future Azure workflow must call this reusable workflow and make its deployment job depend on successful verification. A verification failure is a release stop, not a reason to use a mutable tag, an insecure Cosign flag, or a manual dashboard deployment.
+
 ## Recovery
 
 Keep the workflow run, SBOM artifact, and immutable digest for investigation. Correct the source or workflow in a new protected commit; do not suppress a finding, delete an existing tag, or overwrite an artifact. Recover a later deployment only by selecting a previously retained digest that satisfies CTR-003 verification.
