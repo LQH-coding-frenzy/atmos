@@ -7,12 +7,9 @@ terraform {
   }
 }
 
-resource "cloudflare_dns_record" "api" {
-  zone_id = var.zone_id
-  name    = var.api_record_name
-  type    = "CNAME"
-  content = var.worker_hostname
-  proxied = true
-  ttl     = 1
-  comment = "Atmos production API Worker"
+resource "cloudflare_workers_custom_domain" "api" {
+  account_id = var.account_id
+  zone_id    = var.zone_id
+  hostname   = var.hostname
+  service    = var.service
 }

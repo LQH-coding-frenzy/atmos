@@ -2,10 +2,14 @@ variable "zone_id" {
   type = string
 }
 
-variable "api_record_name" {
+variable "account_id" {
   type = string
 }
 
-variable "worker_hostname" {
+variable "hostname" {
+  type = string
+}
+
+variable "service" {
   type = string
 }
