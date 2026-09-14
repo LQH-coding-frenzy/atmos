@@ -66,6 +66,7 @@ export async function bootstrapHcpTerraform({
   const projects = await client.list(`organizations/${config.organization}/projects`);
   let project = projects.find(({ attributes }) => attributes.name === config.project);
   let projectCreated = false;
+  let projectUpdated = false;
 
   if (!project) {
     const response = await client.request(`organizations/${config.organization}/projects`, {
@@ -82,57 +83,97 @@ export async function bootstrapHcpTerraform({
     });
     project = response.data;
     projectCreated = true;
-  }
-
-  const workspaceNames = new Set(
-    (await client.list(`organizations/${config.organization}/workspaces`)).map(
-      ({ attributes }) => attributes.name,
-    ),
-  );
-  const createdWorkspaces = [];
-
-  for (const workspace of config.workspaces) {
-    if (workspaceNames.has(workspace)) {
-      continue;
-    }
-
-    await client.request(`organizations/${config.organization}/workspaces`, {
-      method: 'POST',
+  } else if (project.attributes['default-execution-mode'] !== 'remote') {
+    const response = await client.request(`projects/${project.id}`, {
+      method: 'PATCH',
       body: JSON.stringify({
         data: {
-          type: 'workspaces',
+          type: 'projects',
+          id: project.id,
           attributes: {
-            name: workspace,
-            'execution-mode': 'remote',
-            'auto-apply': false,
-          },
-          relationships: {
-            project: {
-              data: {
-                type: 'projects',
-                id: project.id,
-              },
-            },
+            'default-execution-mode': 'remote',
           },
         },
       }),
     });
-    createdWorkspaces.push(workspace);
+    project = response.data;
+    projectUpdated = true;
+  }
+
+  const workspacesByName = new Map(
+    (await client.list(`organizations/${config.organization}/workspaces`)).map((workspace) => [
+      workspace.attributes.name,
+      workspace,
+    ]),
+  );
+  const createdWorkspaces = [];
+  const updatedWorkspaces = [];
+
+  for (const workspace of config.workspaces) {
+    const existing = workspacesByName.get(workspace);
+    if (
+      existing &&
+      existing.attributes['execution-mode'] === 'remote' &&
+      existing.attributes['auto-apply'] === false &&
+      existing.relationships?.project?.data?.id === project.id
+    ) {
+      continue;
+    }
+
+    const workspaceData = {
+      type: 'workspaces',
+      ...(existing ? { id: existing.id } : {}),
+      attributes: {
+        name: workspace,
+        'execution-mode': 'remote',
+        'auto-apply': false,
+      },
+      relationships: {
+        project: {
+          data: {
+            type: 'projects',
+            id: project.id,
+          },
+        },
+      },
+    };
+
+    if (existing) {
+      await client.request(`workspaces/${existing.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ data: workspaceData }),
+      });
+      updatedWorkspaces.push(workspace);
+    } else {
+      await client.request(`organizations/${config.organization}/workspaces`, {
+        method: 'POST',
+        body: JSON.stringify({ data: workspaceData }),
+      });
+      createdWorkspaces.push(workspace);
+    }
   }
 
   return {
     projectCreated,
+    projectUpdated,
     createdWorkspaces,
-    existingWorkspaces: config.workspaces.filter((name) => !createdWorkspaces.includes(name)),
+    updatedWorkspaces,
+    existingWorkspaces: config.workspaces.filter(
+      (name) => !createdWorkspaces.includes(name) && !updatedWorkspaces.includes(name),
+    ),
   };
 }
 
 async function main() {
   const result = await bootstrapHcpTerraform({ token: process.env.TF_ORG_TOKEN });
-  const projectStatus = result.projectCreated ? 'created' : 'already existed';
+  const projectStatus = result.projectCreated
+    ? 'created'
+    : result.projectUpdated
+      ? 'reconciled'
+      : 'already matched';
   console.log(`HCP Terraform project ${projectStatus}: ${hcpBootstrapConfig.project}`);
   console.log(
-    `HCP Terraform workspaces created: ${result.createdWorkspaces.length}; already present: ${result.existingWorkspaces.length}`,
+    `HCP Terraform workspaces created: ${result.createdWorkspaces.length}; reconciled: ${result.updatedWorkspaces.length}; already matched: ${result.existingWorkspaces.length}`,
   );
 }
 

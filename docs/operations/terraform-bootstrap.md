@@ -16,6 +16,6 @@ Rotate or remove the bootstrap token after the workspaces are established. Later
 
 ## Operation And Recovery
 
-Dispatch the workflow only from protected `main`. It is idempotent: existing project/workspaces are retained, and only missing approved names are created.
+Dispatch the workflow only from protected `main`. It is idempotent: missing approved names are created, while existing approved project/workspaces are reconciled to remote execution, manual apply, and the `atmos-platform` project. No resource or remote state is deleted.
 
 If it fails, correct organization-token permissions and dispatch it again. Do not create alternate workspace names, enable auto-apply, or attach VCS as a workaround. Delete no HCP Terraform state or workspace to retry.
