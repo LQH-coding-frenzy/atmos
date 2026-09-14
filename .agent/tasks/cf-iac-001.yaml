@@ -1,0 +1,17 @@
+task:
+  id: CF-IAC-001
+  title: Cloudflare production DNS, R2, and queue IaC
+  status: DONE
+  objective: Manage the production API Worker custom domain, backup bucket, and notification queues in HCP Terraform.
+  depends_on: [TF-002]
+  validation:
+    commands: [HCP Terraform remote plan/apply, Wrangler R2/queue list, HTTPS API health check]
+    expected:
+      [API health returns 200, private APAC bucket exists, production queues are state-managed]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  evidence: [docs/evidence/cf-iac-001/2026-09-14.md]
+  rollback:
+    strategy: Terraform-plan a custom-domain rollback; do not delete R2 backups or queues without backup/restore approval.
