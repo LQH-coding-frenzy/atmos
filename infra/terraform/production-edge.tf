@@ -11,10 +11,11 @@ terraform {
 provider "cloudflare" {}
 
 module "edge" {
-  source          = "./modules/cloudflare-edge"
-  zone_id         = var.zone_id
-  api_record_name = "api"
-  worker_hostname = var.worker_hostname
+  source     = "./modules/cloudflare-edge"
+  account_id = var.account_id
+  zone_id    = var.zone_id
+  hostname   = "api.rainify.dpdns.org"
+  service    = "atmos-gateway"
 }
 
 module "r2" {
