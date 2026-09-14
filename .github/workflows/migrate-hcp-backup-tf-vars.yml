@@ -1,0 +1,35 @@
+name: Migrate HCP Backup Terraform Variables
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      TF_ORG_TOKEN: ${{ secrets.TF_ORG_TOKEN }}
+    steps:
+      - name: Rename sensitive keys without reading values
+        run: |
+          node --input-type=module -e '
+            const headers = { Authorization: `Bearer ${process.env.TF_ORG_TOKEN}`, Accept: "application/vnd.api+json", "Content-Type": "application/vnd.api+json" };
+            const workspace = await fetch("https://app.terraform.io/api/v2/organizations/atmos_uit/workspaces/atmos-azure-production", { headers });
+            if (!workspace.ok) throw new Error(`workspace request failed: ${workspace.status}`);
+            const id = (await workspace.json()).data.id;
+            const response = await fetch(`https://app.terraform.io/api/v2/workspaces/${id}/vars`, { headers });
+            if (!response.ok) throw new Error(`variable list failed: ${response.status}`);
+            const variables = new Map((await response.json()).data.map((item) => [item.attributes.key, item]));
+            for (const [from, to] of Object.entries({ SUPABASE_BACKUP_DATABASE_URL: "TF_VAR_backup_database_url", BACKUP_ENCRYPTION_KEY: "TF_VAR_backup_encryption_key", R2_ACCESS_KEY_ID: "TF_VAR_r2_access_key_id", R2_SECRET_ACCESS_KEY: "TF_VAR_r2_secret_access_key" })) {
+              const variable = variables.get(from);
+              if (!variable) { if (!variables.has(to)) throw new Error(`missing sensitive variable metadata: ${from}`); continue; }
+              if (!variable.attributes.sensitive || variable.attributes.category !== "env") throw new Error(`invalid sensitive environment variable metadata: ${from}`);
+              const update = await fetch(`https://app.terraform.io/api/v2/vars/${variable.id}`, { method: "PATCH", headers, body: JSON.stringify({ data: { type: "vars", id: variable.id, attributes: { key: to } } }) });
+              if (!update.ok) throw new Error(`variable key update failed: ${update.status}`);
+              console.log(`migrated sensitive variable key: ${from} -> ${to}`);
+            }
+          '
