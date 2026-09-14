@@ -1,7 +1,7 @@
 task:
   id: CTR-002
   title: Scanned signed job image
-  status: IN_PROGRESS
+  status: DONE
   objective: Scan the exact hardened image, generate a validated CycloneDX SBOM, publish the same image config, and attach keyless Cosign signature and SBOM attestation to its immutable GHCR digest.
   depends_on: [CTR-001]
   external_policy_checks: [public GHCR package, Sigstore public-good service, GitHub Actions OIDC]
@@ -47,7 +47,7 @@ task:
         docs/operations/container-supply-chain.md,
         docs/operations/container-runtime.md,
         docs/operations/ghcr-container-publishing.md,
-        docs/evidence/ctr-002/2026-09-13.md,
+        docs/evidence/ctr-002/2026-09-14.md,
       ]
     terraform_resources: [none]
     database_changes: [none]
@@ -100,7 +100,7 @@ task:
     traces: [Git SHA workflow run ID Fulcio identity and Rekor entries]
   evidence:
     [
-      docs/evidence/ctr-002/2026-09-13.md,
+      docs/evidence/ctr-002/2026-09-14.md,
       protected pull request checks,
       protected signed-image workflow run,
       retained CycloneDX workflow artifact,
