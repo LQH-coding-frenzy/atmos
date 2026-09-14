@@ -1,0 +1,49 @@
+task:
+  id: TF-002
+  title: Terraform provider pinning and module base
+  status: IN_PROGRESS
+  objective: Establish a credential-free Terraform base with exact approved provider pins and a module/environment ownership layout.
+  depends_on: [TF-001]
+  scope:
+    include: [infra/terraform, scripts/terraform-base.test.mjs]
+    exclude: [provider resources, provider configuration, state, tokens, Terraform apply]
+  inputs:
+    required_config: [Terraform 1.16.2, approved provider releases]
+    required_secrets: [none]
+  outputs:
+    files:
+      [
+        infra/terraform/versions.tf,
+        infra/terraform/README.md,
+        infra/terraform/modules/README.md,
+        infra/terraform/environments/README.md,
+        scripts/terraform-base.test.mjs,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+  validation:
+    commands:
+      [
+        terraform fmt -check infra/terraform,
+        terraform init -backend=false,
+        terraform validate,
+        node --test scripts/terraform-base.test.mjs,
+        protected pull request checks,
+      ]
+    expected:
+      [
+        all provider versions are exact,
+        no provider credentials or state exist,
+        no provider resources can apply,
+      ]
+  security_checks:
+    [exact provider pinning, no Terraform state, no token or provider block, no apply]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  rollback:
+    strategy: Revert through protected Git before any provider resource task consumes the base.
+  human_approval:
+    required: true
+    reason: Owner authorized provider-base implementation only; it creates no remote resource or credential.
