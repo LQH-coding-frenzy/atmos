@@ -1,7 +1,7 @@
 task:
   id: R2BACK-001
   title: Private R2 backup storage boundary
-  status: IN_PROGRESS
+  status: DONE
   objective: Restrict backup object credentials to the Azure backup-job workspace and define a bounded prefix smoke verification.
   depends_on: [CF-IAC-001]
   inputs:
@@ -33,3 +33,4 @@ task:
   human_approval:
     required: true
     reason: Owner approved bounded R2 smoke work below 1 GB and 100 operations on 2026-09-14.
+  evidence: [docs/evidence/r2back-001/2026-09-15.md]
