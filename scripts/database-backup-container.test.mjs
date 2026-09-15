@@ -14,7 +14,11 @@ test('backup image has a finite non-root encrypted R2 upload contract', () => {
   assert.match(dockerfile, /^ENTRYPOINT \["\/usr\/local\/bin\/backup"\]$/m);
   assert.doesNotMatch(dockerfile, /(?:TOKEN|PASSWORD|SECRET|DATABASE_URL)=/i);
   assert.match(script, /^set -eu$/m);
-  assert.match(script, /pg_dump --schema=public --format=custom --no-owner --no-privileges/);
+  assert.match(script, /pg_dumpall --roles-only/);
+  assert.match(script, /pg_dump --schema=public --schema-only --no-owner --no-privileges/);
+  assert.match(script, /pg_dump --schema=public --data-only --no-owner --no-privileges/);
+  assert.match(script, /sha256sum roles\.sql schema\.sql data\.sql >sha256sums\.txt/);
+  assert.match(script, /tar -C "\$workdir" -czf/);
   assert.match(script, /openssl enc -aes-256-cbc -salt -pbkdf2 -iter 600000/);
   assert.match(script, /openssl dgst -sha256 -hmac "\$BACKUP_ENCRYPTION_KEY"/);
   assert.match(script, /s3:\/\/\$\{R2_BUCKET\}\/\$\{object\}/);
