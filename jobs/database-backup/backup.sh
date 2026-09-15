@@ -13,17 +13,26 @@ export AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY"
 export AWS_DEFAULT_REGION="auto"
 export AWS_EC2_METADATA_DISABLED="true"
 
-object="backups/$(date -u +%Y/%m/%d)/backup-$(date -u +%Y%m%dT%H%M%SZ).dump.enc"
+timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+object="backups/$(date -u +%Y/%m/%d)/atmos-backup-${timestamp}.tar.gz.enc"
 endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
+archive="atmos-backup-${timestamp}"
+archive_dir="$workdir/$archive"
+mkdir "$archive_dir"
 
-# Supabase-managed schemas are not part of the application backup role's scope.
-pg_dump --schema=public --format=custom --no-owner --no-privileges "$SUPABASE_BACKUP_DATABASE_URL" >"$workdir/backup.dump"
+# The application dump excludes Supabase-managed schemas from the backup scope.
+pg_dumpall --roles-only --database="$SUPABASE_BACKUP_DATABASE_URL" >"$archive_dir/roles.sql"
+pg_dump --schema=public --schema-only --no-owner --no-privileges "$SUPABASE_BACKUP_DATABASE_URL" >"$archive_dir/schema.sql"
+pg_dump --schema=public --data-only --no-owner --no-privileges "$SUPABASE_BACKUP_DATABASE_URL" >"$archive_dir/data.sql"
+(cd "$archive_dir" && sha256sum roles.sql schema.sql data.sql >sha256sums.txt)
+printf '{"created_at":"%s","format":"postgresql-logical","schema":"public"}\n' "$timestamp" >"$archive_dir/manifest.json"
+tar -C "$workdir" -czf "$workdir/$archive.tar.gz" "$archive"
 openssl enc -aes-256-cbc -salt -pbkdf2 -iter 600000 -pass env:BACKUP_ENCRYPTION_KEY \
-  -in "$workdir/backup.dump" -out "$workdir/backup.dump.enc"
-openssl dgst -sha256 -hmac "$BACKUP_ENCRYPTION_KEY" "$workdir/backup.dump.enc" >"$workdir/backup.dump.enc.hmac"
-aws s3 cp "$workdir/backup.dump.enc" "s3://${R2_BUCKET}/${object}" --endpoint-url "$endpoint" --no-progress
-aws s3 cp "$workdir/backup.dump.enc.hmac" "s3://${R2_BUCKET}/${object}.hmac" --endpoint-url "$endpoint" --no-progress
+  -in "$workdir/$archive.tar.gz" -out "$workdir/$archive.tar.gz.enc"
+openssl dgst -sha256 -hmac "$BACKUP_ENCRYPTION_KEY" "$workdir/$archive.tar.gz.enc" >"$workdir/$archive.tar.gz.enc.hmac"
+aws s3 cp "$workdir/$archive.tar.gz.enc" "s3://${R2_BUCKET}/${object}" --endpoint-url "$endpoint" --no-progress
+aws s3 cp "$workdir/$archive.tar.gz.enc.hmac" "s3://${R2_BUCKET}/${object}.hmac" --endpoint-url "$endpoint" --no-progress
 
 printf '%s\n' "backup and HMAC manifest uploaded: ${object}"
