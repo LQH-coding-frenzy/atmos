@@ -59,7 +59,7 @@ resource "azurerm_container_group" "backup" {
 
   container {
     name     = "backup"
-    image    = "ghcr.io/lqh-coding-frenzy/atmos-database-backup@sha256:08c34cb6ca0dcb3aee44e3a0150c06c4234125975450c81f5ef80480bab1fd45"
+    image    = "ghcr.io/lqh-coding-frenzy/atmos-database-backup@sha256:ef26b061c33b50bed10b9fe345e6ec40e7eabde7e611a385324cbed7587e977b"
     cpu      = 0.25
     memory   = 0.5
     commands = ["/bin/sh", "-c", "exec timeout 1800 /usr/local/bin/backup"]
