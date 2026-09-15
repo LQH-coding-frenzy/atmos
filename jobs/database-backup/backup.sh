@@ -18,7 +18,8 @@ endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
 
-pg_dump --format=custom --no-owner --no-privileges "$SUPABASE_BACKUP_DATABASE_URL" >"$workdir/backup.dump"
+# Supabase-managed schemas are not part of the application backup role's scope.
+pg_dump --schema=public --format=custom --no-owner --no-privileges "$SUPABASE_BACKUP_DATABASE_URL" >"$workdir/backup.dump"
 openssl enc -aes-256-cbc -salt -pbkdf2 -iter 600000 -pass env:BACKUP_ENCRYPTION_KEY \
   -in "$workdir/backup.dump" -out "$workdir/backup.dump.enc"
 openssl dgst -sha256 -mac HMAC -macopt keyenv:BACKUP_ENCRYPTION_KEY "$workdir/backup.dump.enc" >"$workdir/backup.dump.enc.hmac"
