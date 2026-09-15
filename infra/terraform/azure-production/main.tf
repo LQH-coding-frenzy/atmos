@@ -27,9 +27,11 @@ provider "azurerm" {
 }
 
 resource "azurerm_container_app_environment" "production" {
-  name                = "cae-atmos-prod"
-  location            = "indonesiacentral"
-  resource_group_name = "rg-atmos-prod"
+  name                       = "cae-atmos-prod"
+  location                   = "indonesiacentral"
+  resource_group_name        = "rg-atmos-prod"
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.production.id
+  logs_destination           = "log-analytics"
 
   workload_profile {
     name                  = "Consumption"
@@ -37,6 +39,14 @@ resource "azurerm_container_app_environment" "production" {
     minimum_count         = 0
     maximum_count         = 0
   }
+}
+
+resource "azurerm_log_analytics_workspace" "production" {
+  name                = "law-atmos-prod"
+  location            = "indonesiacentral"
+  resource_group_name = "rg-atmos-prod"
+  sku                 = "PerGB2018"
+  retention_in_days   = 30
 }
 
 resource "azurerm_container_app_job" "backup" {
