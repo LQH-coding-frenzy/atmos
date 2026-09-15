@@ -22,7 +22,7 @@ trap 'rm -rf "$workdir"' EXIT
 pg_dump --schema=public --format=custom --no-owner --no-privileges "$SUPABASE_BACKUP_DATABASE_URL" >"$workdir/backup.dump"
 openssl enc -aes-256-cbc -salt -pbkdf2 -iter 600000 -pass env:BACKUP_ENCRYPTION_KEY \
   -in "$workdir/backup.dump" -out "$workdir/backup.dump.enc"
-openssl dgst -sha256 -mac HMAC -macopt keyenv:BACKUP_ENCRYPTION_KEY "$workdir/backup.dump.enc" >"$workdir/backup.dump.enc.hmac"
+openssl dgst -sha256 -hmac "$BACKUP_ENCRYPTION_KEY" "$workdir/backup.dump.enc" >"$workdir/backup.dump.enc.hmac"
 aws s3 cp "$workdir/backup.dump.enc" "s3://${R2_BUCKET}/${object}" --endpoint-url "$endpoint" --no-progress
 aws s3 cp "$workdir/backup.dump.enc.hmac" "s3://${R2_BUCKET}/${object}.hmac" --endpoint-url "$endpoint" --no-progress
 

@@ -16,7 +16,7 @@ test('backup image has a finite non-root encrypted R2 upload contract', () => {
   assert.match(script, /^set -eu$/m);
   assert.match(script, /pg_dump --schema=public --format=custom --no-owner --no-privileges/);
   assert.match(script, /openssl enc -aes-256-cbc -salt -pbkdf2 -iter 600000/);
-  assert.match(script, /openssl dgst -sha256 -mac HMAC -macopt keyenv:BACKUP_ENCRYPTION_KEY/);
+  assert.match(script, /openssl dgst -sha256 -hmac "\$BACKUP_ENCRYPTION_KEY"/);
   assert.match(script, /s3:\/\/\$\{R2_BUCKET\}\/\$\{object\}/);
   assert.match(script, /trap 'rm -rf "\$workdir"' EXIT/);
   assert.doesNotMatch(script, /--acl|public-read|curl|wget/);
