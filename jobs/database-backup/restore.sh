@@ -29,6 +29,8 @@ tar -C "$workdir" -xzf "$workdir/archive.tar.gz"
 archive="$(find "$workdir" -mindepth 1 -maxdepth 1 -type d -name 'atmos-backup-*')"
 (cd "$archive" && sha256sum -c sha256sums.txt)
 psql --host localhost --username postgres --dbname postgres --set ON_ERROR_STOP=1 --file "$archive/roles.sql"
+psql --host localhost --username postgres --dbname postgres --set ON_ERROR_STOP=1 \
+  --command "CREATE SCHEMA IF NOT EXISTS auth;"
 psql --host localhost --username postgres --dbname postgres --set ON_ERROR_STOP=1 --file "$archive/schema.sql"
 psql --host localhost --username postgres --dbname postgres --set ON_ERROR_STOP=1 --file "$archive/data.sql"
 psql --host localhost --username postgres --dbname postgres --tuples-only --no-align \
