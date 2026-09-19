@@ -113,6 +113,7 @@ resource "azurerm_container_group" "restore_drill" {
       BACKUP_ENCRYPTION_KEY = var.backup_encryption_key
       R2_ACCESS_KEY_ID      = var.r2_access_key_id
       R2_SECRET_ACCESS_KEY  = var.r2_secret_access_key
+      RESTORE_DATABASE_URL  = var.restore_database_url
     }
   }
 }
