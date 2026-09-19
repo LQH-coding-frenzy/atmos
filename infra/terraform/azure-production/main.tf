@@ -76,3 +76,43 @@ resource "azurerm_container_group" "backup" {
     }
   }
 }
+
+resource "azurerm_container_group" "restore_drill" {
+  count               = var.run_restore_drill ? 1 : 0
+  name                = "atmos-restore-drill-prod"
+  location            = "indonesiacentral"
+  resource_group_name = "rg-atmos-prod"
+  os_type             = "Linux"
+  restart_policy      = "Never"
+  ip_address_type     = "None"
+
+  container {
+    name   = "postgres"
+    image  = "postgres:17.7-alpine3.22@sha256:6b591f995765a189e69276dd55e0b362342d65d10d0359bb1fab67bc3391f20f"
+    cpu    = 0.25
+    memory = 0.5
+
+    environment_variables = {
+      POSTGRES_HOST_AUTH_METHOD = "trust"
+    }
+  }
+
+  container {
+    name     = "restore"
+    image    = "ghcr.io/lqh-coding-frenzy/atmos-database-backup@sha256:e56e87fd6a6125e07e109556d4bb59866b8825422bc839c4134781fb24799b42"
+    cpu      = 0.25
+    memory   = 0.5
+    commands = ["/bin/sh", "-c", "exec /usr/local/bin/restore"]
+
+    environment_variables = {
+      R2_ACCOUNT_ID  = "50f15456a2d4abf3186c504f406da3fe"
+      R2_BUCKET      = "atmos-production-backups"
+      RESTORE_OBJECT = "backups/2026/09/15/atmos-backup-20260915T162922Z.tar.gz.enc"
+    }
+    secure_environment_variables = {
+      BACKUP_ENCRYPTION_KEY = var.backup_encryption_key
+      R2_ACCESS_KEY_ID      = var.r2_access_key_id
+      R2_SECRET_ACCESS_KEY  = var.r2_secret_access_key
+    }
+  }
+}
