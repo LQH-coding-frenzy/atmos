@@ -29,6 +29,7 @@ test('backup image has a finite non-root encrypted R2 upload contract', () => {
   assert.match(script, /trap 'rm -rf "\$workdir"' EXIT/);
   assert.doesNotMatch(script, /--acl|public-read|curl|wget/);
   assert.match(restore, /sha256sum -c sha256sums\.txt/);
+  assert.match(restore, /CREATE SCHEMA IF NOT EXISTS auth/);
   assert.match(restore, /restore verification passed/);
   assert.doesNotMatch(restore, /--acl|public-read|curl|wget/);
 });
