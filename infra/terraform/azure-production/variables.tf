@@ -29,3 +29,8 @@ variable "r2_secret_access_key" {
   type      = string
   sensitive = true
 }
+
+variable "run_restore_drill" {
+  type    = bool
+  default = false
+}
