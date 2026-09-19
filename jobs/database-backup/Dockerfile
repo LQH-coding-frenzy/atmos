@@ -11,7 +11,8 @@ RUN apk upgrade --no-cache \
     && rm -f /usr/local/bin/gosu
 
 COPY backup.sh /usr/local/bin/backup
-RUN chmod 0555 /usr/local/bin/backup
+COPY restore.sh /usr/local/bin/restore
+RUN chmod 0555 /usr/local/bin/backup /usr/local/bin/restore
 
 USER 999
 ENTRYPOINT ["/usr/local/bin/backup"]
