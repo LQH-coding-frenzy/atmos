@@ -31,7 +31,7 @@ archive="$(find "$workdir" -mindepth 1 -maxdepth 1 -type d -name 'atmos-backup-*
 psql --host localhost --username postgres --dbname postgres --set ON_ERROR_STOP=1 \
   --command "CREATE SCHEMA IF NOT EXISTS auth; DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated; END IF; END \$\$;"
 psql --host localhost --username postgres --dbname postgres --set ON_ERROR_STOP=1 \
-  --command "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+  --command "DROP SCHEMA public CASCADE;"
 psql --host localhost --username postgres --dbname postgres --set ON_ERROR_STOP=1 --file "$archive/schema.sql"
 psql --host localhost --username postgres --dbname postgres --set ON_ERROR_STOP=1 --file "$archive/data.sql"
 psql --host localhost --username postgres --dbname postgres --tuples-only --no-align \
