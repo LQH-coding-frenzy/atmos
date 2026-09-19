@@ -7,6 +7,7 @@ const dockerfile = readFileSync(
   'utf8',
 );
 const script = readFileSync(new URL('../jobs/database-backup/backup.sh', import.meta.url), 'utf8');
+const restore = readFileSync(new URL('../jobs/database-backup/restore.sh', import.meta.url), 'utf8');
 
 test('backup image has a finite non-root encrypted R2 upload contract', () => {
   assert.match(dockerfile, /^FROM postgres:17\.7-alpine3\.22@sha256:[0-9a-f]{64}$/m);
@@ -24,4 +25,7 @@ test('backup image has a finite non-root encrypted R2 upload contract', () => {
   assert.match(script, /s3:\/\/\$\{R2_BUCKET\}\/\$\{object\}/);
   assert.match(script, /trap 'rm -rf "\$workdir"' EXIT/);
   assert.doesNotMatch(script, /--acl|public-read|curl|wget/);
+  assert.match(restore, /sha256sum -c sha256sums\.txt/);
+  assert.match(restore, /restore verification passed/);
+  assert.doesNotMatch(restore, /--acl|public-read|curl|wget/);
 });
