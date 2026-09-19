@@ -99,7 +99,7 @@ resource "azurerm_container_group" "restore_drill" {
 
   container {
     name     = "restore"
-    image    = "ghcr.io/lqh-coding-frenzy/atmos-database-backup@sha256:333fd9c122f7bcda047ee88095c2336e78d36cfc7f04e7b29578a85f0fa2b0f4"
+    image    = "ghcr.io/lqh-coding-frenzy/atmos-database-backup@sha256:bd077141af37b430d4461cc59ca3f37c3bf0b8feab9e672ebe567c6f939e2c81"
     cpu      = 0.25
     memory   = 0.5
     commands = ["/bin/sh", "-c", "exec /usr/local/bin/restore"]
