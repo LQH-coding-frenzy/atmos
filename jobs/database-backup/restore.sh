@@ -28,8 +28,9 @@ openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 600000 -pass env:BACKUP_ENCRYPTI
 tar -C "$workdir" -xzf "$workdir/archive.tar.gz"
 archive="$(find "$workdir" -mindepth 1 -maxdepth 1 -type d -name 'atmos-backup-*')"
 (cd "$archive" && sha256sum -c sha256sums.txt)
-psql --host localhost --username postgres --dbname postgres --file "$archive/schema.sql"
-psql --host localhost --username postgres --dbname postgres --file "$archive/data.sql"
+psql --host localhost --username postgres --dbname postgres --set ON_ERROR_STOP=1 --file "$archive/roles.sql"
+psql --host localhost --username postgres --dbname postgres --set ON_ERROR_STOP=1 --file "$archive/schema.sql"
+psql --host localhost --username postgres --dbname postgres --set ON_ERROR_STOP=1 --file "$archive/data.sql"
 psql --host localhost --username postgres --dbname postgres --tuples-only --no-align \
   --command "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';" | grep -Eq '^[1-9][0-9]*$'
 printf '%s\n' "restore verification passed: ${RESTORE_OBJECT}"
