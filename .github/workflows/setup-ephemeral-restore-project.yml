@@ -25,7 +25,7 @@ jobs:
           password="$(openssl rand -hex 32)"
           production="$(curl --fail --silent --show-error --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/oxgwprvkotfvyacpqayx")"
           org_id="$(node --input-type=module -e 'const project = JSON.parse(process.argv[1]); const id = project.organization_id; if (!id) throw new Error("production project organization ID unavailable"); console.log(id);' "$production")"
-          project="$(npx --yes supabase@2.117.0 projects create "atmos-restore-${GITHUB_RUN_ID}" --org-id "$org_id" --db-password "$password" --region ap-southeast-1 --size micro --output json)"
+          project="$(npx --yes supabase@2.117.0 projects create "atmos-restore-${GITHUB_RUN_ID}" --org-id "$org_id" --db-password "$password" --region ap-southeast-1 --output json)"
           ref="$(node --input-type=module -e 'const project = JSON.parse(process.argv[1]); const ref = project.ref ?? project.id; if (!/^[a-z0-9]{20}$/.test(ref ?? "")) throw new Error("unexpected project reference"); console.log(ref);' "$project")"
           export RESTORE_DATABASE_URL="postgresql://postgres.${ref}:${password}@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require"
           export RESTORE_PROJECT_REF="$ref"
