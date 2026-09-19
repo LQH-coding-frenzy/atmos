@@ -17,7 +17,12 @@ endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
 workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
 
-until pg_isready --host localhost --username postgres --dbname postgres; do sleep 1; done
+if [ -n "${RESTORE_DATABASE_URL:-}" ]; then
+  target_database="$RESTORE_DATABASE_URL"
+else
+  until pg_isready --host localhost --username postgres --dbname postgres; do sleep 1; done
+  target_database="postgresql://postgres@localhost:5432/postgres"
+fi
 aws s3 cp "s3://${R2_BUCKET}/${RESTORE_OBJECT}" "$workdir/archive.tar.gz.enc" --endpoint-url "$endpoint" --no-progress
 aws s3 cp "s3://${R2_BUCKET}/${RESTORE_OBJECT}.hmac" "$workdir/archive.tar.gz.enc.hmac" --endpoint-url "$endpoint" --no-progress
 expected="$(awk '{print $2}' "$workdir/archive.tar.gz.enc.hmac")"
@@ -28,12 +33,14 @@ openssl enc -d -aes-256-cbc -salt -pbkdf2 -iter 600000 -pass env:BACKUP_ENCRYPTI
 tar -C "$workdir" -xzf "$workdir/archive.tar.gz"
 archive="$(find "$workdir" -mindepth 1 -maxdepth 1 -type d -name 'atmos-backup-*')"
 (cd "$archive" && sha256sum -c sha256sums.txt)
-psql --host localhost --username postgres --dbname postgres --set ON_ERROR_STOP=1 \
-  --command "CREATE SCHEMA IF NOT EXISTS auth; DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated; END IF; END \$\$;"
-psql --host localhost --username postgres --dbname postgres --set ON_ERROR_STOP=1 \
+if [ -z "${RESTORE_DATABASE_URL:-}" ]; then
+  psql "$target_database" --set ON_ERROR_STOP=1 \
+    --command "CREATE SCHEMA IF NOT EXISTS auth; DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated; END IF; END \$\$;"
+fi
+psql "$target_database" --set ON_ERROR_STOP=1 \
   --command "DROP SCHEMA public CASCADE;"
-psql --host localhost --username postgres --dbname postgres --set ON_ERROR_STOP=1 --file "$archive/schema.sql"
-psql --host localhost --username postgres --dbname postgres --set ON_ERROR_STOP=1 --file "$archive/data.sql"
-psql --host localhost --username postgres --dbname postgres --tuples-only --no-align \
+psql "$target_database" --set ON_ERROR_STOP=1 --file "$archive/schema.sql"
+psql "$target_database" --set ON_ERROR_STOP=1 --file "$archive/data.sql"
+psql "$target_database" --tuples-only --no-align \
   --command "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';" | grep -Eq '^[1-9][0-9]*$'
 printf '%s\n' "restore verification passed: ${RESTORE_OBJECT}"
