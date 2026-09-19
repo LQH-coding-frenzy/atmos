@@ -1,0 +1,44 @@
+name: Cleanup Ephemeral Restore Project
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_ref:
+        description: Temporary Supabase project reference
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ALL_ACCESS }}
+      TF_ORG_TOKEN: ${{ secrets.TF_ORG_TOKEN }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Delete temporary project and HCP handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref='${{ inputs.project_ref }}'
+          [[ "$ref" =~ ^[a-z0-9]{20}$ ]]
+          npx --yes supabase@2.117.0 projects delete "$ref" --yes
+          node --input-type=module -e '
+            const headers = { Authorization: `Bearer ${process.env.TF_ORG_TOKEN}`, Accept: "application/vnd.api+json", "Content-Type": "application/vnd.api+json" };
+            const workspace = await fetch("https://app.terraform.io/api/v2/organizations/atmos_uit/workspaces/atmos-azure-production", { headers });
+            if (!workspace.ok) throw new Error(`workspace request failed: ${workspace.status}`);
+            const workspaceId = (await workspace.json()).data.id;
+            const variables = await fetch(`https://app.terraform.io/api/v2/workspaces/${workspaceId}/vars`, { headers });
+            if (!variables.ok) throw new Error(`variable list failed: ${variables.status}`);
+            const variable = (await variables.json()).data.find((item) => item.attributes.key === "restore_database_url");
+            if (!variable) process.exit(0);
+            const response = await fetch(`https://app.terraform.io/api/v2/vars/${variable.id}`, { method: "DELETE", headers });
+            if (!response.ok) throw new Error(`HCP restore URL deletion failed: ${response.status}`);
+          '
