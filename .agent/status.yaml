@@ -1,5 +1,11 @@
 project: atmos
-updated: 2026-09-14
+updated: 2026-09-20
+scope:
+  profile: CV_SHOWCASE
+  production_hardening: DEFERRED
+  verified_showcase_evidence:
+    - encrypted R2 logical backup archive
+    - ephemeral Supabase restore drill
 tasks:
   GOV-001: DONE
   GOV-002: DONE

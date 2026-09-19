@@ -1,8 +1,8 @@
 ---
 document: Atmos DevSecOps Master Plan
-version: 2.0.2
-status: implementation-ready-final-validated
-last_updated: 2026-08-31
+version: 2.1.0
+status: cv-showcase-scope
+last_updated: 2026-09-20
 validation:
   last_validated: 2026-08-31
   result: GO
@@ -57,6 +57,8 @@ source_of_truth:
 >
 > This document is written for both humans and automation. Major components have stable IDs, dependencies, failure modes, acceptance criteria, evidence requirements, rollback expectations, and agent-safe boundaries.
 
+> **Current delivery profile: CV showcase.** Atmos is a portfolio demonstrator, not an operated production service. The completed scope retains the live application, protected CI, IaC, signed OCI artifacts, and one verified encrypted R2 backup plus ephemeral Supabase restore drill. It intentionally excludes recurring backup schedules, automatic backup retention/deletion, continuous disaster-recovery exercises, further paid-resource expansion, and production-only backlog execution. The remaining Section 29 items are a future-hardening roadmap, not a current completion gate.
+
 ---
 
 # 0. How to use this document
@@ -68,6 +70,8 @@ source_of_truth:
 3. Implement one backlog item at a time from Section 29.
 4. Do not skip security, telemetry, rollback, or evidence because a feature “works.”
 5. Re-check free-tier and student-plan quotas before provisioning; the values in this document are a research snapshot, not a permanent contract.
+
+For the CV showcase profile, do not provision or operate a roadmap item unless it is required to preserve the completed showcase evidence or is explicitly re-approved as future production hardening.
 
 ## 0.2 AI-agent workflow
 
@@ -3367,6 +3371,16 @@ DONE
 | DOC-001 | runbooks | SLO-002 | ops docs |
 | DOC-002 | postmortem | GAME-002 | incident doc |
 | PORT-001 | architecture/evidence README | FRONTREL-001, REL-006, SLO-002, GAME-003, GAME-006, CTR-003 | portfolio |
+
+### CV Showcase Completion Boundary
+
+The active CV showcase stops after a functional deployed application and verified representative evidence. `BACKUP-001` and `RESTORE-001` are demonstrated once with encrypted R2 artifacts and an ephemeral Supabase target; their recurring production operations are not enabled. The following roadmap items are explicitly deferred until an owner elects to operate Atmos as a production service:
+
+- `BACKUP-002`, automatic retention and scheduled backup execution;
+- recurring `GAME-006` restore exercises, `GAME-007`, `AZJOB-002`, and `OBS-005`;
+- outstanding production-only telemetry, affinity, portability, and vendor-expansion work.
+
+Do not create an R2 lifecycle policy in this profile. Retention policy examples in Section 31 remain future-production guidance.
 | PORT-002 | interview demo package | PORT-001 | CV/interview evidence |
 
 ---
@@ -3485,6 +3499,10 @@ An agent must STOP and request human approval when:
 # 31. Backup, retention, and disaster recovery
 
 ## 31.1 Why Atmos owns backups
+
+### CV Showcase Override
+
+The showcase demonstrates one encrypted logical archive and one successful ephemeral restore, then removes the temporary project and runtime. It does not schedule backups or configure R2 lifecycle deletion. Section 31.3 retention and recurring recovery operations apply only after an owner explicitly adopts the production profile.
 
 Supabase Free currently has no automatic backups/PITR. Supabase itself recommends regular CLI exports for free projects.
 
