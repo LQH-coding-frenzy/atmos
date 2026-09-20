@@ -7,8 +7,6 @@ export function createForecastTrend(
   daily: Dashboard['daily'],
   metric: ForecastTrendMetric,
 ): { labels: string[]; values: number[]; unit: string; label: string } {
-  // Home currently supplies MockWeatherProvider. This adapter consumes its normalized
-  // daily dashboard fields directly so live provider wiring can replace it unchanged.
   return {
     labels: daily.map((day) =>
       new Intl.DateTimeFormat('en', { weekday: 'short', timeZone: 'UTC' }).format(

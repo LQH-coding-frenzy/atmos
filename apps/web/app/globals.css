@@ -46,6 +46,17 @@ button {
   min-height: 100vh;
   padding: clamp(12px, 2vw, 30px);
 }
+.weather-unavailable {
+  width: min(640px, 100%);
+  margin: auto;
+  padding: clamp(28px, 6vw, 56px);
+  color: var(--ink);
+  background: var(--shell);
+}
+.weather-unavailable p:last-child {
+  margin-bottom: 0;
+  color: var(--muted);
+}
 .sidebar {
   position: sticky;
   top: 30px;

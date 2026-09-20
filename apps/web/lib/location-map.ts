@@ -1,6 +1,6 @@
 import type { CurrentWeather, Location } from '@atmos/contracts';
 
-export type MockMapData = {
+export type LocationMapData = {
   center: [number, number];
   point: {
     type: 'Feature';
@@ -19,9 +19,10 @@ const markerColors: Record<CurrentWeather['condition'], string> = {
   snow: '#eaf8fb',
 };
 
-export function createMockMapData(location: Location, current: CurrentWeather): MockMapData {
-  // Home currently supplies MockWeatherProvider. Preserve its exact coordinates here;
-  // live map tiles and weather overlays will replace this local rendering boundary later.
+export function createLocationMapData(
+  location: Location,
+  current: CurrentWeather,
+): LocationMapData {
   const center: [number, number] = [location.longitude, location.latitude];
   return {
     center,
