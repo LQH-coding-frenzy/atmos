@@ -113,9 +113,6 @@ button {
 .sidebar a span {
   display: none;
 }
-.settings-link {
-  margin-top: auto;
-}
 .close-nav,
 .menu-button {
   display: none;
@@ -158,27 +155,6 @@ button {
   align-items: center;
   gap: 10px;
 }
-.search-control {
-  display: flex;
-  width: min(30vw, 310px);
-  align-items: center;
-  gap: 9px;
-  padding: 12px 14px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #2a2d35;
-  color: var(--muted);
-}
-.search-control input {
-  width: 100%;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--ink);
-}
-.search-control input::placeholder {
-  color: var(--muted);
-}
 .unit-switch {
   display: flex;
   padding: 3px;
@@ -202,6 +178,9 @@ button {
   display: grid;
   grid-template-columns: minmax(0, 1.75fr) minmax(300px, 1fr);
   gap: 20px;
+}
+.dashboard-grid > * {
+  min-width: 0;
 }
 .panel {
   border: 1px solid var(--line);
@@ -461,126 +440,6 @@ button {
 .forecast-card {
   background: linear-gradient(145deg, #353843, #2b2e36);
 }
-.aqi-card {
-  padding: 25px;
-}
-.aqi-summary {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 16px;
-  align-items: center;
-  margin-top: 24px;
-}
-.aqi-value {
-  display: grid;
-  width: 88px;
-  height: 88px;
-  place-items: center;
-  align-content: center;
-  border-radius: 50%;
-  color: #1f292d;
-}
-.aqi-value strong {
-  font-size: 31px;
-  letter-spacing: -0.08em;
-}
-.aqi-value span {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.aqi-good {
-  background: #b8e4cf;
-}
-.aqi-fair {
-  background: #dce8b5;
-}
-.aqi-moderate {
-  background: #e9d79b;
-}
-.aqi-poor {
-  background: #e5ae8f;
-}
-.aqi-very-poor {
-  background: #d69aab;
-}
-.aqi-category,
-.aqi-european,
-.aqi-source {
-  margin: 0;
-}
-.comparison-card {
-  padding: 25px;
-}
-.comparison-card h2 {
-  margin: 5px 0 0;
-  font-size: 20px;
-}
-.comparison-temperature {
-  margin: 22px 0 5px;
-  color: #cde8ed;
-  font-size: 30px;
-  font-weight: 700;
-  letter-spacing: -0.05em;
-}
-.comparison-card .muted {
-  margin: 0;
-  font-size: 13px;
-}
-.comparison-source {
-  margin: 18px 0 0;
-  color: var(--muted);
-  font-size: 10px;
-}
-.aqi-category {
-  font-size: 17px;
-  font-weight: 700;
-}
-.aqi-summary .muted {
-  margin-top: 5px;
-  font-size: 12px;
-  line-height: 1.4;
-}
-.aqi-european {
-  margin-top: 10px;
-  color: #aeb8c2;
-  font-size: 12px;
-}
-.pollutant-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin: 22px 0 0;
-}
-.pollutant-grid div {
-  padding: 9px;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.14);
-}
-.pollutant-grid dt,
-.pollutant-grid dd {
-  margin: 0;
-}
-.pollutant-grid dt {
-  color: var(--muted);
-  font-size: 10px;
-}
-.pollutant-grid dd {
-  margin-top: 4px;
-  font-size: 15px;
-  font-weight: 700;
-}
-.pollutant-grid small {
-  color: var(--muted);
-  font-size: 9px;
-  font-weight: 400;
-}
-.aqi-source {
-  margin-top: 17px;
-  color: var(--muted);
-  font-size: 10px;
-}
 .forecast-list {
   display: grid;
   gap: 10px;
@@ -616,57 +475,6 @@ button {
   margin-left: auto;
   text-align: right;
 }
-.saved-locations {
-  display: flex;
-  grid-column: 1 / 2;
-  gap: 12px;
-  overflow-x: auto;
-  padding: 18px 0 2px;
-}
-.add-location,
-.location-card {
-  position: relative;
-  display: grid;
-  min-width: 145px;
-  min-height: 132px;
-  align-content: center;
-  justify-items: center;
-  gap: 6px;
-  padding: 15px;
-  text-align: center;
-}
-.add-location {
-  border: 1px dashed #9cc7cd;
-  border-radius: 22px;
-  background: transparent;
-  color: var(--ink);
-}
-.add-location > span {
-  position: absolute;
-  top: -15px;
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-size: 25px;
-}
-.add-location small,
-.location-card span {
-  color: var(--muted);
-}
-.location-card {
-  border-radius: 22px;
-}
-.location-card svg {
-  color: var(--accent);
-}
-.location-card em {
-  font-size: 24px;
-  font-style: normal;
-}
 .attribution-card {
   display: flex;
   grid-column: 2;
@@ -698,7 +506,6 @@ footer {
   .map-card {
     min-height: 230px;
   }
-  .saved-locations,
   .attribution-card {
     grid-column: auto;
   }
@@ -772,9 +579,6 @@ footer {
   .topbar-actions {
     flex-direction: column;
     align-items: stretch;
-  }
-  .search-control {
-    width: 165px;
   }
   .current-summary {
     display: grid;
