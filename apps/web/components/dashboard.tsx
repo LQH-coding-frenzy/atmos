@@ -3,28 +3,20 @@
 import type { Dashboard as DashboardData, UnitSystem, WeatherCondition } from '@atmos/contracts';
 import { formatTemperature, formatWindSpeed } from '@atmos/domain';
 import {
-  Bell,
   Cloud,
   CloudLightning,
   CloudRain,
   CloudSun,
-  Compass,
   Droplets,
   Gauge,
   LayoutDashboard,
-  LocateFixed,
   Map,
   Menu,
-  Search,
-  Settings,
   Sun,
   X,
 } from 'lucide-react';
 import { useState } from 'react';
-import { AuthControl } from './auth-control';
-import { AirQualityCard } from './air-quality-card';
 import { DashboardMap } from './dashboard-map';
-import { WeatherComparisonCard } from './weather-comparison-card';
 import { ForecastTrendChart } from './forecast-trend-chart';
 import type { ForecastTrendMetric } from '../lib/forecast-trend';
 
@@ -50,8 +42,28 @@ function temperature(value: number, units: UnitSystem): string {
   return formatTemperature(value, units).replace(' deg', '');
 }
 
-function formatHour(value: string): string {
-  return new Intl.DateTimeFormat('en', { hour: 'numeric' }).format(new Date(value));
+function formatHour(value: string, timezone: string): string {
+  return new Intl.DateTimeFormat('en', { hour: 'numeric', timeZone: timezone }).format(
+    new Date(value),
+  );
+}
+
+function formatDashboardDate(value: string, timezone: string): string {
+  return new Intl.DateTimeFormat('en', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    timeZone: timezone,
+  }).format(new Date(value));
+}
+
+function formatForecastDate(value: string, timezone: string): string {
+  return new Intl.DateTimeFormat('en', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: timezone,
+  }).format(new Date(`${value}T00:00:00Z`));
 }
 
 export function Dashboard({ initialDashboard }: DashboardProps) {
@@ -86,23 +98,7 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
             <Map size={19} />
             <span>Map</span>
           </a>
-          <a href="#saved">
-            <LocateFixed size={19} />
-            <span>Locations</span>
-          </a>
-          <a href="#alerts">
-            <Bell size={19} />
-            <span>Alerts</span>
-          </a>
-          <a href="#explore">
-            <Compass size={19} />
-            <span>Explore</span>
-          </a>
         </nav>
-        <a className="settings-link" href="#settings">
-          <Settings size={19} />
-          <span>Settings</span>
-        </a>
       </aside>
 
       <section className="dashboard-shell" id="dashboard">
@@ -116,14 +112,11 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
           </button>
           <div>
             <p className="eyebrow">Weather intelligence</p>
-            <h1>Tuesday, 1 September</h1>
+            <h1>
+              {formatDashboardDate(dashboard.current.observedAt, dashboard.location.timezone)}
+            </h1>
           </div>
           <div className="topbar-actions">
-            <label className="search-control">
-              <Search size={17} aria-hidden="true" />
-              <span className="sr-only">Search city or postcode</span>
-              <input aria-label="Search city or postcode" placeholder="Search city or postcode" />
-            </label>
             <div className="unit-switch" aria-label="Temperature unit">
               <button
                 className={units === 'metric' ? 'active' : ''}
@@ -140,7 +133,6 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
                 F
               </button>
             </div>
-            <AuthControl />
           </div>
         </header>
 
@@ -166,7 +158,7 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
             <div className="hourly-row" aria-label="Hourly forecast">
               {dashboard.hourly.map((hour) => (
                 <div className="hourly-item" key={hour.time}>
-                  <span>{formatHour(hour.time)}</span>
+                  <span>{formatHour(hour.time, dashboard.location.timezone)}</span>
                   <WeatherIcon condition={hour.condition} size={18} />
                   <strong>{temperature(hour.temperatureC, units)} deg</strong>
                 </div>
@@ -219,41 +211,11 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
                     <strong>{temperature(day.highC, units)} deg</strong>
                     <span> / {temperature(day.lowC, units)} deg</span>
                   </div>
-                  <time>
-                    {new Intl.DateTimeFormat('en', {
-                      weekday: 'short',
-                      day: 'numeric',
-                      month: 'short',
-                    }).format(new Date(`${day.date}T00:00:00Z`))}
-                  </time>
+                  <time>{formatForecastDate(day.date, dashboard.location.timezone)}</time>
                 </div>
               ))}
             </div>
           </article>
-
-          <AirQualityCard />
-
-          <WeatherComparisonCard dashboard={dashboard} />
-
-          <section className="saved-locations" id="saved" aria-label="Saved locations">
-            <button className="add-location">
-              <span>+</span>
-              <strong>Add location</strong>
-              <small>Build your weather world</small>
-            </button>
-            {[
-              ['Lisbon', 'Portugal', 23, 'clear'],
-              ['Kyoto', 'Japan', 29, 'cloudy'],
-              ['Antalya', 'Türkiye', 30, 'partly-cloudy'],
-            ].map(([name, country, value, condition]) => (
-              <article className="location-card panel" key={name as string}>
-                <WeatherIcon condition={condition as WeatherCondition} size={22} />
-                <strong>{name}</strong>
-                <span>{country}</span>
-                <em>{temperature(value as number, units)} deg</em>
-              </article>
-            ))}
-          </section>
 
           <aside className="attribution-card">
             <Droplets size={25} />
@@ -261,16 +223,13 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
               <p className="eyebrow">Data honesty</p>
               <h2>Built for the elements.</h2>
               <p>
-                Mock data powers this local dashboard. Live weather uses Open-Meteo with visible
+                Live weather comes through the Atmos gateway from Open-Meteo, with visible
                 attribution and quota-aware caching.
               </p>
             </div>
           </aside>
         </section>
-        <footer>
-          Weather data: Open-Meteo. Map data: OpenStreetMap contributors. Local view currently uses
-          deterministic mock weather data.
-        </footer>
+        <footer>Live weather data: Open-Meteo. Map view: MapLibre.</footer>
       </section>
     </main>
   );

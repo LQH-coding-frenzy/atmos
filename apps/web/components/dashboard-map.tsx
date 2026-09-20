@@ -3,7 +3,7 @@
 import type { Dashboard } from '@atmos/contracts';
 import type { StyleSpecification } from 'maplibre-gl';
 import { useEffect, useRef } from 'react';
-import { createMockMapData } from '../lib/mock-map';
+import { createLocationMapData } from '../lib/location-map';
 
 type DashboardMapProps = {
   location: Dashboard['location'];
@@ -17,7 +17,7 @@ export function DashboardMap({ location, current }: DashboardMapProps) {
     const mapContainer = mapElement.current;
     if (!mapContainer) return;
 
-    const mapData = createMockMapData(location, current);
+    const mapData = createLocationMapData(location, current);
     let disposed = false;
     let map: { remove: () => void; resize: () => void } | undefined;
 
@@ -89,7 +89,7 @@ export function DashboardMap({ location, current }: DashboardMapProps) {
       aria-label={`Interactive map centered on ${location.name}`}
     >
       <div className="local-map-canvas" ref={mapElement} />
-      <p className="map-caption">Interactive local MapLibre view · mock dashboard location</p>
+      <p className="map-caption">Interactive MapLibre view centered on the live weather location</p>
     </article>
   );
 }

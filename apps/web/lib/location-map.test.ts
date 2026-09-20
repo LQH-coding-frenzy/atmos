@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createMockMapData } from './mock-map';
+import { createLocationMapData } from './location-map';
 
-describe('createMockMapData', () => {
+describe('createLocationMapData', () => {
   it('preserves normalized dashboard coordinates without creating a synthetic location', () => {
-    const data = createMockMapData(
+    const data = createLocationMapData(
       {
         id: 'berlin-de',
         name: 'Berlin',

@@ -1,10 +1,10 @@
 # Atmos CV Showcase Completion Handoff
 
-Updated: 2026-09-13 11:28 UTC
+Updated: 2026-09-20
 
 ## Scope Override
 
-The owner changed Atmos from an end-to-end production-completion effort to a CV showcase on 2026-09-20. This document's earlier production-continuation directive is superseded.
+The owner changed Atmos from an end-to-end production-completion effort to a CV showcase on 2026-09-20. This document's earlier production-continuation directive is superseded. Historical production state below is preserved as dated evidence only and is not a current-operation claim.
 
 Keep the deployed application and existing evidence, but do not pursue recurring backup schedules, R2 lifecycle retention, continuous DR operations, additional paid-resource work, or remaining production-only Section 29 tasks unless the owner explicitly reopens production hardening.
 
