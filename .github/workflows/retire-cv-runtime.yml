@@ -27,6 +27,8 @@ jobs:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_REF: oxgwprvkotfvyacpqayx
       CONFIRMATION: ${{ inputs.confirmation }}
+      # GitHub-hosted custom-domain DNS is not a reliable Worker smoke dependency.
+      WORKER_SMOKE_URL: https://atmos-gateway.rainify.workers.dev/
     steps:
       - name: Require explicit retirement confirmation
         run: |
@@ -83,9 +85,9 @@ jobs:
           pnpm --filter @atmos/gateway exec wrangler deployments list --env="" --json > "$RUNNER_TEMP/deployments.json"
           stable_version_id="$(node -e "const deployments=require(process.argv[1]);const current=[...deployments].sort((left,right)=>Date.parse(right.created_on)-Date.parse(left.created_on))[0];const stable=current?.versions?.find((version)=>version.percentage===100);if(!/^[0-9a-f-]{36}$/.test(stable?.version_id??''))process.exit(1);process.stdout.write(stable.version_id)" "$RUNNER_TEMP/deployments.json")"
           pnpm --filter @atmos/gateway exec wrangler versions deploy "$stable_version_id@100" "$version_id@0" --env="" --message "CVRET-001 queue-free candidate" --yes
-          node scripts/worker-rollback.mjs smoke https://api.rainify.dpdns.org/ "$RELEASE_ID" "$version_id"
+          node scripts/worker-rollback.mjs smoke "$WORKER_SMOKE_URL" "$RELEASE_ID" "$version_id"
           pnpm --filter @atmos/gateway exec wrangler versions deploy "$version_id@100" --env="" --message "CVRET-001 queue-free release" --yes
-          node scripts/worker-rollback.mjs smoke https://api.rainify.dpdns.org/ "$RELEASE_ID"
+          node scripts/worker-rollback.mjs smoke "$WORKER_SMOKE_URL" "$RELEASE_ID"
           printf 'version_id=%s\n' "$version_id" >> "$GITHUB_OUTPUT"
       - name: Update canonical Supabase API after queue triggers are detached
         run: |
