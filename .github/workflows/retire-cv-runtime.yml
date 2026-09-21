@@ -107,7 +107,14 @@ jobs:
           else
             echo 'Cloudflare queue secret is already absent.'
           fi
-          pnpm exec supabase secrets unset INTERNAL_QUEUE_SECRET ALERT_CRON_SECRET GATEWAY_URL --project-ref "$SUPABASE_PROJECT_REF"
+          for secret in INTERNAL_QUEUE_SECRET ALERT_CRON_SECRET GATEWAY_URL; do
+            unset_output="$(pnpm exec supabase secrets unset "$secret" --project-ref "$SUPABASE_PROJECT_REF" --yes 2>&1)" || unset_status=$?
+            if [[ "${unset_status:-0}" -ne 0 && "$unset_output" != *"Secret not found with given name"* ]]; then
+              echo 'Supabase secret retirement failed.' >&2
+              exit "$unset_status"
+            fi
+            unset_status=0
+          done
       - name: Restore the tagged queue-free production Worker
         env:
           RELEASE_ID: ${{ steps.backend.outputs.release_id }}
