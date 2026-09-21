@@ -108,6 +108,25 @@ jobs:
             echo 'Cloudflare queue secret is already absent.'
           fi
           pnpm exec supabase secrets unset INTERNAL_QUEUE_SECRET ALERT_CRON_SECRET GATEWAY_URL --project-ref "$SUPABASE_PROJECT_REF"
+      - name: Restore the tagged queue-free production Worker
+        env:
+          RELEASE_ID: ${{ steps.backend.outputs.release_id }}
+          WORKER_VERSION_ID: ${{ steps.worker.outputs.version_id }}
+        run: |
+          set -euo pipefail
+          pnpm --filter @atmos/gateway exec wrangler versions deploy "$WORKER_VERSION_ID@100" --env="" --message "CVRET-001 tagged queue-free release" --yes
+          sleep 10
+          node scripts/worker-rollback.mjs smoke "$WORKER_SMOKE_URL" "$RELEASE_ID" "$WORKER_VERSION_ID"
+      - name: Replace the staging Worker without Queue bindings
+        env:
+          RELEASE_ID: ${{ steps.backend.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          pnpm --filter @atmos/gateway exec wrangler versions upload --env staging --tag "$RELEASE_ID" --message "CVRET-001 queue-free staging runtime"
+          pnpm --filter @atmos/gateway exec wrangler versions list --env staging --json > "$RUNNER_TEMP/staging-versions.json"
+          version_id="$(RELEASE_ID="$RELEASE_ID" node -e "const versions=require(process.argv[1]);const version=versions.find((item)=>item.annotations?.['workers/tag']===process.env.RELEASE_ID);if(!/^[0-9a-f-]{36}$/.test(version?.id??''))process.exit(1);process.stdout.write(version.id)" "$RUNNER_TEMP/staging-versions.json")"
+          pnpm --filter @atmos/gateway exec wrangler versions deploy "$version_id@100" --env staging --message "CVRET-001 queue-free staging release" --yes
+          sleep 10
       - name: Delete staging queues
         run: |
           set -euo pipefail
