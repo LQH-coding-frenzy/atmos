@@ -89,6 +89,8 @@ jobs:
           sleep 10
           node scripts/worker-rollback.mjs smoke "$WORKER_SMOKE_URL" "$RELEASE_ID" "$version_id"
           pnpm --filter @atmos/gateway exec wrangler versions deploy "$version_id@100" --env="" --message "CVRET-001 queue-free release" --yes
+          # Ordinary traffic requires the same propagation window after promotion.
+          sleep 10
           node scripts/worker-rollback.mjs smoke "$WORKER_SMOKE_URL" "$RELEASE_ID"
           printf 'version_id=%s\n' "$version_id" >> "$GITHUB_OUTPUT"
       - name: Update canonical Supabase API after queue triggers are detached
