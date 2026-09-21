@@ -18,38 +18,42 @@ function isDashboard(value: unknown): value is DashboardData {
 }
 
 async function getDashboard(): Promise<DashboardData | undefined> {
-  try {
-    const url = new URL(
-      '/api/v1/weather/dashboard',
-      process.env.ATMOS_GATEWAY_URL ?? defaultGatewayOrigin,
-    );
-    url.search = new URLSearchParams({
-      lat: '52.52',
-      lon: '13.405',
-      timezone: 'Europe/Berlin',
-      units: 'metric',
-    }).toString();
+  const url = new URL(
+    '/api/v1/weather/dashboard',
+    process.env.ATMOS_GATEWAY_URL ?? defaultGatewayOrigin,
+  );
+  url.search = new URLSearchParams({
+    lat: '52.52',
+    lon: '13.405',
+    timezone: 'Europe/Berlin',
+    units: 'metric',
+  }).toString();
 
-    const response = await fetch(url, {
-      next: { revalidate: 300 },
-      signal: AbortSignal.timeout(5_000),
-    });
-    if (!response.ok) return undefined;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        next: { revalidate: 300 },
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!response.ok) continue;
 
-    const dashboard: unknown = await response.json();
-    if (!isDashboard(dashboard)) return undefined;
+      const dashboard: unknown = await response.json();
+      if (!isDashboard(dashboard)) continue;
 
-    return {
-      ...dashboard,
-      location: {
-        ...dashboard.location,
-        name: 'Berlin',
-        country: 'Germany',
-      },
-    };
-  } catch {
-    return undefined;
+      return {
+        ...dashboard,
+        location: {
+          ...dashboard.location,
+          name: 'Berlin',
+          country: 'Germany',
+        },
+      };
+    } catch {
+      // One bounded retry avoids showing an error for a transient edge request failure.
+    }
   }
+
+  return undefined;
 }
 
 export default async function Home() {
