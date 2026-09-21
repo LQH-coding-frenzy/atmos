@@ -29,4 +29,7 @@ jobs:
           sudo rm -f /etc/apt/sources.list.d/google-chrome*
           pnpm exec playwright install --with-deps chromium
       - name: Run browser smoke tests
+        env:
+          # Keep browser UI coverage independent of GitHub-hosted custom-domain DNS.
+          ATMOS_GATEWAY_URL: https://atmos-gateway.rainify.workers.dev
         run: pnpm test:e2e

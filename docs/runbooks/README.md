@@ -4,12 +4,12 @@ These runbooks are the operator entry points required by the Atmos master plan. 
 
 ## Current operational boundary
 
-The Vercel frontend, Cloudflare Worker, production Supabase project, Grafana synthetics/SLOs, Workers Analytics Engine, and Cloudflare notification queues are active. Azure Container Apps, HCP Terraform, R2 backups, restore automation, and external Grafana notification routing are not active. Their runbooks define safe holds and activation prerequisites; they must not be cited as evidence that those controls are deployed.
+The Vercel frontend, Cloudflare Worker, production Supabase project, Grafana synthetics/SLOs, and Workers Analytics Engine are active. Notification queues, alert delivery, and Azure container-platform resources are retiring from the CV showcase; R2 backup evidence and restore automation remain on-demand rather than continuously operated. External Grafana notification routing is inactive.
 
 ## Shared production references
 
 - Frontend: `https://rainify.dpdns.org/`
-- Worker: `https://atmos-gateway.rainify.workers.dev`
+- Worker: `https://api.rainify.dpdns.org`
 - Grafana synthetic dashboard: `/d/atmos-synthetics/atmos-synthetic-monitoring`
 - Availability SLO: `/d/grafana_slo_app-jcmsyyihfk6uhgi19d5m7`
 - Client-latency SLO: `/d/grafana_slo_app-evgiwsqi2ipq6tgr2p4nm`

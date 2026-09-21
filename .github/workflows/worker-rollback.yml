@@ -103,7 +103,7 @@ jobs:
           STABLE_RELEASE_ID: ${{ inputs.stable_release_id }}
         run: >-
           node scripts/worker-rollback.mjs smoke
-          https://atmos-gateway.rainify.workers.dev/
+          https://api.rainify.dpdns.org/
           "$STABLE_RELEASE_ID"
           "$STABLE_VERSION_ID"
       - name: Deploy retained stable version
@@ -140,7 +140,7 @@ jobs:
           STABLE_RELEASE_ID: ${{ inputs.stable_release_id }}
         run: >-
           node scripts/worker-rollback.mjs smoke
-          https://atmos-gateway.rainify.workers.dev/
+          https://api.rainify.dpdns.org/
           "$STABLE_RELEASE_ID"
       - name: Record plan-only result
         if: inputs.mode == 'plan'

@@ -10,8 +10,6 @@ export const requiredRunbooks = [
   'supabase-project-paused.md',
   'supabase-function-failure.md',
   'rls-authorization-incident.md',
-  'queue-backlog.md',
-  'notification-dlq.md',
   'failed-worker-canary.md',
   'worker-analytics-gate-insufficient-data.md',
   'supabase-dependency-synthetic-failure.md',

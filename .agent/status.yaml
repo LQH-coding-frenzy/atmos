@@ -1,5 +1,5 @@
 project: atmos
-updated: 2026-09-20
+updated: 2026-09-21
 scope:
   profile: CV_SHOWCASE
   production_hardening: DEFERRED
@@ -98,3 +98,4 @@ tasks:
   R2BACK-001: DONE
   BACKUP-001: DONE
   RESTORE-001: DONE
+  CVRET-001: IN_PROGRESS
