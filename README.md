@@ -19,7 +19,7 @@ The implementation plan is the source of truth: [Atmos master plan](docs/archite
 - Next.js on Vercel for the frontend.
 - Cloudflare Workers and Hono for the thin edge gateway and public cache.
 - Supabase Postgres, Auth, Edge Functions, and RLS for durable user data and authenticated APIs.
-- Cloudflare Queues and R2 for asynchronous delivery and one-time encrypted backup evidence.
+- Cloudflare R2 for one-time encrypted backup evidence.
 - Azure Container Instances for one-time backup and restore demonstrations.
 
 ## Local development

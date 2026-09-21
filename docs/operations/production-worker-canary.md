@@ -2,18 +2,15 @@
 
 REL-003 establishes the first production Worker deployment and proves a release candidate without sending it ordinary traffic. Run every deployment from a protected `main` commit and retain immutable Worker and Supabase function versions for rollback.
 
+> Queue-specific instructions are historical release evidence. The CV retirement workflow removes that
+> runtime; do not recreate it unless the owner explicitly reopens the production profile.
+
 ## Preconditions
 
-- Confirm Cloudflare Workers, Queues, and Analytics Engine remain within Free allowances.
+- Confirm Cloudflare Workers and Analytics Engine remain within Free allowances.
 - Confirm the production Supabase project is healthy and the migration dry-run contains only reviewed, additive migrations.
-- Keep database credentials and `INTERNAL_QUEUE_SECRET` out of command arguments, logs, evidence, and the repository.
+- Keep database credentials out of command arguments, logs, evidence, and the repository.
 - Stop before any destructive migration, paid-resource change, custom route, or candidate traffic assignment.
-
-## Isolate staging queues
-
-Create `atmos-notifications-staging` and `atmos-notifications-staging-dlq`, then update only the `staging` environment in `workers/gateway/wrangler.jsonc`. Upload and deploy the protected release to staging at 100 percent before assigning the original queues to production. Run `wrangler triggers deploy --env staging` because queue consumers are non-versioned triggers, then explicitly remove any stale `atmos-gateway-staging` consumer from `atmos-notifications`.
-
-Require staging `/health`, `/version`, weather, and unauthenticated protected-route smoke to pass. Confirm `atmos-notifications` has no staging consumer before continuing.
 
 ## Expand production schema
 
@@ -38,13 +35,13 @@ corepack pnpm release:supabase:stage
 corepack pnpm exec supabase functions deploy api-<release-id> --project-ref oxgwprvkotfvyacpqayx --no-verify-jwt
 ```
 
-Set `CORS_ORIGIN`, the public production `GATEWAY_URL`, and one generated `INTERNAL_QUEUE_SECRET` in the production Supabase secret store. Supply that same internal secret to both Worker versions through an ephemeral secrets file, with stable referencing `api-v1` and candidate referencing `api-<release-id>`. Delete the local secrets file immediately after both uploads.
+Set `CORS_ORIGIN` in the production Supabase secret store. Supply the candidate function URL to its Worker version through an ephemeral secrets file, with stable referencing `api-v1` and candidate referencing `api-<release-id>`. Delete the local secrets file immediately after the upload.
 
 Require exact `/health` and `/version` responses from both function URLs before the Worker deployment.
 
 ## Bootstrap stable
 
-For a Worker that does not yet exist, `wrangler versions upload` cannot create its first version. Run `wrangler deploy --env=""` from the previous protected `main` release with the stable secrets file; this creates the Worker, deploys stable at 100 percent, and configures its `workers.dev` and queue triggers. For an existing Worker, use version upload followed by an explicit 100-percent deployment instead.
+For a Worker that does not yet exist, `wrangler versions upload` cannot create its first version. Run `wrangler deploy --env=""` from the previous protected `main` release with the stable secrets file; this creates the Worker, deploys stable at 100 percent, and configures its Worker triggers. For an existing Worker, use version upload followed by an explicit 100-percent deployment instead.
 
 Require ordinary requests to the production `workers.dev` route to return the stable release and pass bounded weather and authorization smoke.
 

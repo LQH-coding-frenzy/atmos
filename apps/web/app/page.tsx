@@ -1,7 +1,7 @@
 import type { Dashboard as DashboardData } from '@atmos/contracts';
 import { Dashboard } from '../components/dashboard';
 
-const defaultGatewayOrigin = 'https://atmos-gateway.rainify.workers.dev';
+const defaultGatewayOrigin = 'https://api.rainify.dpdns.org';
 
 function isDashboard(value: unknown): value is DashboardData {
   if (!value || typeof value !== 'object') return false;

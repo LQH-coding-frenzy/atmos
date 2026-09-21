@@ -3,7 +3,6 @@ import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { OpenMeteoProvider } from '@atmos/provider-openmeteo';
 import type { Dashboard, WeatherProvider } from '@atmos/contracts';
-import { assertNotificationMessage, type NotificationQueueMessage } from './notification-queue';
 import { createCorrelation } from './correlation';
 import {
   backendReleaseFromUrl,
@@ -18,8 +17,6 @@ type Bindings = {
   CORS_ORIGIN?: string;
   RELEASE_ID?: string;
   SUPABASE_FUNCTION_URL?: string;
-  INTERNAL_QUEUE_SECRET?: string;
-  NOTIFICATION_QUEUE?: Queue<NotificationQueueMessage>;
   REQUEST_ANALYTICS?: RequestAnalyticsDataset;
   CF_VERSION_METADATA?: { id: string; tag?: string; timestamp: string };
 };
@@ -192,38 +189,6 @@ export function createApp(
     }),
   );
 
-  app.post('/internal/notifications/publish', async (context) => {
-    if (
-      !context.env.INTERNAL_QUEUE_SECRET ||
-      context.req.header('x-internal-queue-secret') !== context.env.INTERNAL_QUEUE_SECRET
-    ) {
-      return gatewayError(context, 'UNAUTHORIZED', 'Internal authorization is required.', 401);
-    }
-    if (!context.env.NOTIFICATION_QUEUE) {
-      return gatewayError(context, 'QUEUE_UNAVAILABLE', 'Notification queue is unavailable.', 503);
-    }
-    const messages = await context.req.json<unknown>().catch(() => undefined);
-    if (!Array.isArray(messages) || messages.length === 0 || messages.length > 100) {
-      return gatewayError(context, 'INVALID_MESSAGE', 'Notification batch is invalid.', 400);
-    }
-    try {
-      messages.forEach((message) => assertNotificationMessage(message as NotificationQueueMessage));
-    } catch {
-      return gatewayError(context, 'INVALID_MESSAGE', 'Notification batch is invalid.', 400);
-    }
-    const notificationMessages = messages as NotificationQueueMessage[];
-    const providerStartedAt = performance.now();
-    context.set('analyticsProvider', 'cloudflare-queue');
-    try {
-      await context.env.NOTIFICATION_QUEUE.sendBatch(
-        notificationMessages.map((body) => ({ body })),
-      );
-    } finally {
-      context.set('providerDurationMs', performance.now() - providerStartedAt);
-    }
-    return context.json({ published: notificationMessages.length });
-  });
-
   app.get('/api/v1/weather/dashboard', async (context) => {
     const input = weatherInput(context);
     if (!input) {
@@ -371,29 +336,4 @@ export function createApp(
 
 export const app = createApp();
 
-export default {
-  fetch: app.fetch,
-  async queue(
-    batch: MessageBatch<import('./notification-queue').NotificationQueueMessage>,
-    env: Bindings,
-  ) {
-    if (!env.SUPABASE_FUNCTION_URL || !env.INTERNAL_QUEUE_SECRET) {
-      throw new Error('Queue consumer is not configured');
-    }
-    for (const message of batch.messages) {
-      const correlation = createCorrelation(undefined, undefined);
-      const response = await fetch(`${env.SUPABASE_FUNCTION_URL}/internal/notifications/deliver`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-internal-queue-secret': env.INTERNAL_QUEUE_SECRET,
-          'x-request-id': correlation.requestId,
-          traceparent: correlation.traceparent,
-        },
-        body: JSON.stringify(message.body),
-      });
-      if (response.ok) message.ack();
-      else message.retry();
-    }
-  },
-};
+export default { fetch: app.fetch };

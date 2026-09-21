@@ -8,7 +8,7 @@ GAME-002 proved that real production per-version telemetry detects a controlled 
 - Hold the candidate at zero percent while validating identity and generating override-only samples.
 - Do not exceed 10 percent ordinary candidate traffic.
 - Create or rotate no secret. `wrangler versions upload --keep-vars` preserves existing remote bindings.
-- Change no database schema, RLS policy, queue trigger, custom route, or frontend deployment.
+- Change no database schema, RLS policy, custom route, or frontend deployment.
 - Stop immediately if stable health, rollback-target smoke, provider inventory, or Worker CPU safety is uncertain.
 
 ## Historical Candidate Preparation

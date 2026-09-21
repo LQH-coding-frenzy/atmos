@@ -19,7 +19,7 @@ edge_gateway: Cloudflare Workers Free + Hono
 backend_compute: Supabase Edge Functions + Hono
 primary_database: Supabase PostgreSQL
 identity: Supabase Auth + PostgreSQL Row Level Security
-async_messaging: Cloudflare Queues Free
+async_messaging: deferred; Cloudflare Queues remain future-production guidance
 scheduler: Supabase Cron; Azure Container Apps Jobs for heavy schedules
 object_storage: Cloudflare R2 Standard
 container_runtime: Azure Container Apps Consumption + Azure Container Apps Jobs
@@ -57,7 +57,7 @@ source_of_truth:
 >
 > This document is written for both humans and automation. Major components have stable IDs, dependencies, failure modes, acceptance criteria, evidence requirements, rollback expectations, and agent-safe boundaries.
 
-> **Current delivery profile: CV showcase.** Atmos is a portfolio demonstrator, not an operated production service. The completed scope retains the live application, protected CI, IaC, signed OCI artifacts, and one verified encrypted R2 backup plus ephemeral Supabase restore drill. It intentionally excludes recurring backup schedules, automatic backup retention/deletion, continuous disaster-recovery exercises, further paid-resource expansion, and production-only backlog execution. The remaining Section 29 items are a future-hardening roadmap, not a current completion gate.
+> **Current delivery profile: CV showcase.** Atmos is a portfolio demonstrator, not an operated production service. The completed scope retains the live application, protected CI, IaC, signed OCI artifacts, and one verified encrypted R2 backup plus ephemeral Supabase restore drill. It intentionally excludes recurring backup schedules, automatic backup retention/deletion, continuous disaster-recovery exercises, asynchronous notification delivery, further paid-resource expansion, and production-only backlog execution. The remaining Section 29 items are a future-hardening roadmap, not a current completion gate.
 
 ---
 
@@ -1246,7 +1246,6 @@ atmos/
 │       ├── modules/
 │       │   ├── cloudflare-edge/
 │       │   ├── cloudflare-r2/
-│       │   ├── cloudflare-queues/
 │       │   ├── vercel-project/
 │       │   ├── supabase-platform/
 │       │   ├── azure-container-apps/
@@ -1907,7 +1906,7 @@ Stable external version prefix:
 /api/v1
 ```
 
-Example routes:
+Example future-production routes:
 
 ```text
 GET /api/v1/weather/current
@@ -1933,7 +1932,6 @@ DELETE /api/v1/me/alerts/:id
 GET   /api/v1/me/notifications
 PATCH /api/v1/me/notifications/:id
 
-POST /api/v1/planner/recommend
 POST /api/v1/planner/compare
 
 GET /health
@@ -3662,8 +3660,6 @@ docs/runbooks/
 ├── supabase-project-paused.md
 ├── supabase-function-failure.md
 ├── rls-authorization-incident.md
-├── queue-backlog.md
-├── notification-dlq.md
 ├── failed-worker-canary.md
 ├── worker-analytics-gate-insufficient-data.md
 ├── supabase-dependency-synthetic-failure.md

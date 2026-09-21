@@ -2,7 +2,7 @@ export type RequestAnalyticsDataset = {
   writeDataPoint(point: { indexes: string[]; blobs: string[]; doubles: number[] }): void;
 };
 
-export type AnalyticsProvider = 'cache' | 'cloudflare-queue' | 'none' | 'open-meteo' | 'supabase';
+export type AnalyticsProvider = 'cache' | 'none' | 'open-meteo' | 'supabase';
 
 type RequestAnalyticsInput = {
   workerVersionId?: string;
@@ -41,7 +41,6 @@ export function requestRouteGroup(method: string, path: string) {
   if (path === '/health/dependencies') return 'health_dependencies';
   if (path === '/version') return 'version';
   if (path === '/api/v1/weather/dashboard') return 'weather_dashboard';
-  if (path === '/internal/notifications/publish') return 'notification_publish';
   if (path.startsWith('/api/')) return 'api_proxy';
   return method === 'OPTIONS' ? 'preflight_other' : 'not_found';
 }

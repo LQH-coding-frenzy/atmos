@@ -27,7 +27,6 @@ Use only bounded, non-sensitive requests against the exact generated preview URL
 GET /health                                      -> 200
 GET /version                                     -> 200 and expected release ID
 GET /api/v1/weather/dashboard?...                -> 200
-POST /internal/notifications/publish             -> 401 without internal credentials
 GET /api/v1/me                                    -> 401 without user credentials
 ```
 

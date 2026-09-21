@@ -23,10 +23,3 @@ module "r2" {
   account_id  = var.account_id
   bucket_name = "atmos-production-backups"
 }
-
-module "queues" {
-  source                 = "./modules/cloudflare-queues"
-  account_id             = var.account_id
-  queue_name             = "atmos-notifications"
-  dead_letter_queue_name = "atmos-notifications-dlq"
-}

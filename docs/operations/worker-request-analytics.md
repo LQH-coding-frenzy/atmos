@@ -19,7 +19,7 @@ Production uses `atmos_worker_requests`. Staging uses `atmos_worker_requests_sta
 | `double2` | server error flag                     | 0 or 1                                                    |
 | `double3` | provider duration in milliseconds     | clamped from 0 through 60,000; 0 when no call occurred    |
 
-The dataset never receives raw URLs, query strings, search text, headers, cookies, JWTs, IP addresses, request IDs, user IDs, or email addresses. Route groups are `health`, `version`, `weather_dashboard`, `notification_publish`, `api_proxy`, `preflight_other`, and `not_found`.
+The dataset never receives raw URLs, query strings, search text, headers, cookies, JWTs, IP addresses, request IDs, user IDs, or email addresses. Route groups are `health`, `version`, `weather_dashboard`, `api_proxy`, `preflight_other`, and `not_found`.
 
 Worker version metadata supplies the immutable version ID and release tag. `RELEASE_ID` may override the tag only when deployment configuration intentionally provides the same canonical release identity.
 
