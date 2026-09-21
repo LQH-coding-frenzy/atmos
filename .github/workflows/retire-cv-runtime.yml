@@ -58,6 +58,15 @@ jobs:
           curl --fail --silent --show-error "$function_url/health" | jq --exit-status '.status == "ok"' >/dev/null
           curl --fail --silent --show-error "$function_url/version" | jq --exit-status --arg release "$release_id" '.release == $release' >/dev/null
           printf 'release_id=%s\nfunction_name=%s\nfunction_url=%s\n' "$release_id" "$function_name" "$function_url" >> "$GITHUB_OUTPUT"
+      - name: Detach the legacy production queue consumer
+        run: |
+          set -euo pipefail
+          consumers_file="$RUNNER_TEMP/production-queue-consumers.json"
+          pnpm --filter @atmos/gateway exec wrangler queues consumer list atmos-notifications --env="" --json > "$consumers_file"
+          case "$(node scripts/queue-consumer-retirement.mjs atmos-gateway "$consumers_file")" in
+            remove) pnpm --filter @atmos/gateway exec wrangler queues consumer remove atmos-notifications atmos-gateway --env="" ;;
+            absent) echo 'Production queue consumer is already absent.' ;;
+          esac
       - name: Upload and deploy the queue-free Worker
         id: worker
         env:
@@ -76,7 +85,6 @@ jobs:
           pnpm --filter @atmos/gateway exec wrangler versions deploy "$stable_version_id@100" "$version_id@0" --env="" --message "CVRET-001 queue-free candidate" --yes
           node scripts/worker-rollback.mjs smoke https://api.rainify.dpdns.org/ "$RELEASE_ID" "$version_id"
           pnpm --filter @atmos/gateway exec wrangler versions deploy "$version_id@100" --env="" --message "CVRET-001 queue-free release" --yes
-          pnpm --filter @atmos/gateway exec wrangler triggers deploy --env=""
           node scripts/worker-rollback.mjs smoke https://api.rainify.dpdns.org/ "$RELEASE_ID"
           printf 'version_id=%s\n' "$version_id" >> "$GITHUB_OUTPUT"
       - name: Update canonical Supabase API after queue triggers are detached
@@ -100,6 +108,12 @@ jobs:
           queues="$(pnpm --filter @atmos/gateway exec wrangler queues list --env='')"
           for queue in atmos-notifications-staging atmos-notifications-staging-dlq; do
             if [[ "$queues" == *"$queue"* ]]; then
+              consumers_file="$RUNNER_TEMP/${queue}-consumers.json"
+              pnpm --filter @atmos/gateway exec wrangler queues consumer list "$queue" --env="" --json > "$consumers_file"
+              case "$(node scripts/queue-consumer-retirement.mjs atmos-gateway-staging "$consumers_file")" in
+                remove) pnpm --filter @atmos/gateway exec wrangler queues consumer remove "$queue" atmos-gateway-staging --env="" ;;
+                absent) ;;
+              esac
               pnpm --filter @atmos/gateway exec wrangler queues delete "$queue" --env=""
             else
               echo "Queue $queue is already absent."
