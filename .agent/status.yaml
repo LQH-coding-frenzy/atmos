@@ -1,5 +1,5 @@
 project: atmos
-updated: 2026-09-21
+updated: 2026-09-22
 scope:
   profile: CV_SHOWCASE
   production_hardening: DEFERRED
