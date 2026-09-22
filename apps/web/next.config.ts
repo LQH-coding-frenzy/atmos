@@ -7,6 +7,7 @@ const contentSecurityPolicy = [
   "img-src 'self' blob: data:",
   "font-src 'self' data:",
   "connect-src 'self' https://*.supabase.co https://*.workers.dev",
+  "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

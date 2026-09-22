@@ -254,12 +254,6 @@ button {
   color: #abb3bd;
   font-size: 11px;
 }
-.hourly-item:nth-child(4),
-.hourly-item:nth-child(5),
-.hourly-item:nth-child(6) {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
 .hourly-item strong {
   font-size: 14px;
   font-weight: 500;
@@ -271,6 +265,12 @@ button {
   border: 1px solid var(--line);
   border-radius: 28px;
   background: radial-gradient(circle at 58% 45%, #353c46 0 2%, #1a1e24 48%, #11141a 100%);
+}
+.weather-stale {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #ffd78c;
+  font-size: 13px;
 }
 .map-grid {
   position: absolute;
@@ -536,9 +536,13 @@ footer {
     min-height: 0;
     transform: translateX(-260px);
     transition: transform 0.2s ease;
+    visibility: hidden;
+    pointer-events: none;
   }
   .sidebar-open {
     transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
   }
   .sidebar a {
     justify-content: flex-start;

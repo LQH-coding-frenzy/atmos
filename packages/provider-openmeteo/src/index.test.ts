@@ -30,7 +30,7 @@ describe('weather providers', () => {
           JSON.stringify({
             timezone: 'Europe/Berlin',
             current: {
-              time: '2026-09-01T10:00',
+              time: 1_788_256_800,
               temperature_2m: 20,
               apparent_temperature: 19,
               relative_humidity_2m: 64,
@@ -39,13 +39,13 @@ describe('weather providers', () => {
               weather_code: 2,
             },
             hourly: {
-              time: ['2026-09-01T10:00'],
-              temperature_2m: [20],
-              precipitation_probability: [5],
-              weather_code: [2],
+              time: [1_788_253_200, 1_788_256_800, 1_788_260_400],
+              temperature_2m: [19, 20, 21],
+              precipitation_probability: [4, 5, 6],
+              weather_code: [1, 2, 3],
             },
             daily: {
-              time: ['2026-09-01'],
+              time: [1_788_249_600],
               temperature_2m_max: [23],
               temperature_2m_min: [14],
               precipitation_probability_max: [5],
@@ -63,6 +63,11 @@ describe('weather providers', () => {
     });
 
     expect(dashboard.current.condition).toBe('partly-cloudy');
+    expect(dashboard.current.observedAt).toBe('2026-09-01T10:00:00.000Z');
+    expect(dashboard.hourly.map((hour) => hour.time)).toEqual([
+      '2026-09-01T10:00:00.000Z',
+      '2026-09-01T11:00:00.000Z',
+    ]);
     expect(dashboard.daily[0]?.highC).toBe(23);
   });
 

@@ -2,7 +2,7 @@
 
 ## Summary
 
-Use this runbook after the encrypted logical backup pipeline is active. It is currently not deployed because Azure/R2 prerequisites are blocked; Supabase Free managed backups must not be assumed.
+Atmos retains one encrypted R2 logical backup archive and backup Container Instance evidence. Recurring backup execution and freshness monitoring are intentionally not operated; Supabase Free managed backups must not be assumed.
 
 ## User impact
 
@@ -10,11 +10,11 @@ The production database continues serving, but recoverability degrades and destr
 
 ## Detection
 
-After `BACKUP-001`, detect failed/missing job execution, nonzero dump/encryption/upload result, missing checksum manifest, or backup-age breach. Today, there is no successful production backup to monitor.
+For an explicitly approved backup run, detect failed job execution, nonzero dump/encryption/upload result, or a missing checksum manifest. Review `docs/evidence/restore-001/2026-09-19.md` for the verified archive rather than claiming recurring freshness.
 
 ## Relevant dashboards/logs
 
-After activation use the Azure backup job execution, private R2 object/manifest inventory, and backup metrics. Current evidence is the explicit R2 error `10042` in `docs/evidence/preflight/2026-09-10.md`.
+Use the backup Container Instance execution, private R2 object/manifest inventory, and the retained restore evidence. Do not invent a recurring backup metric or freshness alert.
 
 ## Immediate mitigation
 

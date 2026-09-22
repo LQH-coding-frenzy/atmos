@@ -11,9 +11,12 @@ x-content-type-options: nosniff
 x-frame-options: DENY
 
 `;
+const liveWeatherBody = '<main>Live weather data: Open-Meteo.</main>';
 
 test('accepts a successful hardened frontend response', () => {
-  assert.doesNotThrow(() => verifyFrontendResponse(200, headersFromCurlDump(validHeaders)));
+  assert.doesNotThrow(() =>
+    verifyFrontendResponse(200, headersFromCurlDump(validHeaders), liveWeatherBody),
+  );
 });
 
 test('uses the final response block from a curl header dump', () => {
@@ -24,9 +27,34 @@ test('uses the final response block from a curl header dump', () => {
 });
 
 test('rejects failures and missing security controls', () => {
-  assert.throws(() => verifyFrontendResponse(503, headersFromCurlDump(validHeaders)), /HTTP 503/);
   assert.throws(
-    () => verifyFrontendResponse(200, headersFromCurlDump('HTTP/2 200\nx-frame-options: DENY\n\n')),
+    () => verifyFrontendResponse(503, headersFromCurlDump(validHeaders), liveWeatherBody),
+    /HTTP 503/,
+  );
+  assert.throws(
+    () =>
+      verifyFrontendResponse(
+        200,
+        headersFromCurlDump('HTTP/2 200\nx-frame-options: DENY\n\n'),
+        liveWeatherBody,
+      ),
     /permissions-policy/,
+  );
+});
+
+test('rejects unavailable or non-weather frontend content', () => {
+  assert.throws(
+    () =>
+      verifyFrontendResponse(200, headersFromCurlDump(validHeaders), '<main>Unavailable</main>'),
+    /live weather content/,
+  );
+  assert.throws(
+    () =>
+      verifyFrontendResponse(
+        200,
+        headersFromCurlDump(validHeaders),
+        `${liveWeatherBody}Weather data is temporarily unavailable.`,
+      ),
+    /unavailable weather state/,
   );
 });

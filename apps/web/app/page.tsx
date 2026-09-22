@@ -1,21 +1,10 @@
-import type { Dashboard as DashboardData } from '@atmos/contracts';
+import { dashboardSchema, type Dashboard as DashboardData } from '@atmos/contracts';
 import { Dashboard } from '../components/dashboard';
 
 const defaultGatewayOrigin = 'https://api.rainify.dpdns.org';
 
-function isDashboard(value: unknown): value is DashboardData {
-  if (!value || typeof value !== 'object') return false;
-
-  const dashboard = value as Partial<DashboardData>;
-  return (
-    typeof dashboard.location === 'object' &&
-    dashboard.location !== null &&
-    typeof dashboard.current === 'object' &&
-    dashboard.current !== null &&
-    Array.isArray(dashboard.hourly) &&
-    Array.isArray(dashboard.daily)
-  );
-}
+// A failed build-time weather request must never be cached as the public page.
+export const dynamic = 'force-dynamic';
 
 async function getDashboard(): Promise<DashboardData | undefined> {
   const url = new URL(
@@ -32,13 +21,14 @@ async function getDashboard(): Promise<DashboardData | undefined> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       const response = await fetch(url, {
-        next: { revalidate: 300 },
-        signal: AbortSignal.timeout(5_000),
+        cache: 'no-store',
+        signal: AbortSignal.timeout(8_000),
       });
       if (!response.ok) continue;
 
-      const dashboard: unknown = await response.json();
-      if (!isDashboard(dashboard)) continue;
+      const parsed = dashboardSchema.safeParse(await response.json());
+      if (!parsed.success) continue;
+      const dashboard: DashboardData = parsed.data;
 
       return {
         ...dashboard,

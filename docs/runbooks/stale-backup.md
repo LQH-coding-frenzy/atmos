@@ -2,7 +2,7 @@
 
 ## Summary
 
-Use this runbook after backup monitoring exists and the newest verified backup exceeds the approved RPO. No production Atmos backup currently exists, so recoverability is already an explicit open gap.
+Use this runbook only if an owner enables recurring backup monitoring and the newest verified backup exceeds the approved RPO. Atmos currently retains one verified archive, not a recurring backup freshness commitment.
 
 ## User impact
 
@@ -10,7 +10,7 @@ The application may be healthy, but a data-loss incident could exceed the intend
 
 ## Detection
 
-After activation, compare current UTC time with the latest successful manifest timestamp and verified checksum/restore status; object modification time alone is insufficient.
+After recurring monitoring is explicitly enabled, compare current UTC time with the latest successful manifest timestamp and verified checksum/restore status; object modification time alone is insufficient.
 
 ## Relevant dashboards/logs
 

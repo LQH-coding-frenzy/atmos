@@ -1,6 +1,6 @@
 # Production Worker Canary
 
-REL-003 establishes the first production Worker deployment and proves a release candidate without sending it ordinary traffic. Run every deployment from a protected `main` commit and retain immutable Worker and Supabase function versions for rollback.
+`Release Edge Runtime` is the normal production workflow for the queue-free Worker and Supabase API. It deploys an immutable backend candidate, holds its Worker at zero percent for exact smoke verification, then promotes the same version from protected `main`. Retain immutable Worker and Supabase function versions for rollback.
 
 > Queue-specific instructions are historical release evidence. The CV retirement workflow removes that
 > runtime; do not recreate it unless the owner explicitly reopens the production profile.
@@ -71,19 +71,10 @@ Require candidate `/health`, `/version`, weather, and unauthenticated protected-
 
 If candidate smoke fails, deploy the stable version alone at 100 percent. Keep both Supabase functions and the additive schema. REL-007 owns function and version cleanup after the rollback window.
 
-## Progressive promotion
+## CV Showcase Promotion Boundary
 
-REL-004 promotes the exact zero-percent candidate through 10, 25, 50, and 100 percent. Before the first exposure, require protected owner approval, exact candidate smoke, and a `PASS` from `scripts/grafana-synthetic-gate.mjs`.
+The CV showcase uses the protected zero-percent candidate and exact smoke workflow. It does not claim an active percentage-based canary because its low organic traffic cannot reliably satisfy the WAE sampling threshold.
 
-At each percentage:
+Percentage-based 10/25/50/100 promotion, WAE sampling, and Grafana synthetic gates remain future production-hardening controls. Do not represent the standalone `WAE release gate` workflow as an active release dependency until an owner adopts that operating profile.
 
-1. deploy only the known stable and candidate version UUIDs with explicit percentages;
-2. confirm the deployment inventory matches the requested split;
-3. collect at least 30 weighted WAE samples for each exact Worker UUID and release ID within the bounded lookback;
-4. dispatch `WAE release gate` from protected `main` against `atmos_worker_requests`;
-5. require WAE `PASS` and a fresh Grafana synthetic `PASS` before the next percentage;
-6. treat `FAIL` as an immediate manual stable-only rollback and `INSUFFICIENT_DATA` as a hold.
-
-The Grafana gate requires all four `Atmos` checks to have a successful sample no older than 30 minutes. Low organic traffic may be supplemented with bounded health requests to obtain the minimum WAE sample, but evidence must identify controlled samples rather than presenting them as user traffic.
-
-After 100 percent, run both gates once more before declaring the candidate stable. Do not delete the previous Worker or Edge Function; REL-007 owns cleanup after REL-006 establishes automated rollback.
+After promotion, preserve the previous Worker and Edge Function releases. REL-007 owns cleanup only after a separate rollback-window decision.

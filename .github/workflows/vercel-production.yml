@@ -83,8 +83,8 @@ jobs:
         run: |
           status="$(pnpm dlx vercel@59.15.1 curl / --deployment "$DEPLOYMENT_URL" -- \
             --silent --show-error --dump-header "$RUNNER_TEMP/candidate-headers" \
-            --output /dev/null --write-out '%{http_code}')"
-          node scripts/verify-frontend-response.mjs "$status" "$RUNNER_TEMP/candidate-headers"
+            --output "$RUNNER_TEMP/candidate.html" --write-out '%{http_code}')"
+          node scripts/verify-frontend-response.mjs "$status" "$RUNNER_TEMP/candidate-headers" "$RUNNER_TEMP/candidate.html"
       - name: Promote exact deployment
         if: ${{ inputs.promote }}
         id: promote
@@ -98,8 +98,8 @@ jobs:
         if: ${{ inputs.promote }}
         run: |
           status="$(curl --silent --show-error --dump-header "$RUNNER_TEMP/production-headers" \
-            --output /dev/null --write-out '%{http_code}' "$PRODUCTION_URL")"
-          node scripts/verify-frontend-response.mjs "$status" "$RUNNER_TEMP/production-headers"
+            --output "$RUNNER_TEMP/production.html" --write-out '%{http_code}' "$PRODUCTION_URL")"
+          node scripts/verify-frontend-response.mjs "$status" "$RUNNER_TEMP/production-headers" "$RUNNER_TEMP/production.html"
       - name: Restore previous production deployment on failure
         if: ${{ failure() && inputs.promote && steps.promote.outcome == 'success' }}
         env:

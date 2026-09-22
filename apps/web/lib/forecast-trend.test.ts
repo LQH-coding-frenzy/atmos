@@ -20,7 +20,7 @@ const daily = [
 
 describe('createForecastTrend', () => {
   it('maps normalized daily dashboard data into a temperature series', () => {
-    expect(createForecastTrend(daily, 'temperature')).toEqual({
+    expect(createForecastTrend(daily, 'temperature', 'metric')).toEqual({
       labels: ['Wed', 'Thu'],
       values: [22, 20],
       unit: 'C',
@@ -29,10 +29,17 @@ describe('createForecastTrend', () => {
   });
 
   it('uses forecast precipitation probability without fabricating rainfall data', () => {
-    expect(createForecastTrend(daily, 'rain-chance')).toMatchObject({
+    expect(createForecastTrend(daily, 'rain-chance', 'metric')).toMatchObject({
       values: [10, 70],
       unit: '%',
       label: 'Rain chance',
+    });
+  });
+
+  it('converts the temperature series when imperial units are selected', () => {
+    expect(createForecastTrend(daily, 'temperature', 'imperial')).toMatchObject({
+      values: [72, 68],
+      unit: 'F',
     });
   });
 });
