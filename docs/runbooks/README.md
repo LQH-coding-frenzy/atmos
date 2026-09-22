@@ -4,7 +4,7 @@ These runbooks are the operator entry points required by the Atmos master plan. 
 
 ## Current operational boundary
 
-The Vercel frontend, Cloudflare Worker, production Supabase project, Grafana synthetics/SLOs, and Workers Analytics Engine are active. Notification queues, alert delivery, and Azure container-platform resources are retiring from the CV showcase; R2 backup evidence and restore automation remain on-demand rather than continuously operated. External Grafana notification routing is inactive.
+The Vercel frontend, Cloudflare Worker, production Supabase project, Grafana synthetics/SLOs, and Workers Analytics Engine are active. Notification queues, alert delivery, and Azure container-platform resources are retired from the CV showcase; R2 backup evidence and restore automation remain on-demand rather than continuously operated. External Grafana notification routing is inactive.
 
 ## Shared production references
 

@@ -15,10 +15,11 @@ weather journey backed by credible DevSecOps evidence, not continuous production
 | Terraform and HCP Terraform configuration                    | keep active    | documents reproducible infrastructure and provider boundaries                           |
 | GHCR backup image, R2 archive, and restore tooling           | keep on demand | supports one verified backup and ephemeral restore demonstration                        |
 | Staging Worker and release controls                          | keep on demand | preserves safe release and rollback evidence without routine exercise                   |
-| Cloudflare Queues and alert delivery runtime                 | retiring       | no active CV user journey publishes notifications; protected removal is in progress     |
-| Azure Container Apps environment and Log Analytics workspace | retiring       | backup evidence uses a one-shot Container Instance, not an Apps environment             |
+| Cloudflare Queues and alert delivery runtime                 | retired        | removed; no active CV user journey publishes notifications                              |
+| Azure Container Apps environment and Log Analytics workspace | retired        | removed; backup evidence uses a one-shot Container Instance, not an Apps environment    |
 
-Provider-side retirement requires an owner-approved, reviewed destructive plan and evidence update.
+Provider-side retirement completed under the owner-approved CVRET-001 plan. See
+`docs/evidence/cvret-001/2026-09-22.md` for the sanitized release and provider evidence.
 
 ## Maintenance Routine
 
