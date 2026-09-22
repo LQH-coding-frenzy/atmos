@@ -1,7 +1,7 @@
 task:
   id: CVRET-001
   title: CV runtime retirement
-  status: IN_PROGRESS
+  status: DONE
   objective: Retire unused queue, alert-delivery, and Azure container-platform runtime while preserving RLS and backup evidence.
   depends_on:
     [
@@ -48,7 +48,7 @@ task:
   compatibility:
     requires_expand_contract: false
     stable_version_compatible: false
-    rollback_window: until the destructive queue and Azure applies complete
+    rollback_window: expired; the approved destructive queue and Azure applies completed on 2026-09-22
   validation:
     commands:
       - corepack pnpm lint
