@@ -58,8 +58,11 @@ function dependencyHealthResponse(context: Context<GatewayEnvironment>, healthy:
 }
 
 function weatherInput(context: { req: { query: (name: string) => string | undefined } }) {
-  const latitude = Number(context.req.query('lat'));
-  const longitude = Number(context.req.query('lon'));
+  const latitudeValue = context.req.query('lat');
+  const longitudeValue = context.req.query('lon');
+  if (!latitudeValue?.trim() || !longitudeValue?.trim()) return undefined;
+  const latitude = Number(latitudeValue);
+  const longitude = Number(longitudeValue);
   const timezone = context.req.query('timezone') ?? 'auto';
   const units = context.req.query('units') ?? 'metric';
 
@@ -80,9 +83,15 @@ function weatherInput(context: { req: { query: (name: string) => string | undefi
   return { latitude, longitude, timezone, units } as const;
 }
 
-function weatherCacheKeys(url: string) {
+function weatherCacheKeys(url: string, input: ReturnType<typeof weatherInput>) {
+  if (!input) throw new Error('Weather cache keys require valid weather input');
   const freshUrl = new URL(url);
-  freshUrl.searchParams.delete('__atmos_cache_tier');
+  freshUrl.search = new URLSearchParams({
+    lat: String(input.latitude),
+    lon: String(input.longitude),
+    timezone: input.timezone,
+    units: input.units,
+  }).toString();
   const staleUrl = new URL(freshUrl);
   staleUrl.searchParams.set('__atmos_cache_tier', 'stale');
   return {
@@ -200,7 +209,7 @@ export function createApp(
       );
     }
 
-    const cacheKeys = weatherCacheKeys(context.req.url);
+    const cacheKeys = weatherCacheKeys(context.req.url, input);
     const weatherCache =
       cache ??
       (typeof caches === 'undefined'
@@ -308,10 +317,15 @@ export function createApp(
       return gatewayError(context, 'API_UNAVAILABLE', 'API is temporarily unavailable.', 503);
     }
 
-    const target = new URL(
-      context.req.path.slice(1),
-      functionUrl.endsWith('/') ? functionUrl : `${functionUrl}/`,
-    );
+    let target: URL;
+    try {
+      target = new URL(
+        context.req.path.slice(1),
+        functionUrl.endsWith('/') ? functionUrl : `${functionUrl}/`,
+      );
+    } catch {
+      return gatewayError(context, 'API_UNAVAILABLE', 'API is temporarily unavailable.', 503);
+    }
     target.search = new URL(context.req.url).search;
     const request = new Request(target, context.req.raw);
     for (const header of [...request.headers.keys()]) {
@@ -322,8 +336,10 @@ export function createApp(
     const providerStartedAt = performance.now();
     context.set('analyticsProvider', 'supabase');
     try {
-      const response = await fetch(request);
+      const response = await fetch(new Request(request, { signal: AbortSignal.timeout(5_000) }));
       return new Response(response.body, response);
+    } catch {
+      return gatewayError(context, 'API_UNAVAILABLE', 'API is temporarily unavailable.', 503);
     } finally {
       context.set('providerDurationMs', performance.now() - providerStartedAt);
     }

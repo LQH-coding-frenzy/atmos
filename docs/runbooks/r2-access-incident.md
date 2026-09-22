@@ -2,7 +2,7 @@
 
 ## Summary
 
-Use this runbook for suspected unauthorized access, public exposure, or credential compromise after the private backup bucket exists. R2 is currently disabled for Atmos with provider error `10042`.
+Use this runbook for suspected unauthorized access, public exposure, or credential compromise involving the retained private `atmos-production-backups` bucket.
 
 ## User impact
 
@@ -10,7 +10,7 @@ Future encrypted backups or exports may be exposed, deleted, or unavailable; the
 
 ## Detection
 
-After activation use R2 audit/access evidence, unexpected object/bucket policy changes, credential alerts, or manifest mismatches. Before activation, any Atmos R2 resource indicates drift.
+Use R2 audit/access evidence, unexpected object/bucket policy changes, credential alerts, or manifest mismatches.
 
 ## Relevant dashboards/logs
 

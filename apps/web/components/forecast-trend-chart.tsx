@@ -1,6 +1,6 @@
 'use client';
 
-import type { Dashboard } from '@atmos/contracts';
+import type { Dashboard, UnitSystem } from '@atmos/contracts';
 import { LineChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent } from 'echarts/components';
 import * as echarts from 'echarts/core';
@@ -13,16 +13,17 @@ echarts.use([GridComponent, LineChart, SVGRenderer, TooltipComponent]);
 type ForecastTrendChartProps = {
   daily: Dashboard['daily'];
   metric: ForecastTrendMetric;
+  units: UnitSystem;
 };
 
-export function ForecastTrendChart({ daily, metric }: ForecastTrendChartProps) {
+export function ForecastTrendChart({ daily, metric, units }: ForecastTrendChartProps) {
   const chartElement = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const element = chartElement.current;
     if (!element) return;
 
-    const trend = createForecastTrend(daily, metric);
+    const trend = createForecastTrend(daily, metric, units);
     const chart = echarts.init(element, undefined, { renderer: 'svg' });
     chart.setOption({
       animation: false,
@@ -63,14 +64,14 @@ export function ForecastTrendChart({ daily, metric }: ForecastTrendChartProps) {
       observer.disconnect();
       chart.dispose();
     };
-  }, [daily, metric]);
+  }, [daily, metric, units]);
 
   return (
     <div
       className="forecast-trend-chart"
       ref={chartElement}
       role="img"
-      aria-label={`${metric} forecast chart`}
+      aria-label={`${metric} forecast chart in ${units} units`}
     />
   );
 }

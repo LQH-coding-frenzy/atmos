@@ -117,7 +117,7 @@ export class OpenMeteoUsageGuard {
 type OpenMeteoResponse = {
   timezone: string;
   current: {
-    time: string;
+    time: number;
     temperature_2m: number;
     apparent_temperature: number;
     relative_humidity_2m: number;
@@ -126,13 +126,13 @@ type OpenMeteoResponse = {
     weather_code: number;
   };
   hourly: {
-    time: string[];
+    time: number[];
     temperature_2m: number[];
     precipitation_probability: number[];
     weather_code: number[];
   };
   daily: {
-    time: string[];
+    time: number[];
     temperature_2m_max: number[];
     temperature_2m_min: number[];
     precipitation_probability_max: number[];
@@ -149,8 +149,61 @@ function conditionFromCode(code: number): WeatherCondition {
   return 'rain';
 }
 
-function toIso(time: string): string {
-  return new Date(`${time}Z`).toISOString();
+function toIso(time: number): string {
+  return new Date(time * 1_000).toISOString();
+}
+
+function localDate(time: number, timezone: string): string {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(time * 1_000));
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${byType.year}-${byType.month}-${byType.day}`;
+}
+
+function isNumberArray(value: unknown): value is number[] {
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === 'number' && Number.isFinite(item))
+  );
+}
+
+function isOpenMeteoResponse(value: unknown): value is OpenMeteoResponse {
+  if (!value || typeof value !== 'object') return false;
+  const data = value as Partial<OpenMeteoResponse>;
+  const current = data.current;
+  const hourly = data.hourly;
+  const daily = data.daily;
+  return (
+    typeof data.timezone === 'string' &&
+    typeof current?.time === 'number' &&
+    [
+      current.temperature_2m,
+      current.apparent_temperature,
+      current.relative_humidity_2m,
+      current.surface_pressure,
+      current.wind_speed_10m,
+      current.weather_code,
+    ].every((item) => typeof item === 'number' && Number.isFinite(item)) &&
+    isNumberArray(hourly?.time) &&
+    isNumberArray(hourly.temperature_2m) &&
+    isNumberArray(hourly.precipitation_probability) &&
+    isNumberArray(hourly.weather_code) &&
+    hourly.time.length === hourly.temperature_2m.length &&
+    hourly.time.length === hourly.precipitation_probability.length &&
+    hourly.time.length === hourly.weather_code.length &&
+    isNumberArray(daily?.time) &&
+    isNumberArray(daily.temperature_2m_max) &&
+    isNumberArray(daily.temperature_2m_min) &&
+    isNumberArray(daily.precipitation_probability_max) &&
+    isNumberArray(daily.weather_code) &&
+    daily.time.length === daily.temperature_2m_max.length &&
+    daily.time.length === daily.temperature_2m_min.length &&
+    daily.time.length === daily.precipitation_probability_max.length &&
+    daily.time.length === daily.weather_code.length
+  );
 }
 
 export class OpenMeteoProvider implements WeatherProvider {
@@ -165,6 +218,7 @@ export class OpenMeteoProvider implements WeatherProvider {
     url.searchParams.set('latitude', String(input.latitude));
     url.searchParams.set('longitude', String(input.longitude));
     url.searchParams.set('timezone', input.timezone);
+    url.searchParams.set('timeformat', 'unixtime');
     url.searchParams.set(
       'current',
       'temperature_2m,apparent_temperature,relative_humidity_2m,surface_pressure,wind_speed_10m,weather_code',
@@ -188,7 +242,10 @@ export class OpenMeteoProvider implements WeatherProvider {
       throw new Error(`Open-Meteo request failed with ${response.status}`);
     }
 
-    const data = (await response.json()) as OpenMeteoResponse;
+    const data: unknown = await response.json();
+    if (!isOpenMeteoResponse(data)) throw new Error('Open-Meteo response has an invalid shape');
+    const firstForecastHour = data.hourly.time.findIndex((time) => time >= data.current.time);
+    if (firstForecastHour < 0) throw new Error('Open-Meteo response has no future hourly forecast');
     const locationName = `${input.latitude.toFixed(2)}, ${input.longitude.toFixed(2)}`;
     const dashboard = {
       location: {
@@ -208,18 +265,23 @@ export class OpenMeteoProvider implements WeatherProvider {
         pressureHpa: data.current.surface_pressure,
         condition: conditionFromCode(data.current.weather_code),
       },
-      hourly: data.hourly.time.slice(0, 12).map((time, index) => ({
-        time: toIso(time),
-        temperatureC: data.hourly.temperature_2m[index] ?? 0,
-        precipitationProbability: data.hourly.precipitation_probability[index] ?? 0,
-        condition: conditionFromCode(data.hourly.weather_code[index] ?? 0),
-      })),
-      daily: data.daily.time.map((date, index) => ({
-        date,
+      hourly: data.hourly.time
+        .slice(firstForecastHour, firstForecastHour + 12)
+        .map((time, index) => {
+          const sourceIndex = firstForecastHour + index;
+          return {
+            time: toIso(time),
+            temperatureC: data.hourly.temperature_2m[sourceIndex],
+            precipitationProbability: data.hourly.precipitation_probability[sourceIndex],
+            condition: conditionFromCode(data.hourly.weather_code[sourceIndex]!),
+          };
+        }),
+      daily: data.daily.time.map((time, index) => ({
+        date: localDate(time, data.timezone),
         highC: data.daily.temperature_2m_max[index] ?? 0,
         lowC: data.daily.temperature_2m_min[index] ?? 0,
         precipitationProbability: data.daily.precipitation_probability_max[index] ?? 0,
-        condition: conditionFromCode(data.daily.weather_code[index] ?? 0),
+        condition: conditionFromCode(data.daily.weather_code[index]!),
       })),
       meta: {
         provider: 'open-meteo',

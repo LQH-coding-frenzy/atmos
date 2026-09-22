@@ -28,6 +28,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Format check
         run: pnpm format:check
+      - name: Terraform format check
+        run: terraform fmt -check -recursive infra/terraform
       - name: Lint
         run: pnpm lint
       - name: Typecheck

@@ -2,7 +2,7 @@
 
 ## Summary
 
-Use this runbook only with a verified encrypted backup and an approved isolated restore target. Atmos currently has neither a production backup pipeline nor restore automation.
+Use this runbook only with the verified encrypted archive and an approved isolated restore target. Atmos retains one verified ephemeral restore drill, not recurring restore automation.
 
 ## User impact
 
@@ -14,7 +14,7 @@ Invoke only for confirmed recovery need or the planned GAME-006 drill. A failed 
 
 ## Relevant dashboards/logs
 
-After activation use backup manifest/checksum evidence, restore-job logs, migration inventory, database tests, and RPO/RTO records. No current restore artifact is authoritative.
+Use `docs/evidence/restore-001/2026-09-19.md`, backup manifest/checksum evidence, restore-job logs, migration inventory, database tests, and RPO/RTO records.
 
 ## Immediate mitigation
 

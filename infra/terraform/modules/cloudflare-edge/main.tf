@@ -12,4 +12,8 @@ resource "cloudflare_workers_custom_domain" "api" {
   zone_id    = var.zone_id
   hostname   = var.hostname
   service    = var.service
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }

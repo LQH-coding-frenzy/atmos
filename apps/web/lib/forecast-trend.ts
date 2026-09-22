@@ -1,4 +1,4 @@
-import type { Dashboard } from '@atmos/contracts';
+import type { Dashboard, UnitSystem } from '@atmos/contracts';
 
 export const forecastTrendMetrics = ['temperature', 'rain-chance'] as const;
 export type ForecastTrendMetric = (typeof forecastTrendMetrics)[number];
@@ -6,6 +6,7 @@ export type ForecastTrendMetric = (typeof forecastTrendMetrics)[number];
 export function createForecastTrend(
   daily: Dashboard['daily'],
   metric: ForecastTrendMetric,
+  units: UnitSystem,
 ): { labels: string[]; values: number[]; unit: string; label: string } {
   return {
     labels: daily.map((day) =>
@@ -14,9 +15,11 @@ export function createForecastTrend(
       ),
     ),
     values: daily.map((day) =>
-      metric === 'temperature' ? Math.round(day.highC) : day.precipitationProbability,
+      metric === 'temperature'
+        ? Math.round(units === 'imperial' ? (day.highC * 9) / 5 + 32 : day.highC)
+        : day.precipitationProbability,
     ),
-    unit: metric === 'temperature' ? 'C' : '%',
+    unit: metric === 'temperature' ? (units === 'imperial' ? 'F' : 'C') : '%',
     label: metric === 'temperature' ? 'Daily high temperature' : 'Rain chance',
   };
 }

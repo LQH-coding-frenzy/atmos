@@ -38,6 +38,10 @@ function WeatherIcon({ condition, size = 22 }: { condition: WeatherCondition; si
   return <CloudRain {...iconProps} />;
 }
 
+function conditionLabel(condition: WeatherCondition): string {
+  return condition.replace('-', ' ');
+}
+
 function temperature(value: number, units: UnitSystem): string {
   return formatTemperature(value, units).replace(' deg', '');
 }
@@ -76,6 +80,7 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
   return (
     <main className="atmos-page">
       <aside
+        id="main-navigation"
         className={navigationOpen ? 'sidebar sidebar-open' : 'sidebar'}
         aria-label="Main navigation"
       >
@@ -107,6 +112,8 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
             className="menu-button"
             onClick={() => setNavigationOpen(true)}
             aria-label="Open navigation"
+            aria-controls="main-navigation"
+            aria-expanded={navigationOpen}
           >
             <Menu size={21} />
           </button>
@@ -139,7 +146,10 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
         <section className="dashboard-grid">
           <article className="current-card panel">
             <div className="current-summary">
-              <div className="condition-mark">
+              <div
+                className="condition-mark"
+                aria-label={conditionLabel(dashboard.current.condition)}
+              >
                 <WeatherIcon condition={dashboard.current.condition} size={59} />
               </div>
               <div>
@@ -157,7 +167,11 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
             </div>
             <div className="hourly-row" aria-label="Hourly forecast">
               {dashboard.hourly.map((hour) => (
-                <div className="hourly-item" key={hour.time}>
+                <div
+                  className="hourly-item"
+                  key={hour.time}
+                  aria-label={`${formatHour(hour.time, dashboard.location.timezone)}, ${conditionLabel(hour.condition)}, ${temperature(hour.temperatureC, units)} degrees`}
+                >
                   <span>{formatHour(hour.time, dashboard.location.timezone)}</span>
                   <WeatherIcon condition={hour.condition} size={18} />
                   <strong>{temperature(hour.temperatureC, units)} deg</strong>
@@ -189,7 +203,7 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
               </div>
             </div>
             <div className="chart-wrap">
-              <ForecastTrendChart daily={dashboard.daily} metric={activeMetric} />
+              <ForecastTrendChart daily={dashboard.daily} metric={activeMetric} units={units} />
             </div>
           </article>
 
@@ -202,7 +216,7 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
               <Gauge size={21} />
             </div>
             <div className="forecast-list">
-              {dashboard.daily.slice(0, 4).map((day) => (
+              {dashboard.daily.map((day) => (
                 <div className="forecast-row" key={day.date}>
                   <span className="forecast-icon">
                     <WeatherIcon condition={day.condition} size={20} />
@@ -228,6 +242,11 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
               </p>
             </div>
           </aside>
+          {dashboard.meta.stale ? (
+            <p className="weather-stale" role="status">
+              Showing cached weather while Open-Meteo is unavailable.
+            </p>
+          ) : null}
         </section>
         <footer>Live weather data: Open-Meteo. Map view: MapLibre.</footer>
       </section>

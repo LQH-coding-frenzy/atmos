@@ -1,0 +1,108 @@
+name: Release Edge Runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type RELEASE_EDGE_RUNTIME to deploy the queue-free Worker and Supabase API
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-edge-runtime
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: Production
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: oxgwprvkotfvyacpqayx
+      CONFIRMATION: ${{ inputs.confirmation }}
+      WORKER_SMOKE_URL: https://atmos-gateway.rainify.workers.dev/
+    steps:
+      - name: Require protected release confirmation
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = "RELEASE_EDGE_RUNTIME"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$SUPABASE_ACCESS_TOKEN"
+      - name: Check out protected source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.14.1
+      - name: Enable Corepack and install locked dependencies
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: Build the queue-free Worker
+        run: pnpm --filter @atmos/gateway build
+      - name: Deploy and verify the versioned Supabase candidate
+        id: backend
+        run: |
+          set -euo pipefail
+          release_id="${GITHUB_SHA::12}"
+          function_name="$(pnpm release:supabase:stage)"
+          pnpm exec supabase functions deploy "$function_name" --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          function_url="https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/$function_name"
+          curl --fail --silent --show-error "$function_url/health" | jq --exit-status '.status == "ok"' >/dev/null
+          curl --fail --silent --show-error "$function_url/version" | jq --exit-status --arg release "$release_id" '.release == $release' >/dev/null
+          printf 'release_id=%s\nfunction_name=%s\nfunction_url=%s\n' "$release_id" "$function_name" "$function_url" >> "$GITHUB_OUTPUT"
+      - name: Upload and smoke a zero-percent Worker candidate
+        id: worker
+        env:
+          RELEASE_ID: ${{ steps.backend.outputs.release_id }}
+          FUNCTION_URL: ${{ steps.backend.outputs.function_url }}
+        run: |
+          set -euo pipefail
+          secrets_file="$RUNNER_TEMP/worker-secrets.env"
+          umask 077
+          printf 'SUPABASE_FUNCTION_URL=%s\n' "$FUNCTION_URL" > "$secrets_file"
+          pnpm --filter @atmos/gateway exec wrangler versions upload --env="" --tag "$RELEASE_ID" --message "Queue-free runtime $RELEASE_ID" --secrets-file "$secrets_file"
+          pnpm --filter @atmos/gateway exec wrangler versions list --env="" --json > "$RUNNER_TEMP/versions.json"
+          version_id="$(RELEASE_ID="$RELEASE_ID" node -e "const versions=require(process.argv[1]);const version=versions.find((item)=>item.annotations?.['workers/tag']===process.env.RELEASE_ID);if(!/^[0-9a-f-]{36}$/.test(version?.id??''))process.exit(1);process.stdout.write(version.id)" "$RUNNER_TEMP/versions.json")"
+          pnpm --filter @atmos/gateway exec wrangler deployments list --env="" --json > "$RUNNER_TEMP/deployments.json"
+          stable_version_id="$(node -e "const deployments=require(process.argv[1]);const current=[...deployments].sort((left,right)=>Date.parse(right.created_on)-Date.parse(left.created_on))[0];const stable=current?.versions?.find((version)=>version.percentage===100);if(!/^[0-9a-f-]{36}$/.test(stable?.version_id??''))process.exit(1);process.stdout.write(stable.version_id)" "$RUNNER_TEMP/deployments.json")"
+          pnpm --filter @atmos/gateway exec wrangler versions deploy "$stable_version_id@100" "$version_id@0" --env="" --message "Queue-free candidate $RELEASE_ID" --yes
+          sleep 10
+          node scripts/worker-rollback.mjs smoke "$WORKER_SMOKE_URL" "$RELEASE_ID" "$version_id"
+          printf 'version_id=%s\n' "$version_id" >> "$GITHUB_OUTPUT"
+      - name: Promote and verify the exact Worker candidate
+        env:
+          RELEASE_ID: ${{ steps.backend.outputs.release_id }}
+          WORKER_VERSION_ID: ${{ steps.worker.outputs.version_id }}
+        run: |
+          set -euo pipefail
+          pnpm --filter @atmos/gateway exec wrangler versions deploy "$WORKER_VERSION_ID@100" --env="" --message "Queue-free release $RELEASE_ID" --yes
+          sleep 10
+          node scripts/worker-rollback.mjs smoke "$WORKER_SMOKE_URL" "$RELEASE_ID" "$WORKER_VERSION_ID"
+      - name: Update the canonical Supabase API
+        run: |
+          set -euo pipefail
+          pnpm exec supabase functions deploy api-v1 --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          curl --fail --silent --show-error "https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/api-v1/health" | jq --exit-status '.status == "ok"' >/dev/null
+      - name: Record release summary
+        env:
+          RELEASE_ID: ${{ steps.backend.outputs.release_id }}
+          FUNCTION_NAME: ${{ steps.backend.outputs.function_name }}
+          WORKER_VERSION_ID: ${{ steps.worker.outputs.version_id }}
+        run: |
+          {
+            echo '## Edge runtime release'
+            echo
+            echo "- Release: \`$RELEASE_ID\`"
+            echo "- Supabase function: \`$FUNCTION_NAME\`"
+            echo "- Worker version: \`$WORKER_VERSION_ID\`"
+            echo '- Queue, alert-delivery, and Azure retirement resources are not touched.'
+          } >> "$GITHUB_STEP_SUMMARY"

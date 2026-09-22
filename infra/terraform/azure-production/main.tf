@@ -34,6 +34,10 @@ resource "azurerm_container_group" "backup" {
   restart_policy      = "Never"
   ip_address_type     = "None"
 
+  lifecycle {
+    prevent_destroy = true
+  }
+
   container {
     name     = "backup"
     image    = "ghcr.io/lqh-coding-frenzy/atmos-database-backup@sha256:21705d456b370ef0992d38f5ffb13aa67cb0bf0a939f51ea934a14a925b94df0"

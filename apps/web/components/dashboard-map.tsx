@@ -86,10 +86,10 @@ export function DashboardMap({ location, current }: DashboardMapProps) {
     <article
       className="map-card"
       id="map"
-      aria-label={`Interactive map centered on ${location.name}`}
+      aria-label={`Weather location marker centered on ${location.name}`}
     >
       <div className="local-map-canvas" ref={mapElement} />
-      <p className="map-caption">Interactive MapLibre view centered on the live weather location</p>
+      <p className="map-caption">Weather location marker centered on the live weather location</p>
     </article>
   );
 }

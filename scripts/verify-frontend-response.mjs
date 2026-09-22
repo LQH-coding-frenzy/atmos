@@ -17,7 +17,7 @@ export function headersFromCurlDump(value) {
   return headers;
 }
 
-export function verifyFrontendResponse(status, headers) {
+export function verifyFrontendResponse(status, headers, body) {
   if (status !== 200) throw new Error(`Frontend smoke returned HTTP ${status}.`);
 
   const exactHeaders = {
@@ -37,15 +37,26 @@ export function verifyFrontendResponse(status, headers) {
       throw new Error(`Frontend response CSP is missing ${directive}.`);
     }
   }
+
+  if (!body?.includes('Live weather data: Open-Meteo.')) {
+    throw new Error('Frontend response does not contain live weather content.');
+  }
+  if (body.includes('Weather data is temporarily unavailable.')) {
+    throw new Error('Frontend response rendered the unavailable weather state.');
+  }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    const [statusValue, headersPath] = process.argv.slice(2);
+    const [statusValue, headersPath, bodyPath] = process.argv.slice(2);
     const status = Number.parseInt(statusValue ?? '', 10);
-    if (!headersPath || !Number.isInteger(status))
-      throw new Error('Status and header file are required.');
-    verifyFrontendResponse(status, headersFromCurlDump(readFileSync(headersPath, 'utf8')));
+    if (!headersPath || !bodyPath || !Number.isInteger(status))
+      throw new Error('Status, header file, and body file are required.');
+    verifyFrontendResponse(
+      status,
+      headersFromCurlDump(readFileSync(headersPath, 'utf8')),
+      readFileSync(bodyPath, 'utf8'),
+    );
     process.stdout.write('Frontend response verification passed.\n');
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : 'Verification failed.'}\n`);

@@ -248,6 +248,28 @@ describe('gateway', () => {
     });
   });
 
+  it('sanitizes malformed and failed Supabase proxy targets', async () => {
+    const malformed = await app.request('http://localhost/api/v1/me', undefined, {
+      SUPABASE_FUNCTION_URL: 'not a URL',
+    });
+    expect(malformed.status).toBe(503);
+    await expect(malformed.json()).resolves.toMatchObject({
+      error: { code: 'API_UNAVAILABLE', request_id: expect.any(String) },
+    });
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Promise.reject(new Error('upstream details'))),
+    );
+    const failed = await app.request('http://localhost/api/v1/me', undefined, {
+      SUPABASE_FUNCTION_URL: 'https://project.supabase.co/functions/v1/api-v1',
+    });
+    expect(failed.status).toBe(503);
+    await expect(failed.json()).resolves.toMatchObject({
+      error: { code: 'API_UNAVAILABLE', request_id: expect.any(String) },
+    });
+  });
+
   it('returns normalized public weather before the Supabase proxy', async () => {
     const getDashboard = vi.fn(
       new MockWeatherProvider().getDashboard.bind(new MockWeatherProvider()),
@@ -271,7 +293,7 @@ describe('gateway', () => {
     });
   });
 
-  it('rejects invalid location input before calling the provider', async () => {
+  it('rejects invalid or blank location input before calling the provider', async () => {
     const getDashboard = vi.fn();
     const weatherApp = createApp({ getDashboard });
 
@@ -287,6 +309,12 @@ describe('gateway', () => {
         request_id: expect.any(String),
       },
     });
+    expect(getDashboard).not.toHaveBeenCalled();
+
+    const blankResponse = await weatherApp.request(
+      'http://localhost/api/v1/weather/dashboard?lat=&lon=',
+    );
+    expect(blankResponse.status).toBe(400);
     expect(getDashboard).not.toHaveBeenCalled();
   });
 
@@ -407,6 +435,25 @@ describe('gateway', () => {
     await expect(cache.put.mock.calls[1]?.[1].clone().json()).resolves.toMatchObject({
       meta: { cached: true, stale: true },
     });
+  });
+
+  it('uses one cache key for equivalent weather requests', async () => {
+    const cache = {
+      match: vi.fn(async (request: Request) => {
+        void request;
+        return undefined;
+      }),
+      put: vi.fn(async () => undefined),
+    };
+    const weatherApp = createApp(new MockWeatherProvider(), cache);
+
+    await weatherApp.request(
+      'http://localhost/api/v1/weather/dashboard?lat=52.520&lon=13.4050&timezone=Europe%2FBerlin&units=metric&nonce=one',
+    );
+
+    expect(cache.match.mock.calls[0]?.[0].url).toBe(
+      'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405&timezone=Europe%2FBerlin&units=metric',
+    );
   });
 
   it('returns live weather when cache writes fail', async () => {

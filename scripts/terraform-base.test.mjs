@@ -3,6 +3,13 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
 const versions = await readFile(new URL('../infra/terraform/versions.tf', import.meta.url), 'utf8');
+const protectedResources = await Promise.all(
+  [
+    '../infra/terraform/modules/cloudflare-r2/main.tf',
+    '../infra/terraform/modules/cloudflare-edge/main.tf',
+    '../infra/terraform/azure-production/main.tf',
+  ].map((path) => readFile(new URL(path, import.meta.url), 'utf8')),
+);
 
 test('pins every approved Terraform provider exactly', () => {
   for (const [source, version] of [
@@ -22,4 +29,10 @@ test('pins every approved Terraform provider exactly', () => {
 test('does not configure providers, state, or resources in the shared base', () => {
   assert.doesNotMatch(versions, /^(provider|resource|data|module|cloud)\s+"/m);
   assert.doesNotMatch(versions, /token|secret|client_secret/i);
+});
+
+test('protects retained recovery resources from Terraform destruction', () => {
+  for (const configuration of protectedResources) {
+    assert.match(configuration, /lifecycle\s*\{\s*prevent_destroy\s*=\s*true\s*\}/s);
+  }
 });

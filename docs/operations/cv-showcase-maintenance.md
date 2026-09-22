@@ -14,7 +14,8 @@ weather journey backed by credible DevSecOps evidence, not continuous production
 | GitHub Actions and branch protection                         | keep active    | verifies build, browser, database, security, SBOM, and supply-chain controls            |
 | Terraform and HCP Terraform configuration                    | keep active    | documents reproducible infrastructure and provider boundaries                           |
 | GHCR backup image, R2 archive, and restore tooling           | keep on demand | supports one verified backup and ephemeral restore demonstration                        |
-| Staging Worker and release controls                          | keep on demand | preserves safe release and rollback evidence without routine exercise                   |
+| Staging Worker                                               | not maintained | dependency health is intentionally unavailable; do not treat it as a release lane       |
+| Production release controls                                  | keep on demand | protected Vercel and Edge Runtime workflows preserve candidate and rollback evidence    |
 | Cloudflare Queues and alert delivery runtime                 | retired        | removed; no active CV user journey publishes notifications                              |
 | Azure Container Apps environment and Log Analytics workspace | retired        | removed; backup evidence uses a one-shot Container Instance, not an Apps environment    |
 
@@ -41,7 +42,7 @@ Provider-side retirement completed under the owner-approved CVRET-001 plan. See
 
 1. Keep the public dashboard truthful: never replace a failed live request with mock data.
 2. Remove or implement every exposed control. Do not leave a visible placeholder feature.
-3. Use protected `main` checks and the Vercel production workflow for production promotion.
+3. Use protected `main` checks, `Vercel production release`, and `Release Edge Runtime` for production promotion.
 4. Update this document and relevant evidence when the active architecture changes.
 
 ## Deferred Production Work
