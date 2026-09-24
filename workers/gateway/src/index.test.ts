@@ -293,6 +293,66 @@ describe('gateway', () => {
     });
   });
 
+  it('serves bounded cached location-search results', async () => {
+    const searchLocations = vi.fn(async () => [
+      {
+        id: '2950159',
+        name: 'Berlin',
+        country: 'Germany',
+        latitude: 52.52437,
+        longitude: 13.41053,
+        timezone: 'Europe/Berlin',
+      },
+    ]);
+    const cache = {
+      match: vi.fn(async (request: Request) => {
+        void request;
+        return undefined;
+      }),
+      put: vi.fn(async () => undefined),
+    };
+    const searchApp = createApp(
+      {
+        getDashboard: new MockWeatherProvider().getDashboard.bind(new MockWeatherProvider()),
+        searchLocations,
+      },
+      cache,
+    );
+
+    const response = await searchApp.request(
+      'http://localhost/api/v1/locations/search?q=Berlin&ignored=value',
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      results: [
+        {
+          id: '2950159',
+          name: 'Berlin',
+          country: 'Germany',
+          latitude: 52.52437,
+          longitude: 13.41053,
+          timezone: 'Europe/Berlin',
+        },
+      ],
+    });
+    expect(searchLocations).toHaveBeenCalledWith('Berlin');
+    expect(cache.match.mock.calls[0]?.[0].url).toBe(
+      'http://localhost/api/v1/locations/search?q=berlin',
+    );
+  });
+
+  it('rejects invalid location searches before calling a provider', async () => {
+    const searchLocations = vi.fn();
+    const searchApp = createApp({
+      getDashboard: new MockWeatherProvider().getDashboard.bind(new MockWeatherProvider()),
+      searchLocations,
+    });
+
+    const response = await searchApp.request('http://localhost/api/v1/locations/search?q=%20');
+    expect(response.status).toBe(400);
+    expect(searchLocations).not.toHaveBeenCalled();
+  });
+
   it('rejects invalid or blank location input before calling the provider', async () => {
     const getDashboard = vi.fn();
     const weatherApp = createApp({ getDashboard });

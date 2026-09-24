@@ -155,6 +155,62 @@ button {
   align-items: center;
   gap: 10px;
 }
+.location-search {
+  position: relative;
+}
+.location-search form {
+  display: flex;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #2a2d35;
+}
+.location-search input {
+  width: 150px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  padding: 8px 12px;
+}
+.location-search button {
+  display: grid;
+  width: 36px;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+.location-search ul {
+  position: absolute;
+  z-index: 8;
+  width: 100%;
+  min-width: 220px;
+  margin: 6px 0 0;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #292c34;
+  list-style: none;
+}
+.location-search li button {
+  display: grid;
+  width: 100%;
+  justify-items: start;
+  gap: 2px;
+  padding: 9px;
+  border-radius: 9px;
+}
+.location-search li button:hover,
+.location-search li button:focus-visible {
+  background: #454a55;
+  color: var(--accent);
+}
+.location-search li span,
+.location-search > p {
+  color: var(--muted);
+  font-size: 12px;
+}
 .unit-switch {
   display: flex;
   padding: 3px;

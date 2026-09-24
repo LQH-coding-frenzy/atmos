@@ -12,12 +12,59 @@ function gatewayOrigin(): string {
   return process.env.ATMOS_GATEWAY_URL ?? productionGatewayOrigin;
 }
 
-async function getDashboard(): Promise<DashboardData | undefined> {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+const defaultLocation = {
+  id: 'berlin-de',
+  name: 'Berlin',
+  country: 'Germany',
+  latitude: 52.52,
+  longitude: 13.405,
+  timezone: 'Europe/Berlin',
+};
+
+function selectedLocation(searchParams: Record<string, string | string[] | undefined>) {
+  const value = (name: string) => {
+    const parameter = searchParams[name];
+    return Array.isArray(parameter) ? parameter[0] : parameter;
+  };
+  const latitude = Number(value('lat'));
+  const longitude = Number(value('lon'));
+  const timezone = value('timezone');
+  const name = value('name')?.trim();
+  const country = value('country')?.trim();
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180 ||
+    !timezone ||
+    !/^[A-Za-z_+-]+(?:\/[A-Za-z_+-]+)*$/.test(timezone) ||
+    !name ||
+    name.length > 80 ||
+    !country ||
+    country.length > 80
+  ) {
+    return defaultLocation;
+  }
+  return {
+    id: `${latitude}:${longitude}`,
+    name,
+    country,
+    latitude,
+    longitude,
+    timezone,
+  };
+}
+
+async function getDashboard(location = defaultLocation): Promise<DashboardData | undefined> {
   const url = new URL('/api/v1/weather/dashboard', gatewayOrigin());
   url.search = new URLSearchParams({
-    lat: '52.52',
-    lon: '13.405',
-    timezone: 'Europe/Berlin',
+    lat: String(location.latitude),
+    lon: String(location.longitude),
+    timezone: location.timezone,
     units: 'metric',
   }).toString();
 
@@ -35,11 +82,7 @@ async function getDashboard(): Promise<DashboardData | undefined> {
 
       return {
         ...dashboard,
-        location: {
-          ...dashboard.location,
-          name: 'Berlin',
-          country: 'Germany',
-        },
+        location,
       };
     } catch {
       // One bounded retry avoids showing an error for a transient edge request failure.
@@ -49,8 +92,9 @@ async function getDashboard(): Promise<DashboardData | undefined> {
   return undefined;
 }
 
-export default async function Home() {
-  const dashboard = await getDashboard();
+export default async function Home({ searchParams }: { searchParams: SearchParams }) {
+  const location = selectedLocation(await searchParams);
+  const dashboard = await getDashboard(location);
 
   if (!dashboard) {
     return (
@@ -66,5 +110,5 @@ export default async function Home() {
     );
   }
 
-  return <Dashboard initialDashboard={dashboard} />;
+  return <Dashboard initialDashboard={dashboard} gatewayOrigin={gatewayOrigin()} />;
 }

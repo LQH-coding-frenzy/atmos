@@ -71,6 +71,37 @@ describe('weather providers', () => {
     expect(dashboard.daily[0]?.highC).toBe(23);
   });
 
+  it('normalizes bounded Open-Meteo geocoding results', async () => {
+    const provider = new OpenMeteoProvider(
+      async () =>
+        new Response(
+          JSON.stringify({
+            results: [
+              {
+                id: 2950159,
+                name: 'Berlin',
+                latitude: 52.52437,
+                longitude: 13.41053,
+                timezone: 'Europe/Berlin',
+                country: 'Germany',
+              },
+            ],
+          }),
+        ),
+    );
+
+    await expect(provider.searchLocations('Berlin')).resolves.toEqual([
+      {
+        id: '2950159',
+        name: 'Berlin',
+        country: 'Germany',
+        latitude: 52.52437,
+        longitude: 13.41053,
+        timezone: 'Europe/Berlin',
+      },
+    ]);
+  });
+
   it('aborts an unresponsive provider after five seconds without retrying', async () => {
     vi.useFakeTimers();
     const fetcher = vi.fn(

@@ -13,6 +13,13 @@ export const locationSchema = z.object({
 });
 export type Location = z.infer<typeof locationSchema>;
 
+export const locationSearchResultSchema = locationSchema;
+export type LocationSearchResult = z.infer<typeof locationSearchResultSchema>;
+
+export interface LocationSearchProvider {
+  searchLocations(query: string): Promise<LocationSearchResult[]>;
+}
+
 export const weatherConditionSchema = z.enum([
   'clear',
   'partly-cloudy',
