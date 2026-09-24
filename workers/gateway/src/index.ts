@@ -2,7 +2,12 @@ import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { OpenMeteoProvider } from '@atmos/provider-openmeteo';
-import type { Dashboard, WeatherProvider } from '@atmos/contracts';
+import type {
+  Dashboard,
+  LocationSearchProvider,
+  LocationSearchResult,
+  WeatherProvider,
+} from '@atmos/contracts';
 import { createCorrelation } from './correlation';
 import {
   backendReleaseFromUrl,
@@ -34,7 +39,9 @@ type WeatherCache = Pick<Cache, 'match' | 'put'>;
 
 const weatherCacheTtlSeconds = 300;
 const staleWeatherCacheTtlSeconds = 3600;
+const locationSearchCacheTtlSeconds = 86400;
 const forwardedProxyHeaders = new Set(['accept', 'authorization', 'content-type']);
+const locationSearchInFlight = new Map<string, Promise<LocationSearchResult[]>>();
 const noWeatherCache: WeatherCache = {
   match: async () => undefined,
   put: async () => undefined,
@@ -100,8 +107,31 @@ function weatherCacheKeys(url: string, input: ReturnType<typeof weatherInput>) {
   };
 }
 
+function locationSearchInput(context: { req: { query: (name: string) => string | undefined } }) {
+  const query = context.req.query('q')?.trim().replace(/\s+/g, ' ');
+  if (!query || query.length < 2 || query.length > 80) return undefined;
+  return query;
+}
+
+function locationSearchCacheKey(url: string, query: string) {
+  const cacheUrl = new URL(url);
+  cacheUrl.search = new URLSearchParams({ q: query.toLocaleLowerCase('en-US') }).toString();
+  return new Request(cacheUrl, { method: 'GET' });
+}
+
+function coalescedLocationSearch(
+  query: string,
+  search: () => Promise<LocationSearchResult[]>,
+): Promise<LocationSearchResult[]> {
+  const existing = locationSearchInFlight.get(query);
+  if (existing) return existing;
+  const pending = search().finally(() => locationSearchInFlight.delete(query));
+  locationSearchInFlight.set(query, pending);
+  return pending;
+}
+
 export function createApp(
-  weatherProvider: WeatherProvider = new OpenMeteoProvider(),
+  weatherProvider: WeatherProvider & Partial<LocationSearchProvider> = new OpenMeteoProvider(),
   cache?: WeatherCache,
 ) {
   const app = new Hono<GatewayEnvironment>();
@@ -309,6 +339,86 @@ export function createApp(
       );
     }
     return response;
+  });
+
+  app.get('/api/v1/locations/search', async (context) => {
+    const query = locationSearchInput(context);
+    if (!query) {
+      return gatewayError(
+        context,
+        'INVALID_LOCATION_SEARCH',
+        'A location search query between 2 and 80 characters is required.',
+        400,
+      );
+    }
+    if (!weatherProvider.searchLocations) {
+      return gatewayError(context, 'LOCATIONS_UNAVAILABLE', 'Location search is unavailable.', 503);
+    }
+
+    const searchCache =
+      cache ??
+      (typeof caches === 'undefined'
+        ? noWeatherCache
+        : (caches as CacheStorage & { default: WeatherCache }).default);
+    const cacheKey = locationSearchCacheKey(context.req.url, query);
+    try {
+      const cached = await searchCache.match(cacheKey);
+      if (cached) {
+        context.set('analyticsProvider', 'cache');
+        const response = new Response(cached.body, cached);
+        response.headers.set('x-cache', 'HIT');
+        return response;
+      }
+    } catch {
+      // Location search remains available if a best-effort edge cache read fails.
+    }
+
+    context.set('analyticsProvider', 'open-meteo');
+    const providerStartedAt = performance.now();
+    try {
+      const locations = await coalescedLocationSearch(query, () =>
+        weatherProvider.searchLocations!(query),
+      );
+      const response = context.json({ results: locations });
+      response.headers.set(
+        'cache-control',
+        `public, max-age=${locationSearchCacheTtlSeconds}, s-maxage=${locationSearchCacheTtlSeconds}`,
+      );
+      response.headers.set('x-cache', 'MISS');
+      try {
+        await searchCache.put(
+          cacheKey,
+          Response.json(
+            { results: locations },
+            {
+              headers: {
+                'cache-control': `public, max-age=${locationSearchCacheTtlSeconds}, s-maxage=${locationSearchCacheTtlSeconds}`,
+              },
+            },
+          ),
+        );
+      } catch {
+        // Caching is an optimization, not a reason to reject a valid bounded search.
+      }
+      return response;
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          event: 'location_search_failed',
+          request_id: context.get('requestId'),
+          trace_id: context.get('traceparent').split('-')[1],
+          error_type: error instanceof Error ? error.name : 'unknown',
+        }),
+      );
+      return gatewayError(
+        context,
+        'LOCATIONS_UNAVAILABLE',
+        'Location search is temporarily unavailable.',
+        503,
+      );
+    } finally {
+      context.set('providerDurationMs', performance.now() - providerStartedAt);
+    }
   });
 
   app.all('/api/*', async (context) => {

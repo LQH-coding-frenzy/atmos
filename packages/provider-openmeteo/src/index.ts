@@ -2,11 +2,14 @@ import {
   dashboardSchema,
   type Dashboard,
   type LocationInput,
+  type LocationSearchProvider,
+  type LocationSearchResult,
   type WeatherCondition,
   type WeatherProvider,
 } from '@atmos/contracts';
 
 const openMeteoBaseUrl = 'https://api.open-meteo.com/v1/forecast';
+const openMeteoGeocodingBaseUrl = 'https://geocoding-api.open-meteo.com/v1/search';
 
 export const openMeteoAttribution = {
   name: 'Open-Meteo',
@@ -140,6 +143,17 @@ type OpenMeteoResponse = {
   };
 };
 
+type OpenMeteoGeocodingResponse = {
+  results?: Array<{
+    id: number;
+    name: string;
+    latitude: number;
+    longitude: number;
+    timezone: string;
+    country: string;
+  }>;
+};
+
 function conditionFromCode(code: number): WeatherCondition {
   if (code === 0) return 'clear';
   if ([1, 2].includes(code)) return 'partly-cloudy';
@@ -206,7 +220,7 @@ function isOpenMeteoResponse(value: unknown): value is OpenMeteoResponse {
   );
 }
 
-export class OpenMeteoProvider implements WeatherProvider {
+export class OpenMeteoProvider implements WeatherProvider, LocationSearchProvider {
   constructor(
     private readonly fetcher: typeof fetch = fetch.bind(globalThis),
     private readonly usageGuard = new OpenMeteoUsageGuard(),
@@ -292,6 +306,47 @@ export class OpenMeteoProvider implements WeatherProvider {
     };
 
     return dashboardSchema.parse(dashboard);
+  }
+
+  async searchLocations(query: string): Promise<LocationSearchResult[]> {
+    this.usageGuard.reserve();
+    const url = new URL(openMeteoGeocodingBaseUrl);
+    url.searchParams.set('name', query);
+    url.searchParams.set('count', '5');
+    url.searchParams.set('language', 'en');
+    url.searchParams.set('format', 'json');
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    let response: Response;
+    try {
+      response = await this.fetcher(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (!response.ok)
+      throw new Error(`Open-Meteo geocoding request failed with ${response.status}`);
+
+    const data = (await response.json()) as OpenMeteoGeocodingResponse;
+    if (!Array.isArray(data.results)) return [];
+    return data.results
+      .filter(
+        (result) =>
+          typeof result.id === 'number' &&
+          typeof result.name === 'string' &&
+          typeof result.latitude === 'number' &&
+          typeof result.longitude === 'number' &&
+          typeof result.timezone === 'string' &&
+          typeof result.country === 'string',
+      )
+      .map((result) => ({
+        id: String(result.id),
+        name: result.name,
+        country: result.country,
+        latitude: result.latitude,
+        longitude: result.longitude,
+        timezone: result.timezone,
+      }));
   }
 }
 

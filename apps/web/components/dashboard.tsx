@@ -1,6 +1,12 @@
 'use client';
 
-import type { Dashboard as DashboardData, UnitSystem, WeatherCondition } from '@atmos/contracts';
+import {
+  dashboardSchema,
+  type Dashboard as DashboardData,
+  type LocationSearchResult,
+  type UnitSystem,
+  type WeatherCondition,
+} from '@atmos/contracts';
 import { formatTemperature, formatWindSpeed } from '@atmos/domain';
 import {
   Cloud,
@@ -19,10 +25,12 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { DashboardMap } from './dashboard-map';
 import { ForecastTrendChart } from './forecast-trend-chart';
+import { LocationSearch } from './location-search';
 import type { ForecastTrendMetric } from '../lib/forecast-trend';
 
 type DashboardProps = {
   initialDashboard: DashboardData;
+  gatewayOrigin: string;
 };
 
 const chartMetrics: Array<{ label: string; value: ForecastTrendMetric }> = [
@@ -83,13 +91,13 @@ function formatTimestamp(value: string, timezone: string): string {
   }).format(new Date(value));
 }
 
-export function Dashboard({ initialDashboard }: DashboardProps) {
+export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
   const [units, setUnits] = useState<UnitSystem>('metric');
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [activeMetric, setActiveMetric] = useState<ForecastTrendMetric>('temperature');
   const menuButton = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
-  const dashboard = initialDashboard;
+  const [dashboard, setDashboard] = useState(initialDashboard);
   const currentTemperature = temperature(dashboard.current.temperatureC, units);
 
   function closeNavigation() {
@@ -106,6 +114,33 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [navigationOpen]);
+
+  async function selectLocation(location: LocationSearchResult) {
+    const url = new URL('/api/v1/weather/dashboard', gatewayOrigin);
+    url.search = new URLSearchParams({
+      lat: String(location.latitude),
+      lon: String(location.longitude),
+      timezone: location.timezone,
+      units: 'metric',
+    }).toString();
+    try {
+      const response = await fetch(url);
+      const parsed = dashboardSchema.safeParse(await response.json());
+      if (!response.ok || !parsed.success) throw new Error('Weather request failed');
+      setDashboard({ ...parsed.data, location });
+      const locationUrl = new URL(window.location.href);
+      locationUrl.search = new URLSearchParams({
+        lat: String(location.latitude),
+        lon: String(location.longitude),
+        timezone: location.timezone,
+        name: location.name,
+        country: location.country,
+      }).toString();
+      window.history.pushState({}, '', locationUrl);
+    } catch {
+      // The existing dashboard remains visible when a selected-location request fails.
+    }
+  }
 
   return (
     <main className="atmos-page">
@@ -156,6 +191,7 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
             </h1>
           </div>
           <div className="topbar-actions">
+            <LocationSearch gatewayOrigin={gatewayOrigin} onSelect={selectLocation} />
             <div className="unit-switch" aria-label="Temperature unit">
               <button
                 className={units === 'metric' ? 'active' : ''}
