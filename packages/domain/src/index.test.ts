@@ -4,6 +4,7 @@ import {
   alertThresholdMetrics,
   formatTemperature,
   formatWindSpeed,
+  planActivity,
   plannerActivityKinds,
   plannerDimensions,
   type AlertRule,
@@ -22,6 +23,26 @@ describe('weather formatting', () => {
 });
 
 describe('planner and alert models', () => {
+  it('ranks low-rain comfortable windows ahead of severe weather', () => {
+    const plan = planActivity('running', [
+      {
+        time: '2026-09-01T09:00:00.000Z',
+        temperatureC: 18,
+        precipitationProbability: 5,
+        condition: 'partly-cloudy',
+      },
+      {
+        time: '2026-09-01T10:00:00.000Z',
+        temperatureC: 14,
+        precipitationProbability: 90,
+        condition: 'thunderstorm',
+      },
+    ]);
+
+    expect(plan.score).toBeGreaterThan(plan.rankedWindows[1]?.score ?? 0);
+    expect(plan.rankedWindows[0]?.startsAt).toBe('2026-09-01T09:00:00.000Z');
+  });
+
   it('covers every planned activity and scoring dimension', () => {
     expect(plannerActivityKinds).toEqual([
       'running',

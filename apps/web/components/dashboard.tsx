@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { DashboardMap } from './dashboard-map';
+import { ActivityPlanner } from './activity-planner';
 import { ForecastTrendChart } from './forecast-trend-chart';
 import { LocationSearch } from './location-search';
 import type { ForecastTrendMetric } from '../lib/forecast-trend';
@@ -303,6 +304,8 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
               ))}
             </div>
           </article>
+
+          <ActivityPlanner hourly={dashboard.hourly} location={dashboard.location} />
 
           <aside className="attribution-card">
             <Droplets size={25} />
