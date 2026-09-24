@@ -75,8 +75,15 @@ jobs:
           pnpm --filter @atmos/gateway exec wrangler deployments list --env="" --json > "$RUNNER_TEMP/deployments.json"
           stable_version_id="$(node -e "const deployments=require(process.argv[1]);const current=[...deployments].sort((left,right)=>Date.parse(right.created_on)-Date.parse(left.created_on))[0];const stable=current?.versions?.find((version)=>version.percentage===100);if(!/^[0-9a-f-]{36}$/.test(stable?.version_id??''))process.exit(1);process.stdout.write(stable.version_id)" "$RUNNER_TEMP/deployments.json")"
           pnpm --filter @atmos/gateway exec wrangler versions deploy "$stable_version_id@100" "$version_id@0" --env="" --message "Queue-free candidate $RELEASE_ID" --yes
-          sleep 10
-          node scripts/worker-rollback.mjs smoke "$WORKER_SMOKE_URL" "$RELEASE_ID" "$version_id"
+          for attempt in {1..6}; do
+            if node scripts/worker-rollback.mjs smoke "$WORKER_SMOKE_URL" "$RELEASE_ID" "$version_id"; then
+              break
+            fi
+            if [ "$attempt" = "6" ]; then
+              exit 1
+            fi
+            sleep 10
+          done
           printf 'version_id=%s\n' "$version_id" >> "$GITHUB_OUTPUT"
       - name: Update and verify the canonical Supabase API before traffic promotion
         run: |
@@ -90,8 +97,15 @@ jobs:
         run: |
           set -euo pipefail
           pnpm --filter @atmos/gateway exec wrangler versions deploy "$WORKER_VERSION_ID@100" --env="" --message "Queue-free release $RELEASE_ID" --yes
-          sleep 10
-          node scripts/worker-rollback.mjs smoke "$WORKER_SMOKE_URL" "$RELEASE_ID" "$WORKER_VERSION_ID"
+          for attempt in {1..6}; do
+            if node scripts/worker-rollback.mjs smoke "$WORKER_SMOKE_URL" "$RELEASE_ID" "$WORKER_VERSION_ID"; then
+              break
+            fi
+            if [ "$attempt" = "6" ]; then
+              exit 1
+            fi
+            sleep 10
+          done
       - name: Record release summary
         env:
           RELEASE_ID: ${{ steps.backend.outputs.release_id }}

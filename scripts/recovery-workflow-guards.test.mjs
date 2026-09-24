@@ -30,4 +30,5 @@ test('verifies canonical API before Worker traffic promotion', () => {
   const promote = edgeRelease.indexOf('Promote and verify the exact Worker candidate');
   assert.ok(canonical >= 0);
   assert.ok(promote > canonical);
+  assert.match(edgeRelease, /for attempt in \{1\.\.6\}; do/);
 });
