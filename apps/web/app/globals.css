@@ -420,6 +420,42 @@ button {
   min-height: 340px;
   padding: 25px;
 }
+.planner-card {
+  min-height: 280px;
+  padding: 25px;
+}
+.planner-summary {
+  margin: 18px 0 12px;
+  color: var(--muted);
+}
+.planner-summary strong,
+.planner-windows strong {
+  color: var(--ink);
+}
+.planner-windows {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.planner-windows li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  padding: 10px;
+  border-radius: 12px;
+  background: #25272e;
+}
+.planner-windows span {
+  color: var(--accent);
+}
+.planner-windows p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
 .card-heading {
   display: flex;
   align-items: flex-start;
