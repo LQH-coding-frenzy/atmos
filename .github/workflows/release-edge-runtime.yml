@@ -78,6 +78,11 @@ jobs:
           sleep 10
           node scripts/worker-rollback.mjs smoke "$WORKER_SMOKE_URL" "$RELEASE_ID" "$version_id"
           printf 'version_id=%s\n' "$version_id" >> "$GITHUB_OUTPUT"
+      - name: Update and verify the canonical Supabase API before traffic promotion
+        run: |
+          set -euo pipefail
+          pnpm exec supabase functions deploy api-v1 --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          curl --fail --silent --show-error "https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/api-v1/health" | jq --exit-status '.status == "ok"' >/dev/null
       - name: Promote and verify the exact Worker candidate
         env:
           RELEASE_ID: ${{ steps.backend.outputs.release_id }}
@@ -87,11 +92,6 @@ jobs:
           pnpm --filter @atmos/gateway exec wrangler versions deploy "$WORKER_VERSION_ID@100" --env="" --message "Queue-free release $RELEASE_ID" --yes
           sleep 10
           node scripts/worker-rollback.mjs smoke "$WORKER_SMOKE_URL" "$RELEASE_ID" "$WORKER_VERSION_ID"
-      - name: Update the canonical Supabase API
-        run: |
-          set -euo pipefail
-          pnpm exec supabase functions deploy api-v1 --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
-          curl --fail --silent --show-error "https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/api-v1/health" | jq --exit-status '.status == "ok"' >/dev/null
       - name: Record release summary
         env:
           RELEASE_ID: ${{ steps.backend.outputs.release_id }}
