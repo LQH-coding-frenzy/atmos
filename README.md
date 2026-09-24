@@ -1,26 +1,56 @@
 # Atmos
 
-Atmos is a serverless-first weather intelligence platform built as a public DevSecOps portfolio project.
+A live, location-aware weather dashboard and public DevSecOps case study.
 
-## CV Showcase Scope
+**[Open the live demo](https://rainify.dpdns.org/)** ·
+**[Browse the source](https://github.com/LQH-coding-frenzy/atmos)** ·
+**[Read the remediation evidence](docs/evidence/cv-audit/2026-09-22-remediation.md)**
 
-The public demo presents live weather for Berlin through the Cloudflare gateway, including a forecast,
-trend chart, location marker, and metric/imperial units. The repository also demonstrates protected
-CI, IaC, signed container supply chain, and one verified encrypted backup and ephemeral restore drill.
+## What You Can Do
 
-Recurring backups, automated retention, continuous disaster recovery, and user-account features are
-deliberately out of scope. See [CV showcase maintenance](docs/operations/cv-showcase-maintenance.md)
-for the active components and lightweight maintenance routine.
+- Search for a city, select a result, and share the resulting URL.
+- View current conditions, the next 12 hours, and a seven-day forecast from Open-Meteo.
+- Switch temperature and wind units between metric and imperial.
+- Read a chart with an accessible textual equivalent and explicit data freshness.
+- Use the dashboard on desktop or mobile without mock-data fallbacks.
 
-## Architecture
+Berlin remains the reliable default. The public journey intentionally avoids authentication, saved
+locations, alerts, queues, and notification features until there is a concrete product need.
 
-The implementation plan is the source of truth: [Atmos master plan](docs/architecture/atmos-devsecops-master-plan.md).
+## Architecture At A Glance
 
-- Next.js on Vercel for the frontend.
-- Cloudflare Workers and Hono for the thin edge gateway and public cache.
-- Supabase Postgres, Auth, Edge Functions, and RLS for durable user data and authenticated APIs.
-- Cloudflare R2 for one-time encrypted backup evidence.
-- Azure Container Instances for one-time backup and restore demonstrations.
+```text
+Browser
+  -> Next.js dashboard on Vercel
+  -> Cloudflare Worker + Hono gateway
+  -> Open-Meteo forecast and geocoding APIs
+
+Protected backend boundary
+  -> Supabase Edge Functions, Postgres, Auth, and RLS
+
+One-time recovery evidence
+  -> Encrypted Cloudflare R2 archive + Azure Container Instance restore drill
+```
+
+The Worker validates bounded public inputs, canonicalizes cache keys, coalesces concurrent location
+searches per isolate, and returns typed sanitized errors. A protected release path uses a zero-percent
+Worker candidate, exact smoke checks, and a content-gated Vercel promotion.
+
+## Engineering Decisions
+
+- **Truthful failure mode:** unavailable live data is shown as unavailable, never substituted with mock weather.
+- **Small public surface:** Open-Meteo is accessed only through typed provider and gateway boundaries.
+- **Accessible by default:** keyboard-operable mobile navigation, textual chart data, explicit units, and responsive layouts are part of the tested journey.
+- **Controlled operations:** protected `main`, database/RLS checks, security scanning, signed supply-chain evidence, and scheduled live-content smoke checks protect the showcase.
+- **Honest operating profile:** recovery evidence is retained, while recurring backup/restore, paging, and paid resources remain intentionally deferred.
+
+## Evidence
+
+- [Live production audit remediation](docs/evidence/cv-audit/2026-09-22-remediation.md)
+- [CV runtime retirement](docs/evidence/cvret-001/2026-09-22.md)
+- [Verified ephemeral restore drill](docs/evidence/restore-001/2026-09-19.md)
+- [CV showcase maintenance boundary](docs/operations/cv-showcase-maintenance.md)
+- [Architecture and original implementation plan](docs/architecture/atmos-devsecops-master-plan.md)
 
 ## Local development
 
@@ -53,3 +83,9 @@ Live weather data is supplied by [Open-Meteo](https://open-meteo.com/) under [CC
 ## Security
 
 Do not commit secrets, Terraform state, database dumps, or generated backup archives. Report vulnerabilities according to [SECURITY.md](SECURITY.md).
+
+## Deliberately Deferred
+
+Atmos is a maintained portfolio showcase, not a continuously operated commercial weather service. Do
+not add paid providers, user accounts, notifications, recurring backup/restore operations, AI advice,
+AQI/history products, or multi-provider failover without a defined user need and explicit owner approval.
