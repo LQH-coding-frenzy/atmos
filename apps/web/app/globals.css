@@ -216,6 +216,11 @@ button {
   margin: 3px 0 0;
   color: var(--muted);
 }
+.weather-freshness {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
 .weather-stats {
   display: flex;
   gap: clamp(10px, 2vw, 28px);

@@ -18,12 +18,12 @@ type ForecastTrendChartProps = {
 
 export function ForecastTrendChart({ daily, metric, units }: ForecastTrendChartProps) {
   const chartElement = useRef<HTMLDivElement>(null);
+  const trend = createForecastTrend(daily, metric, units);
 
   useEffect(() => {
     const element = chartElement.current;
     if (!element) return;
 
-    const trend = createForecastTrend(daily, metric, units);
     const chart = echarts.init(element, undefined, { renderer: 'svg' });
     chart.setOption({
       animation: false,
@@ -67,11 +67,21 @@ export function ForecastTrendChart({ daily, metric, units }: ForecastTrendChartP
   }, [daily, metric, units]);
 
   return (
-    <div
-      className="forecast-trend-chart"
-      ref={chartElement}
-      role="img"
-      aria-label={`${metric} forecast chart in ${units} units`}
-    />
+    <>
+      <div
+        className="forecast-trend-chart"
+        ref={chartElement}
+        role="img"
+        aria-describedby="forecast-trend-description"
+        aria-label={`${trend.label} chart`}
+      />
+      <p className="sr-only" id="forecast-trend-description">
+        {trend.label}:{' '}
+        {trend.labels
+          .map((label, index) => `${label} ${trend.values[index]} ${trend.unit}`)
+          .join(', ')}
+        .
+      </p>
+    </>
   );
 }

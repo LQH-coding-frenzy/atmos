@@ -12,10 +12,11 @@ import {
   LayoutDashboard,
   Map,
   Menu,
+  Snowflake,
   Sun,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DashboardMap } from './dashboard-map';
 import { ForecastTrendChart } from './forecast-trend-chart';
 import type { ForecastTrendMetric } from '../lib/forecast-trend';
@@ -35,6 +36,7 @@ function WeatherIcon({ condition, size = 22 }: { condition: WeatherCondition; si
   if (condition === 'partly-cloudy') return <CloudSun {...iconProps} />;
   if (condition === 'cloudy') return <Cloud {...iconProps} />;
   if (condition === 'thunderstorm') return <CloudLightning {...iconProps} />;
+  if (condition === 'snow') return <Snowflake {...iconProps} />;
   return <CloudRain {...iconProps} />;
 }
 
@@ -61,21 +63,49 @@ function formatDashboardDate(value: string, timezone: string): string {
   }).format(new Date(value));
 }
 
-function formatForecastDate(value: string, timezone: string): string {
+function formatForecastDate(value: string): string {
+  const [year = 0, month = 1, day = 1] = value.split('-').map(Number);
   return new Intl.DateTimeFormat('en', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
+    timeZone: 'UTC',
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
+function formatTimestamp(value: string, timezone: string): string {
+  return new Intl.DateTimeFormat('en', {
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
     timeZone: timezone,
-  }).format(new Date(`${value}T00:00:00Z`));
+  }).format(new Date(value));
 }
 
 export function Dashboard({ initialDashboard }: DashboardProps) {
   const [units, setUnits] = useState<UnitSystem>('metric');
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [activeMetric, setActiveMetric] = useState<ForecastTrendMetric>('temperature');
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
   const dashboard = initialDashboard;
   const currentTemperature = temperature(dashboard.current.temperatureC, units);
+
+  function closeNavigation() {
+    setNavigationOpen(false);
+    requestAnimationFrame(() => menuButton.current?.focus());
+  }
+
+  useEffect(() => {
+    if (!navigationOpen) return;
+    closeButton.current?.focus();
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') closeNavigation();
+    }
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [navigationOpen]);
 
   return (
     <main className="atmos-page">
@@ -89,24 +119,25 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
         </div>
         <button
           className="close-nav"
-          onClick={() => setNavigationOpen(false)}
+          onClick={closeNavigation}
           aria-label="Close navigation"
+          ref={closeButton}
         >
           <X size={18} />
         </button>
         <nav aria-label="Main navigation">
-          <a href="#dashboard" aria-current="page">
+          <a href="#dashboard" aria-current="page" onClick={closeNavigation}>
             <LayoutDashboard size={19} />
             <span>Dashboard</span>
           </a>
-          <a href="#map">
+          <a href="#map" onClick={closeNavigation}>
             <Map size={19} />
             <span>Map</span>
           </a>
         </nav>
       </aside>
 
-      <section className="dashboard-shell" id="dashboard">
+      <section className="dashboard-shell" id="dashboard" inert={navigationOpen}>
         <header className="topbar">
           <button
             className="menu-button"
@@ -114,6 +145,7 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
             aria-label="Open navigation"
             aria-controls="main-navigation"
             aria-expanded={navigationOpen}
+            ref={menuButton}
           >
             <Menu size={21} />
           </button>
@@ -129,6 +161,7 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
                 className={units === 'metric' ? 'active' : ''}
                 onClick={() => setUnits('metric')}
                 aria-pressed={units === 'metric'}
+                aria-label="Celsius"
               >
                 C
               </button>
@@ -136,6 +169,7 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
                 className={units === 'imperial' ? 'active' : ''}
                 onClick={() => setUnits('imperial')}
                 aria-pressed={units === 'imperial'}
+                aria-label="Fahrenheit"
               >
                 F
               </button>
@@ -155,6 +189,10 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
               <div>
                 <p className="location-name">{dashboard.location.name}</p>
                 <p className="muted">{dashboard.location.country}</p>
+                <p className="weather-freshness">
+                  Observed{' '}
+                  {formatTimestamp(dashboard.current.observedAt, dashboard.location.timezone)}
+                </p>
               </div>
               <div className="weather-stats">
                 <Stat value={`${currentTemperature} deg`} label="Temperature" />
@@ -188,14 +226,13 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
                 <p className="eyebrow">Live patterns</p>
                 <h2>Overview</h2>
               </div>
-              <div className="metric-tabs" role="tablist" aria-label="Chart metric">
+              <div className="metric-tabs" role="group" aria-label="Chart metric">
                 {chartMetrics.map((metric) => (
                   <button
                     key={metric.value}
                     className={activeMetric === metric.value ? 'active' : ''}
                     onClick={() => setActiveMetric(metric.value)}
-                    role="tab"
-                    aria-selected={activeMetric === metric.value}
+                    aria-pressed={activeMetric === metric.value}
                   >
                     {metric.label}
                   </button>
@@ -225,7 +262,7 @@ export function Dashboard({ initialDashboard }: DashboardProps) {
                     <strong>{temperature(day.highC, units)} deg</strong>
                     <span> / {temperature(day.lowC, units)} deg</span>
                   </div>
-                  <time>{formatForecastDate(day.date, dashboard.location.timezone)}</time>
+                  <time>{formatForecastDate(day.date)}</time>
                 </div>
               ))}
             </div>
