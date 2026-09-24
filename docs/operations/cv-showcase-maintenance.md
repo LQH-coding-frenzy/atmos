@@ -14,6 +14,7 @@ weather journey backed by credible DevSecOps evidence, not continuous production
 | GitHub Actions and branch protection                         | keep active    | verifies build, browser, database, security, SBOM, and supply-chain controls            |
 | Terraform and HCP Terraform configuration                    | keep active    | documents reproducible infrastructure and provider boundaries                           |
 | GHCR backup image, R2 archive, and restore tooling           | keep on demand | supports one verified backup and ephemeral restore demonstration                        |
+| Backup secret bootstrap                                      | disabled       | retained evidence does not justify rotating the project-wide database password          |
 | Staging Worker                                               | not maintained | dependency health is intentionally unavailable; do not treat it as a release lane       |
 | Production release controls                                  | keep on demand | protected Vercel and Edge Runtime workflows preserve candidate and rollback evidence    |
 | Cloudflare Queues and alert delivery runtime                 | retired        | removed; no active CV user journey publishes notifications                              |

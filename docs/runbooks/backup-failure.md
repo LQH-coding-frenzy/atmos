@@ -4,6 +4,8 @@
 
 Atmos retains one encrypted R2 logical backup archive and backup Container Instance evidence. Recurring backup execution and freshness monitoring are intentionally not operated; Supabase Free managed backups must not be assumed.
 
+The historical `Bootstrap Backup Secrets` workflow is disabled. Do not re-enable it or rotate database credentials for this CV showcase without a new owner-approved backup design.
+
 ## User impact
 
 The production database continues serving, but recoverability degrades and destructive data work must stop.

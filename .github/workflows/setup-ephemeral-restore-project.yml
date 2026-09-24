@@ -2,26 +2,58 @@ name: Setup Ephemeral Restore Project
 
 on:
   workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type CREATE_EPHEMERAL_RESTORE_PROJECT to create a one-time restore target
+        required: true
+        type: string
 
 permissions:
   contents: read
+
+concurrency:
+  group: setup-ephemeral-restore-project
+  cancel-in-progress: false
 
 jobs:
   setup:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    environment: Production
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ALL_ACCESS }}
       TF_ORG_TOKEN: ${{ secrets.TF_ORG_TOKEN }}
+      CONFIRMATION: ${{ inputs.confirmation }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+      - name: Require an empty restore handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$CONFIRMATION" = "CREATE_EPHEMERAL_RESTORE_PROJECT"
+          node --input-type=module -e '
+            const headers = { Authorization: `Bearer ${process.env.TF_ORG_TOKEN}`, Accept: "application/vnd.api+json" };
+            const workspace = await fetch("https://app.terraform.io/api/v2/organizations/atmos_uit/workspaces/atmos-azure-production", { headers });
+            if (!workspace.ok) throw new Error(`workspace request failed: ${workspace.status}`);
+            const workspaceId = (await workspace.json()).data.id;
+            const variables = await fetch(`https://app.terraform.io/api/v2/workspaces/${workspaceId}/vars`, { headers });
+            if (!variables.ok) throw new Error(`variable list failed: ${variables.status}`);
+            if ((await variables.json()).data.some((item) => item.attributes.key === "restore_database_url")) throw new Error("an ephemeral restore handoff is already active");
+          '
       - name: Create temporary restore project and HCP handoff
         shell: bash
         run: |
           set -euo pipefail
+          ref=""
+          cleanup() {
+            if [ -n "$ref" ]; then
+              npx --yes supabase@2.117.0 projects delete "$ref" --yes || true
+            fi
+          }
+          trap cleanup ERR
           password="$(openssl rand -hex 32)"
           production="$(curl --fail --silent --show-error --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/oxgwprvkotfvyacpqayx")"
           org_id="$(node --input-type=module -e 'const project = JSON.parse(process.argv[1]); const id = project.organization_id; if (!id) throw new Error("production project organization ID unavailable"); console.log(id);' "$production")"
@@ -42,4 +74,5 @@ jobs:
             const response = await fetch(id ? `https://app.terraform.io/api/v2/vars/${id}` : `https://app.terraform.io/api/v2/workspaces/${workspaceId}/vars`, { method: id ? "PATCH" : "POST", headers, body: JSON.stringify({ data: { type: "vars", ...(id ? { id } : {}), attributes: { key, value: process.env.RESTORE_DATABASE_URL, category: "terraform", sensitive: true } } }) });
             if (!response.ok) throw new Error(`HCP restore URL write failed: ${response.status}`);
           '
+          trap - ERR
           echo "::notice title=Temporary Supabase restore project::${RESTORE_PROJECT_REF}"
