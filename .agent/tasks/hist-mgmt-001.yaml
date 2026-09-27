@@ -1,7 +1,7 @@
 task:
   id: HIST-MGMT-001
   title: Delete own weather history observations
-  status: IN_PROGRESS
+  status: DONE
   objective: Allow a signed-in user to permanently delete one of their own previously recorded weather observations from the history panel.
   depends_on: [EDGE-003, FEAT-LOC-UI-001, HIST-CAP-001, RLS-002, ROUTE-001, WEB-002]
   external_policy_checks:
