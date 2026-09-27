@@ -219,6 +219,8 @@ test('authenticates, saves the current place, and switches to an API-returned sa
       }
     | undefined;
   let historyAuthorization = '';
+  let deleteAuthorization = '';
+  let deletedSnapshotId = '';
   let postedObservation: Record<string, unknown> | undefined;
 
   await page.route('**/auth/v1/token?grant_type=password', async (route) => {
@@ -297,6 +299,13 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   });
   await page.route('**/api/v1/weather/history**', async (route) => {
     historyAuthorization = route.request().headers().authorization ?? '';
+    if (route.request().method() === 'DELETE') {
+      deleteAuthorization = route.request().headers().authorization ?? '';
+      deletedSnapshotId = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
+      savedObservation = undefined;
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
     if (route.request().method() === 'POST') {
       postedObservation = route.request().postDataJSON();
       const observation = postedObservation;
@@ -357,6 +366,12 @@ test('authenticates, saves the current place, and switches to an API-returned sa
     temperatureC: 20,
   });
   expect(historyAuthorization).toBe(`Bearer ${accessToken}`);
+
+  await page.getByRole('button', { name: /Delete observation from/ }).click();
+  await expect(page.locator('.weather-history-status')).toContainText('Observation deleted.');
+  await expect(page.getByRole('list', { name: 'Recorded observations' })).toHaveCount(0);
+  expect(deleteAuthorization).toBe(`Bearer ${accessToken}`);
+  expect(deletedSnapshotId).toBe('00000000-0000-4000-8000-000000000030');
 });
 
 test('shows email-confirmation guidance after account creation', async ({ page }) => {

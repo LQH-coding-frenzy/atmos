@@ -13,7 +13,7 @@ A live, location-aware weather dashboard and public DevSecOps case study.
 - Switch temperature and wind units between metric and imperial.
 - Read a chart with an accessible textual equivalent and explicit data freshness.
 - Expand an on-demand Open-Meteo/CAMS air-quality panel with U.S./European AQI and pollutant values.
-- Sign in to save locations and record current observations for a personal 7/30/90-day history.
+- Sign in to save locations, record current observations, and delete entries from a personal 7/30/90-day history.
 - Use the dashboard on desktop or mobile without mock-data fallbacks.
 
 Berlin remains the reliable default. The public weather journey works without an account; users may

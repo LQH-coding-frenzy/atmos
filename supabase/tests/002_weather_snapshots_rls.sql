@@ -1,5 +1,5 @@
 begin;
-select plan(15);
+select plan(17);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, raw_app_meta_data, raw_user_meta_data, created_at, updated_at
@@ -72,6 +72,14 @@ select throws_ok(
 select is_empty(
   $$delete from public.weather_snapshots where id = '10000000-0000-0000-0000-000000000002' returning id$$,
   'user A cannot delete user B snapshot'
+);
+select lives_ok(
+  $$delete from public.weather_snapshots where id = '10000000-0000-0000-0000-000000000001'$$,
+  'user A can delete own snapshot'
+);
+select is_empty(
+  $$select * from public.weather_snapshots where id = '10000000-0000-0000-0000-000000000001'$$,
+  'deleted own snapshot is no longer visible'
 );
 
 select * from finish();
