@@ -1,0 +1,70 @@
+task:
+  id: HIST-MGMT-001
+  title: Delete own weather history observations
+  status: IN_PROGRESS
+  objective: Allow a signed-in user to permanently delete one of their own previously recorded weather observations from the history panel.
+  depends_on: [EDGE-003, FEAT-LOC-UI-001, HIST-CAP-001, RLS-002, ROUTE-001, WEB-002]
+  external_policy_checks:
+    [none; uses the existing authenticated API, Worker proxy, and owner-scoped DELETE policy]
+  runtime_placement:
+    allowed: [supabase-edge-function, cloudflare-worker, vercel-nextjs]
+    selected: supabase-edge-function
+    reason: The existing Edge API uses a caller-scoped Supabase client; the database RLS policy enforces row ownership and the UI initiates deletion explicitly.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/hist-mgmt-001.yaml,
+        supabase/functions/api-v1/index.ts,
+        supabase/tests/002_weather_snapshots_rls.sql,
+        workers/gateway/src/index.ts,
+        workers/gateway/src/index.test.ts,
+        apps/web/components/weather-history-panel.tsx,
+        apps/web/app/globals.css,
+        tests/e2e/dashboard.spec.ts,
+        README.md,
+        docs/architecture/atmos-devsecops-master-plan.md,
+        docs/evidence/hist-mgmt-001/2026-09-27.md,
+      ]
+    exclude: [delete all, export, retention policy, schema/RLS migration, remote database mutation]
+  inputs:
+    required_config: [existing Supabase URL and publishable key]
+    required_secrets: []
+  outputs:
+    files: [supabase/functions/api-v1/index.ts, apps/web/components/weather-history-panel.tsx]
+    terraform_resources: []
+    database_changes: [none; uses the existing owner-scoped DELETE policy]
+    deployed_units: [api-v1 Edge Function, queue-free Worker, web]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until the previous Edge Function, Worker, and Vercel releases are retired
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run workers/gateway/src/index.test.ts,
+        corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts,
+        corepack pnpm typecheck,
+        corepack pnpm test:db,
+        corepack pnpm --filter @atmos/gateway build,
+        corepack pnpm --filter @atmos/web build,
+      ]
+    expected:
+      [
+        A user can delete one API-returned snapshot; unauthenticated and cross-user deletes remain denied by the existing API authorization and RLS policy.,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable, existing RLS tests]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['existing bounded api_proxy request group only; no snapshot ID or values']
+    logs: ['request IDs and sanitized errors only; no user data or credentials']
+    traces: ['existing request correlation only']
+  evidence: [docs/evidence/hist-mgmt-001/2026-09-27.md, pull request checks, protected releases]
+  rollback:
+    strategy: Revert the delete route and control; already deleted rows are not recoverable and no other rows are modified.
+  human_approval:
+    required: false
+    reason: User selected history controls; deletes are one row at a time after explicit user activation and enforced by existing RLS.

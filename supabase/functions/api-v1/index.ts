@@ -21,7 +21,12 @@ type Variables = {
 
 export const app = new Hono<{ Bindings: Bindings; Variables: Variables }>().basePath('/api-v1');
 
-function error(context: Context, code: string, message: string, status: 400 | 401 | 409 | 503) {
+function error(
+  context: Context,
+  code: string,
+  message: string,
+  status: 400 | 401 | 404 | 409 | 503,
+) {
   return context.json(
     {
       error: {
@@ -57,7 +62,7 @@ app.use(
       return origin === allowedOrigin ? origin : allowedOrigin;
     },
     allowHeaders: ['Authorization', 'Content-Type', 'Traceparent', 'X-Request-Id'],
-    allowMethods: ['GET', 'OPTIONS', 'POST'],
+    allowMethods: ['DELETE', 'GET', 'OPTIONS', 'POST'],
     maxAge: 86400,
   }),
 );
@@ -235,6 +240,30 @@ app.post('/api/v1/weather/history', async (context) => {
     return error(context, 'HISTORY_UNAVAILABLE', 'Weather history is unavailable.', 503);
   }
   return context.json({ snapshot: data }, 201);
+});
+
+app.delete('/api/v1/weather/history/:id', async (context) => {
+  context.header('cache-control', 'private, no-store');
+  const snapshotId = context.req.param('id');
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(snapshotId)
+  ) {
+    return error(context, 'INVALID_SNAPSHOT_ID', 'A valid snapshot ID is required.', 400);
+  }
+  const authenticated = await authenticatedClient(context);
+  if (!authenticated) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+
+  const { data, error: deleteError } = await authenticated.client
+    .from('weather_snapshots')
+    .delete()
+    .eq('id', snapshotId)
+    .select('id')
+    .maybeSingle();
+  if (deleteError) {
+    return error(context, 'HISTORY_UNAVAILABLE', 'Weather history is unavailable.', 503);
+  }
+  if (!data) return error(context, 'SNAPSHOT_NOT_FOUND', 'The observation was not found.', 404);
+  return context.body(null, 204);
 });
 
 app.notFound((context) =>

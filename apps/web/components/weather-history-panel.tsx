@@ -11,7 +11,7 @@ import {
 } from '@atmos/contracts';
 import { formatTemperature } from '@atmos/domain';
 import type { Session } from '@supabase/supabase-js';
-import { History } from 'lucide-react';
+import { History, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabaseBrowserClient } from '../lib/supabase-browser';
 
@@ -97,6 +97,7 @@ export function WeatherHistoryPanel({
   const [snapshots, setSnapshots] = useState<WeatherSnapshot[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -211,6 +212,32 @@ export function WeatherHistoryPanel({
     }
   }
 
+  async function deleteObservation(snapshotId: string) {
+    if (!accessToken) return;
+    setDeletingId(snapshotId);
+    setMessage('');
+    try {
+      const response = await fetch(
+        new URL(`/api/v1/weather/history/${snapshotId}`, gatewayOrigin),
+        { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+      if (response.status === 404) {
+        await refreshHistory();
+        setMessage('This observation is already gone.');
+        return;
+      }
+      if (!response.ok) throw new Error('Delete failed');
+      const loaded = await refreshHistory();
+      setMessage(
+        loaded ? 'Observation deleted.' : 'Observation deleted; history could not be refreshed.',
+      );
+    } catch {
+      setMessage('This observation could not be deleted. Please try again.');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   const alreadyRecorded = snapshots.some((snapshot) => snapshot.observed_at === current.observedAt);
   const points = historyChartPoints(snapshots, units);
   const chartDescription = snapshots
@@ -303,15 +330,28 @@ export function WeatherHistoryPanel({
                   {chartDescription}
                 </p>
                 <ol className="weather-history-observations" aria-label="Recorded observations">
-                  {snapshots.map((snapshot) => (
-                    <li key={snapshot.id}>
-                      <time dateTime={snapshot.observed_at}>
-                        {formatObservedTime(snapshot.observed_at, location.timezone)}
-                      </time>
-                      <strong>{temperature(snapshot.payload.temperature_c, units)} deg</strong>
-                      <span>{snapshot.payload.condition.replace('-', ' ')}</span>
-                    </li>
-                  ))}
+                  {snapshots.map((snapshot) => {
+                    const observedTime = formatObservedTime(
+                      snapshot.observed_at,
+                      location.timezone,
+                    );
+                    return (
+                      <li key={snapshot.id}>
+                        <time dateTime={snapshot.observed_at}>{observedTime}</time>
+                        <strong>{temperature(snapshot.payload.temperature_c, units)} deg</strong>
+                        <span>{snapshot.payload.condition.replace('-', ' ')}</span>
+                        <button
+                          type="button"
+                          className="delete-weather-observation"
+                          aria-label={`Delete observation from ${observedTime}`}
+                          disabled={loading || saving || deletingId !== null}
+                          onClick={() => void deleteObservation(snapshot.id)}
+                        >
+                          <Trash2 size={15} aria-hidden="true" />
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ol>
               </>
             ) : null}

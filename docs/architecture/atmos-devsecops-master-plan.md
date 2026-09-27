@@ -3301,6 +3301,7 @@ DONE
 | FEAT-AQI-LIVE-001 | on-demand Open-Meteo air-quality experience | CACHE-001, EDGE-004, FEAT-AQI-001, PERF-001, WEB-002, WX-003, WX-004 | feature |
 | FEAT-MAP-001 | map | WEB-002 | feature |
 | HIST-CAP-001 | authenticated user-captured weather history | FEAT-LOC-UI-001, FUNC-002, HIST-001, ROUTE-001, WEB-002 | feature |
+| HIST-MGMT-001 | delete own weather history observations | EDGE-003, FEAT-LOC-UI-001, HIST-CAP-001, RLS-002, ROUTE-001, WEB-002 | feature |
 | FEAT-PLAN-001 | deterministic planner | DOM-002, FUNC-001 | feature |
 | FEAT-CMP-001 | comparison | FEAT-PLAN-001 | feature |
 | HIST-001 | snapshot schema | DB-001 | data tables |

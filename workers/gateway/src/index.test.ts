@@ -173,6 +173,22 @@ describe('gateway', () => {
     expect(response.headers.get('access-control-allow-origin')).toBe('https://rainify.dpdns.org');
     expect(response.headers.get('access-control-allow-methods')).toContain('POST');
     expect(response.headers.get('access-control-allow-headers')).toContain('Traceparent');
+
+    const deleteResponse = await app.request(
+      'http://localhost/api/v1/weather/history/00000000-0000-4000-8000-000000000001',
+      {
+        method: 'OPTIONS',
+        headers: {
+          origin: 'https://rainify.dpdns.org',
+          'access-control-request-method': 'DELETE',
+          'access-control-request-headers': 'authorization',
+        },
+      },
+      { CORS_ORIGIN: 'https://rainify.dpdns.org' },
+    );
+
+    expect(deleteResponse.status).toBe(204);
+    expect(deleteResponse.headers.get('access-control-allow-methods')).toContain('DELETE');
   });
 
   it('does not grant cross-origin access to unconfigured origins', async () => {
