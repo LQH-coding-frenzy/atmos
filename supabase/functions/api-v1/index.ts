@@ -4,6 +4,10 @@ import { secureHeaders } from 'npm:hono@4.13.5/secure-headers';
 import { createClient } from 'npm:@supabase/supabase-js@2.114.0';
 import { createCorrelation } from '../_shared/correlation.ts';
 import { databaseDependencyIsHealthy } from '../_shared/dependency-health.ts';
+import {
+  parseWeatherHistoryQuery,
+  parseWeatherSnapshotInsert,
+} from '../_shared/weather-snapshot.ts';
 
 type Bindings = {
   CORS_ORIGIN?: string;
@@ -17,7 +21,7 @@ type Variables = {
 
 export const app = new Hono<{ Bindings: Bindings; Variables: Variables }>().basePath('/api-v1');
 
-function error(context: Context, code: string, message: string, status: 400 | 401 | 503) {
+function error(context: Context, code: string, message: string, status: 400 | 401 | 409 | 503) {
   return context.json(
     {
       error: {
@@ -161,6 +165,76 @@ app.post('/api/v1/locations', async (context) => {
   if (insertError)
     return error(context, 'LOCATIONS_UNAVAILABLE', 'Saved locations are unavailable.', 503);
   return context.json({ location: data }, 201);
+});
+
+app.get('/api/v1/weather/history', async (context) => {
+  context.header('cache-control', 'private, no-store');
+  const range = parseWeatherHistoryQuery(
+    context.req.query('lat'),
+    context.req.query('lon'),
+    context.req.query('days'),
+  );
+  if (!range) {
+    return error(
+      context,
+      'INVALID_HISTORY_RANGE',
+      'Valid coordinates and a 7, 30, or 90 day range are required.',
+      400,
+    );
+  }
+  const authenticated = await authenticatedClient(context);
+  if (!authenticated) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+
+  const since = new Date(Date.now() - range.days * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error: queryError } = await authenticated.client
+    .from('weather_snapshots')
+    .select('id, latitude, longitude, observed_at, provider, payload, created_at')
+    .eq('latitude', range.latitude)
+    .eq('longitude', range.longitude)
+    .gte('observed_at', since)
+    .order('observed_at', { ascending: false })
+    .limit(100);
+  if (queryError) {
+    return error(context, 'HISTORY_UNAVAILABLE', 'Weather history is unavailable.', 503);
+  }
+  return context.json({ snapshots: data });
+});
+
+app.post('/api/v1/weather/history', async (context) => {
+  context.header('cache-control', 'private, no-store');
+  const authenticated = await authenticatedClient(context);
+  if (!authenticated) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+
+  const snapshot = parseWeatherSnapshotInsert(
+    await context.req.json().catch(() => undefined),
+    authenticated.user.id,
+  );
+  if (!snapshot) {
+    return error(
+      context,
+      'INVALID_WEATHER_SNAPSHOT',
+      'A valid current weather observation is required.',
+      400,
+    );
+  }
+
+  const { data, error: insertError } = await authenticated.client
+    .from('weather_snapshots')
+    .insert(snapshot)
+    .select('id, latitude, longitude, observed_at, provider, payload, created_at')
+    .single();
+  if (insertError?.code === '23505') {
+    return error(
+      context,
+      'SNAPSHOT_ALREADY_RECORDED',
+      'This observation is already in your history.',
+      409,
+    );
+  }
+  if (insertError || !data) {
+    return error(context, 'HISTORY_UNAVAILABLE', 'Weather history is unavailable.', 503);
+  }
+  return context.json({ snapshot: data }, 201);
 });
 
 app.notFound((context) =>
