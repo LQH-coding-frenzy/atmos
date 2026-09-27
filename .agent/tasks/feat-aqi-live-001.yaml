@@ -1,7 +1,7 @@
 task:
   id: FEAT-AQI-LIVE-001
   title: On-demand live air-quality experience
-  status: IN_PROGRESS
+  status: DONE
   objective: Show current Open-Meteo/CAMS US and European AQI plus pollutant levels when a user expands the dashboard air-quality panel.
   depends_on: [CACHE-001, EDGE-004, FEAT-AQI-001, PERF-001, WEB-002, WX-003, WX-004]
   external_policy_checks:
