@@ -293,6 +293,174 @@ describe('gateway', () => {
     });
   });
 
+  it('serves cached, bounded Open-Meteo air-quality responses', async () => {
+    const airQuality = {
+      observedAt: '2026-09-27T10:00:00.000Z',
+      usAqi: 42,
+      europeanAqi: 18,
+      pollutants: {
+        pm25: 7.2,
+        pm10: 12.4,
+        carbonMonoxide: 120,
+        nitrogenDioxide: 4.3,
+        sulphurDioxide: 1.1,
+        ozone: 65,
+      },
+      meta: {
+        provider: 'open-meteo',
+        cached: false,
+        stale: false,
+        updatedAt: '2026-09-27T10:02:00.000Z',
+      },
+    } as const;
+    const provider = new MockWeatherProvider();
+    const getAirQuality = vi.fn(async () => airQuality);
+    const cachedResponses = new Map<string, Response>();
+    const cache = {
+      match: vi.fn(async (request: Request) => cachedResponses.get(request.url)?.clone()),
+      put: vi.fn(async (request: Request, response: Response) => {
+        cachedResponses.set(request.url, response.clone());
+      }),
+    };
+    const airQualityApp = createApp(
+      { getDashboard: provider.getDashboard.bind(provider), getAirQuality },
+      cache,
+    );
+
+    const first = await airQualityApp.request(
+      'http://localhost/api/v1/weather/air-quality?lat=52.520&lon=13.4050&ignored=private',
+    );
+    expect(first.status).toBe(200);
+    expect(first.headers.get('x-cache')).toBe('MISS');
+    expect(getAirQuality).toHaveBeenCalledWith({ latitude: 52.52, longitude: 13.405 });
+    expect(cache.match.mock.calls[0]?.[0].url).toBe(
+      'http://localhost/api/v1/weather/air-quality?lat=52.52&lon=13.405',
+    );
+
+    const second = await airQualityApp.request(
+      'http://localhost/api/v1/weather/air-quality?lat=52.52&lon=13.405',
+    );
+    expect(second.headers.get('x-cache')).toBe('HIT');
+    await expect(second.json()).resolves.toMatchObject({
+      usAqi: 42,
+      europeanAqi: 18,
+      meta: { cached: true, stale: false },
+    });
+    expect(getAirQuality).toHaveBeenCalledOnce();
+  });
+
+  it('coalesces concurrent AQI cache misses for the same coordinates', async () => {
+    const provider = new MockWeatherProvider();
+    const result = {
+      observedAt: '2026-09-27T10:00:00.000Z',
+      usAqi: 42,
+      europeanAqi: 18,
+      pollutants: {
+        pm25: 7.2,
+        pm10: 12.4,
+        carbonMonoxide: 120,
+        nitrogenDioxide: 4.3,
+        sulphurDioxide: 1.1,
+        ozone: 65,
+      },
+      meta: {
+        provider: 'open-meteo' as const,
+        cached: false,
+        stale: false,
+        updatedAt: '2026-09-27T10:02:00.000Z',
+      },
+    };
+    let resolveAirQuality!: (value: typeof result) => void;
+    const getAirQuality = vi.fn(
+      () => new Promise<typeof result>((resolve) => (resolveAirQuality = resolve)),
+    );
+    const weatherApp = createApp(
+      { getDashboard: provider.getDashboard.bind(provider), getAirQuality },
+      { match: vi.fn(async () => undefined), put: vi.fn(async () => undefined) },
+    );
+
+    const first = weatherApp.request(
+      'http://localhost/api/v1/weather/air-quality?lat=52.52&lon=13.405',
+    );
+    const second = weatherApp.request(
+      'http://localhost/api/v1/weather/air-quality?lat=52.5200&lon=13.4050',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(getAirQuality).toHaveBeenCalledOnce();
+    resolveAirQuality(result);
+    const responses = await Promise.all([first, second]);
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+  });
+
+  it('rejects invalid AQI coordinates before calling the provider', async () => {
+    const provider = new MockWeatherProvider();
+    const getAirQuality = vi.fn();
+    const airQualityApp = createApp({
+      getDashboard: provider.getDashboard.bind(provider),
+      getAirQuality,
+    });
+
+    const response = await airQualityApp.request(
+      'http://localhost/api/v1/weather/air-quality?lat=91&lon=13',
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'INVALID_LOCATION' },
+    });
+    expect(getAirQuality).not.toHaveBeenCalled();
+  });
+
+  it('serves the bounded stale AQI cache after an upstream failure', async () => {
+    const provider = new MockWeatherProvider();
+    const getAirQuality = vi.fn(async () => Promise.reject(new Error('private provider details')));
+    const cached = {
+      observedAt: '2026-09-27T10:00:00.000Z',
+      usAqi: 42,
+      europeanAqi: 18,
+      pollutants: {
+        pm25: 7.2,
+        pm10: 12.4,
+        carbonMonoxide: 120,
+        nitrogenDioxide: 4.3,
+        sulphurDioxide: 1.1,
+        ozone: 65,
+      },
+      meta: {
+        provider: 'open-meteo',
+        cached: true,
+        stale: true,
+        updatedAt: '2026-09-27T10:02:00.000Z',
+      },
+    };
+    const cache = {
+      match: vi.fn(async (request: Request) =>
+        request.url.includes('__atmos_cache_tier=stale')
+          ? Response.json(cached, {
+              headers: { 'cache-control': 'public, max-age=0, s-maxage=3600' },
+            })
+          : undefined,
+      ),
+      put: vi.fn(async () => undefined),
+    };
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const weatherApp = createApp(
+      { getDashboard: provider.getDashboard.bind(provider), getAirQuality },
+      cache,
+    );
+
+    const response = await weatherApp.request(
+      'http://localhost/api/v1/weather/air-quality?lat=52.52&lon=13.405',
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-cache')).toBe('STALE');
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    await expect(response.json()).resolves.toMatchObject({ meta: { stale: true } });
+    expect(String(warning.mock.calls[0]?.[0])).not.toContain('private provider details');
+    warning.mockRestore();
+  });
+
   it('serves bounded cached location-search results', async () => {
     const searchLocations = vi.fn(async () => [
       {

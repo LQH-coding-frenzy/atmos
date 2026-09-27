@@ -38,6 +38,10 @@ export interface LocationSearchProvider {
   searchLocations(query: string): Promise<LocationSearchResult[]>;
 }
 
+export interface AirQualityProvider {
+  getAirQuality(input: AirQualityInput): Promise<AirQuality>;
+}
+
 export const weatherConditionSchema = z.enum([
   'clear',
   'partly-cloudy',
@@ -58,6 +62,35 @@ export const currentWeatherSchema = z.object({
   condition: weatherConditionSchema,
 });
 export type CurrentWeather = z.infer<typeof currentWeatherSchema>;
+
+const nullablePollutantValue = z.number().nonnegative().nullable();
+
+export const airQualitySchema = z.object({
+  observedAt: z.string().datetime(),
+  usAqi: z.number().nonnegative().nullable(),
+  europeanAqi: z.number().nonnegative().nullable(),
+  pollutants: z.object({
+    pm25: nullablePollutantValue,
+    pm10: nullablePollutantValue,
+    carbonMonoxide: nullablePollutantValue,
+    nitrogenDioxide: nullablePollutantValue,
+    sulphurDioxide: nullablePollutantValue,
+    ozone: nullablePollutantValue,
+  }),
+  meta: z.object({
+    provider: z.literal('open-meteo'),
+    cached: z.boolean(),
+    stale: z.boolean(),
+    updatedAt: z.string().datetime(),
+  }),
+});
+export type AirQuality = z.infer<typeof airQualitySchema>;
+
+export const airQualityInputSchema = z.object({
+  latitude: z.number().gte(-90).lte(90),
+  longitude: z.number().gte(-180).lte(180),
+});
+export type AirQualityInput = z.infer<typeof airQualityInputSchema>;
 
 export const weatherSnapshotPayloadSchema = z.object({
   location_name: z.string().min(1).max(80),

@@ -1,0 +1,110 @@
+task:
+  id: FEAT-AQI-LIVE-001
+  title: On-demand live air-quality experience
+  status: IN_PROGRESS
+  objective: Show current Open-Meteo/CAMS US and European AQI plus pollutant levels when a user expands the dashboard air-quality panel.
+  depends_on: [CACHE-001, EDGE-004, FEAT-AQI-001, PERF-001, WEB-002, WX-003, WX-004]
+  external_policy_checks:
+    [
+      Open-Meteo Air Quality API,
+      Free plan,
+      and terms rechecked 2026-09-27: non-commercial only,
+      same WX-004 request limits,
+      CC BY 4.0,
+      and explicit CAMS ENSEMBLE attribution.,
+    ]
+  runtime_placement:
+    allowed: [cloudflare-worker, vercel-nextjs]
+    selected: cloudflare-worker
+    reason: The Worker validates, caches, coalesces, and proxies a small typed AQI response; the panel fetches only after the user opens it.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/feat-aqi-live-001.yaml,
+        packages/contracts/src/index.ts,
+        packages/contracts/src/index.test.ts,
+        packages/provider-openmeteo/src/index.ts,
+        packages/provider-openmeteo/src/index.test.ts,
+        workers/gateway/src/index.ts,
+        workers/gateway/src/index.test.ts,
+        workers/gateway/src/request-analytics.ts,
+        workers/gateway/src/request-analytics.test.ts,
+        apps/web/components/air-quality-panel.tsx,
+        apps/web/components/dashboard.tsx,
+        apps/web/lib/air-quality.ts,
+        apps/web/lib/air-quality.test.ts,
+        apps/web/app/globals.css,
+        tests/e2e/dashboard.spec.ts,
+        docs/cost/quota-budget.md,
+        docs/operations/worker-request-analytics.md,
+        docs/evidence/feat-aqi-live-001/2026-09-27.md,
+        docs/architecture/atmos-devsecops-master-plan.md,
+        README.md,
+      ]
+    exclude:
+      [
+        new provider/vendor,
+        paid plan,
+        live AQI history,
+        database/schema changes,
+        medical advice,
+        automatic background polling,
+      ]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files:
+      [
+        packages/provider-openmeteo/src/index.ts,
+        workers/gateway/src/index.ts,
+        apps/web/components/air-quality-panel.tsx,
+      ]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [queue-free Worker, web]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until previous Worker and Vercel releases are retired
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run packages/provider-openmeteo/src/index.test.ts workers/gateway/src/index.test.ts workers/gateway/src/request-analytics.test.ts apps/web/lib/air-quality.test.ts packages/contracts/src/index.test.ts,
+        corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts,
+        corepack pnpm typecheck,
+        corepack pnpm --filter @atmos/provider-openmeteo build,
+        corepack pnpm --filter @atmos/gateway build,
+        corepack pnpm --filter @atmos/web build,
+      ]
+    expected:
+      [
+        AQI fetches only on panel expansion,
+        cache/coalescing avoid duplicate provider calls,
+        invalid input fails closed,
+        and public AQI displays explicit data age and attribution.,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics:
+      [
+        'bounded air_quality route group and existing Open-Meteo provider timing; no coordinates or pollutant values',
+      ]
+    logs: ['sanitized request IDs and error types only; no query values or response payloads']
+    traces: ['existing request correlation only']
+  evidence:
+    [
+      docs/evidence/feat-aqi-live-001/2026-09-27.md,
+      pull request checks,
+      protected Edge and Vercel releases,
+    ]
+  rollback:
+    strategy: Revert the AQI provider, gateway route, panel, and analytics group; public weather and the forecast path remain unchanged.
+  human_approval:
+    required: false
+    reason: The user selected AQI; use the existing non-commercial Open-Meteo provider and current protected runtime releases without new resources or credentials.

@@ -41,6 +41,7 @@ export function requestRouteGroup(method: string, path: string) {
   if (path === '/health/dependencies') return 'health_dependencies';
   if (path === '/version') return 'version';
   if (path === '/api/v1/weather/dashboard') return 'weather_dashboard';
+  if (path === '/api/v1/weather/air-quality') return 'air_quality';
   if (path.startsWith('/api/')) return 'api_proxy';
   return method === 'OPTIONS' ? 'preflight_other' : 'not_found';
 }

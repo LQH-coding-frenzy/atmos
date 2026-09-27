@@ -18,6 +18,8 @@ Atmos targets zero recurring out-of-pocket cost while within free-tier quotas. P
 
 No task may silently upgrade a paid plan. Azure credit exhaustion blocks Azure work; it never authorizes pay-as-you-go.
 
+The dashboard AQI panel calls Open-Meteo only when expanded. Its Worker route shares the provider quota guard, coalesces concurrent misses, caches for five minutes, and retains a one-hour stale response. The quota guard is isolate-local, not a distributed counter; the free-tier limits remain the hard service boundary.
+
 Grafana Cloud limits tracked for Atmos are 10,000 active metric series, 50 GB/month each for logs and traces, 100,000 API synthetic executions/month, and 10,000 browser synthetic executions/month.
 
 SLO-001 uses four API checks, one Singapore public probe per check, and a 15-minute frequency. Grafana's 31-day monthly calculator projects 11,904 executions, or 11.904 percent of the API synthetic allowance.

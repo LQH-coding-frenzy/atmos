@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  airQualitySchema,
   createWeatherSnapshotRequestSchema,
   locationInputSchema,
   savedLocationResponseSchema,
@@ -97,6 +98,49 @@ describe('weather snapshot API contracts', () => {
     expect(() =>
       weatherSnapshotResponseSchema.parse({
         snapshot: { ...snapshot, payload: { ...snapshot.payload, temperature_c: 999 } },
+      }),
+    ).toThrow();
+  });
+});
+
+describe('air-quality API contract', () => {
+  const airQuality = {
+    observedAt: '2026-09-27T10:00:00.000Z',
+    usAqi: 42,
+    europeanAqi: 18,
+    pollutants: {
+      pm25: 7.2,
+      pm10: 12.4,
+      carbonMonoxide: 120,
+      nitrogenDioxide: 4.3,
+      sulphurDioxide: 1.1,
+      ozone: 65,
+    },
+    meta: {
+      provider: 'open-meteo',
+      cached: false,
+      stale: false,
+      updatedAt: '2026-09-27T10:02:00.000Z',
+    },
+  };
+
+  it('accepts complete model data and nullable missing fields', () => {
+    expect(airQualitySchema.parse(airQuality)).toEqual(airQuality);
+    expect(
+      airQualitySchema.parse({
+        ...airQuality,
+        usAqi: null,
+        pollutants: { ...airQuality.pollutants, pm25: null },
+      }).usAqi,
+    ).toBeNull();
+  });
+
+  it('rejects negative AQI and invalid pollutant data', () => {
+    expect(() => airQualitySchema.parse({ ...airQuality, europeanAqi: -1 })).toThrow();
+    expect(() =>
+      airQualitySchema.parse({
+        ...airQuality,
+        pollutants: { ...airQuality.pollutants, pm10: 'high' },
       }),
     ).toThrow();
   });

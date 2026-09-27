@@ -2,7 +2,10 @@ import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { OpenMeteoProvider } from '@atmos/provider-openmeteo';
+import { airQualitySchema } from '@atmos/contracts';
 import type {
+  AirQuality,
+  AirQualityProvider,
   Dashboard,
   LocationSearchProvider,
   LocationSearchResult,
@@ -38,10 +41,12 @@ type GatewayEnvironment = { Bindings: Bindings; Variables: Variables };
 type WeatherCache = Pick<Cache, 'match' | 'put'>;
 
 const weatherCacheTtlSeconds = 300;
+const airQualityCacheTtlSeconds = 300;
 const staleWeatherCacheTtlSeconds = 3600;
 const locationSearchCacheTtlSeconds = 86400;
 const forwardedProxyHeaders = new Set(['accept', 'authorization', 'content-type']);
 const locationSearchInFlight = new Map<string, Promise<LocationSearchResult[]>>();
+const airQualityInFlight = new Map<string, Promise<AirQuality>>();
 const noWeatherCache: WeatherCache = {
   match: async () => undefined,
   put: async () => undefined,
@@ -107,6 +112,39 @@ function weatherCacheKeys(url: string, input: ReturnType<typeof weatherInput>) {
   };
 }
 
+function airQualityInput(context: { req: { query: (name: string) => string | undefined } }) {
+  const latitudeValue = context.req.query('lat');
+  const longitudeValue = context.req.query('lon');
+  if (!latitudeValue?.trim() || !longitudeValue?.trim()) return undefined;
+  const latitude = Number(latitudeValue);
+  const longitude = Number(longitudeValue);
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    return undefined;
+  }
+  return { latitude, longitude } as const;
+}
+
+function airQualityCacheKeys(url: string, input: NonNullable<ReturnType<typeof airQualityInput>>) {
+  const freshUrl = new URL(url);
+  freshUrl.search = new URLSearchParams({
+    lat: String(input.latitude),
+    lon: String(input.longitude),
+  }).toString();
+  const staleUrl = new URL(freshUrl);
+  staleUrl.searchParams.set('__atmos_cache_tier', 'stale');
+  return {
+    fresh: new Request(freshUrl, { method: 'GET' }),
+    stale: new Request(staleUrl, { method: 'GET' }),
+  };
+}
+
 function locationSearchInput(context: { req: { query: (name: string) => string | undefined } }) {
   const query = context.req.query('q')?.trim().replace(/\s+/g, ' ');
   if (!query || query.length < 2 || query.length > 80) return undefined;
@@ -130,8 +168,21 @@ function coalescedLocationSearch(
   return pending;
 }
 
+function coalescedAirQuality(
+  key: string,
+  getAirQuality: () => Promise<AirQuality>,
+): Promise<AirQuality> {
+  const existing = airQualityInFlight.get(key);
+  if (existing) return existing;
+  const pending = getAirQuality().finally(() => airQualityInFlight.delete(key));
+  airQualityInFlight.set(key, pending);
+  return pending;
+}
+
 export function createApp(
-  weatherProvider: WeatherProvider & Partial<LocationSearchProvider> = new OpenMeteoProvider(),
+  weatherProvider: WeatherProvider &
+    Partial<LocationSearchProvider> &
+    Partial<AirQualityProvider> = new OpenMeteoProvider(),
   cache?: WeatherCache,
 ) {
   const app = new Hono<GatewayEnvironment>();
@@ -339,6 +390,132 @@ export function createApp(
       );
     }
     return response;
+  });
+
+  app.get('/api/v1/weather/air-quality', async (context) => {
+    const input = airQualityInput(context);
+    if (!input) {
+      return gatewayError(
+        context,
+        'INVALID_LOCATION',
+        'Valid latitude and longitude query parameters are required.',
+        400,
+      );
+    }
+
+    const airQualityCache =
+      cache ??
+      (typeof caches === 'undefined'
+        ? noWeatherCache
+        : (caches as CacheStorage & { default: WeatherCache }).default);
+    const cacheKeys = airQualityCacheKeys(context.req.url, input);
+    let staleResponse: Response | undefined;
+    try {
+      const cached = await airQualityCache.match(cacheKeys.fresh);
+      if (cached) {
+        context.set('analyticsProvider', 'cache');
+        const response = new Response(cached.body, cached);
+        response.headers.set('x-cache', 'HIT');
+        return response;
+      }
+      staleResponse = await airQualityCache.match(cacheKeys.stale);
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          event: 'air_quality_cache_read_failed',
+          request_id: context.get('requestId'),
+          trace_id: context.get('traceparent').split('-')[1],
+          error_type: error instanceof Error ? error.name : 'unknown',
+        }),
+      );
+    }
+
+    if (!weatherProvider.getAirQuality) {
+      return gatewayError(
+        context,
+        'AIR_QUALITY_UNAVAILABLE',
+        'Air quality is temporarily unavailable.',
+        503,
+      );
+    }
+
+    const key = `${input.latitude}:${input.longitude}`;
+    const providerStartedAt = performance.now();
+    context.set('analyticsProvider', 'open-meteo');
+    try {
+      const airQuality = await coalescedAirQuality(key, () =>
+        weatherProvider.getAirQuality!(input),
+      );
+      const parsed = airQualitySchema.safeParse(airQuality);
+      if (!parsed.success) throw new Error('Air-quality response has an invalid shape');
+
+      const response = context.json(parsed.data);
+      response.headers.set(
+        'cache-control',
+        `public, max-age=${airQualityCacheTtlSeconds}, s-maxage=${airQualityCacheTtlSeconds}`,
+      );
+      response.headers.set('x-cache', 'MISS');
+      try {
+        await Promise.all([
+          airQualityCache.put(
+            cacheKeys.fresh,
+            Response.json(
+              { ...parsed.data, meta: { ...parsed.data.meta, cached: true, stale: false } },
+              {
+                headers: {
+                  'cache-control': `public, max-age=${airQualityCacheTtlSeconds}, s-maxage=${airQualityCacheTtlSeconds}`,
+                },
+              },
+            ),
+          ),
+          airQualityCache.put(
+            cacheKeys.stale,
+            Response.json(
+              { ...parsed.data, meta: { ...parsed.data.meta, cached: true, stale: true } },
+              {
+                headers: {
+                  'cache-control': `public, max-age=0, s-maxage=${staleWeatherCacheTtlSeconds}`,
+                },
+              },
+            ),
+          ),
+        ]);
+      } catch (error) {
+        console.warn(
+          JSON.stringify({
+            event: 'air_quality_cache_write_failed',
+            request_id: context.get('requestId'),
+            trace_id: context.get('traceparent').split('-')[1],
+            error_type: error instanceof Error ? error.name : 'unknown',
+          }),
+        );
+      }
+      return response;
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          event: 'air_quality_provider_failed',
+          request_id: context.get('requestId'),
+          trace_id: context.get('traceparent').split('-')[1],
+          cache_status: staleResponse ? 'STALE' : 'MISS',
+          error_type: error instanceof Error ? error.name : 'unknown',
+        }),
+      );
+      if (staleResponse) {
+        const response = new Response(staleResponse.body, staleResponse);
+        response.headers.set('cache-control', 'private, no-store');
+        response.headers.set('x-cache', 'STALE');
+        return response;
+      }
+      return gatewayError(
+        context,
+        'AIR_QUALITY_UNAVAILABLE',
+        'Air quality is temporarily unavailable.',
+        503,
+      );
+    } finally {
+      context.set('providerDurationMs', performance.now() - providerStartedAt);
+    }
   });
 
   app.get('/api/v1/locations/search', async (context) => {
