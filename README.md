@@ -13,13 +13,15 @@ A live, location-aware weather dashboard and public DevSecOps case study.
 - Switch temperature and wind units between metric and imperial.
 - Read a chart with an accessible textual equivalent and explicit data freshness.
 - Expand an on-demand Open-Meteo/CAMS air-quality panel with U.S./European AQI and pollutant values.
+- Create in-app weather rules and see whether the current dashboard/forecast matches them.
 - Sign in to save locations, record current observations, and delete entries from a personal 7/30/90-day history.
 - Use the dashboard on desktop or mobile without mock-data fallbacks.
 
 Berlin remains the reliable default. The public weather journey works without an account; users may
-sign in with email/password to save places, switch between them, and explicitly record observations.
-Alerts, queues, notifications, automatic history collection, and provider history/backfill remain
-deferred; no earlier observations are backfilled.
+sign in with email/password to save places, create in-app alert rules, switch between them, and
+explicitly record observations. Alert status is evaluated only from the open dashboard/forecast;
+email/push delivery, schedules, queues, automatic history collection, and provider history/backfill
+remain deferred; no earlier observations are backfilled.
 
 ## Architecture At A Glance
 
@@ -92,6 +94,6 @@ Do not commit secrets, Terraform state, database dumps, or generated backup arch
 ## Deliberately Deferred
 
 Atmos is a maintained portfolio showcase, not a continuously operated commercial weather service. Do
-not add paid providers, Google OAuth, notifications, recurring backup/restore operations, AI advice,
-historical AQI analysis, provider history/backfill, or multi-provider failover without a defined user need and
-explicit owner approval.
+not add paid providers, Google OAuth, email/push alert delivery, recurring backup/restore operations,
+AI advice, historical AQI analysis, provider history/backfill, or multi-provider failover without a
+defined user need and explicit owner approval.

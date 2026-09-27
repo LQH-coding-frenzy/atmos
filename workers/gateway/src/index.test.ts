@@ -189,6 +189,21 @@ describe('gateway', () => {
 
     expect(deleteResponse.status).toBe(204);
     expect(deleteResponse.headers.get('access-control-allow-methods')).toContain('DELETE');
+
+    const patchResponse = await app.request(
+      'http://localhost/api/v1/alerts/00000000-0000-4000-8000-000000000001',
+      {
+        method: 'OPTIONS',
+        headers: {
+          origin: 'https://rainify.dpdns.org',
+          'access-control-request-method': 'PATCH',
+          'access-control-request-headers': 'authorization,content-type',
+        },
+      },
+      { CORS_ORIGIN: 'https://rainify.dpdns.org' },
+    );
+    expect(patchResponse.status).toBe(204);
+    expect(patchResponse.headers.get('access-control-allow-methods')).toContain('PATCH');
   });
 
   it('does not grant cross-origin access to unconfigured origins', async () => {

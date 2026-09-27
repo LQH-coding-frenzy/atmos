@@ -31,6 +31,7 @@ import { LocationSearch } from './location-search';
 import { SavedLocationsPanel } from './saved-locations-panel';
 import { WeatherHistoryPanel } from './weather-history-panel';
 import { AirQualityPanel } from './air-quality-panel';
+import { InAppAlertsPanel } from './in-app-alerts-panel';
 import type { ForecastTrendMetric } from '../lib/forecast-trend';
 
 type DashboardProps = {
@@ -257,6 +258,13 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
               units={units}
             />
             <AirQualityPanel gatewayOrigin={gatewayOrigin} location={dashboard.location} />
+            <InAppAlertsPanel
+              gatewayOrigin={gatewayOrigin}
+              location={dashboard.location}
+              current={dashboard.current}
+              hourly={dashboard.hourly}
+              stale={dashboard.meta.stale}
+            />
             <button
               className="current-location-button"
               type="button"

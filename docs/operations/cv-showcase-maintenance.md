@@ -9,7 +9,7 @@ weather journey backed by credible DevSecOps evidence, not continuous production
 | ------------------------------------------------------------ | -------------- | ------------------------------------------------------------------------------------ |
 | Vercel dashboard                                             | keep active    | presents live Berlin weather, forecast, chart, map marker, and unit selection        |
 | Cloudflare Worker gateway                                    | keep active    | validates input, applies cache and security controls, and calls Open-Meteo           |
-| Supabase project and edge API                                | keep active    | serves the RLS-backed saved-location API and dependency-health evidence              |
+| Supabase project and edge API                                | keep active    | serves RLS-backed saved-location, snapshot-history, and in-app alert APIs            |
 | Grafana synthetics                                           | keep active    | detects public frontend, gateway, dependency, and weather-route outages              |
 | GitHub Actions and branch protection                         | keep active    | verifies build, browser, database, security, SBOM, and supply-chain controls         |
 | Terraform and HCP Terraform configuration                    | keep active    | documents reproducible infrastructure and provider boundaries                        |
@@ -17,7 +17,7 @@ weather journey backed by credible DevSecOps evidence, not continuous production
 | Backup secret bootstrap                                      | disabled       | retained evidence does not justify rotating the project-wide database password       |
 | Staging Worker                                               | not maintained | dependency health is intentionally unavailable; do not treat it as a release lane    |
 | Production release controls                                  | keep on demand | protected Vercel and Edge Runtime workflows preserve candidate and rollback evidence |
-| Cloudflare Queues and alert delivery runtime                 | retired        | removed; no active CV user journey publishes notifications                           |
+| Cloudflare Queues and alert delivery runtime                 | retired        | removed; in-app alert status does not publish notifications                          |
 | Azure Container Apps environment and Log Analytics workspace | retired        | removed; backup evidence uses a one-shot Container Instance, not an Apps environment |
 
 Provider-side retirement completed under the owner-approved CVRET-001 plan. See

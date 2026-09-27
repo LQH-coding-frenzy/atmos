@@ -221,6 +221,8 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   let historyAuthorization = '';
   let deleteAuthorization = '';
   let deletedSnapshotId = '';
+  let savedAlertRule: Record<string, unknown> | undefined;
+  let alertAuthorization = '';
   let postedObservation: Record<string, unknown> | undefined;
 
   await page.route('**/auth/v1/token?grant_type=password', async (route) => {
@@ -331,6 +333,40 @@ test('authenticates, saves the current place, and switches to an API-returned sa
     }
     await route.fulfill({ json: { snapshots: savedObservation ? [savedObservation] : [] } });
   });
+  await page.route('**/api/v1/alerts**', async (route) => {
+    alertAuthorization = route.request().headers().authorization ?? '';
+    if (route.request().method() === 'POST') {
+      const body = route.request().postDataJSON();
+      savedAlertRule = {
+        id: '00000000-0000-4000-8000-000000000040',
+        location_id: String(body.location_id),
+        latitude: Number(body.latitude),
+        longitude: Number(body.longitude),
+        conditions: [body.condition],
+        schedule: {
+          weekdays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+          cooldownMinutes: 60,
+        },
+        notification_channels: ['in-app'],
+        enabled: true,
+        created_at: '2026-09-27T10:03:00.000Z',
+        updated_at: '2026-09-27T10:03:00.000Z',
+      };
+      await route.fulfill({ status: 201, json: { rule: savedAlertRule } });
+      return;
+    }
+    if (route.request().method() === 'PATCH' && savedAlertRule) {
+      savedAlertRule = { ...savedAlertRule, ...route.request().postDataJSON() };
+      await route.fulfill({ json: { rule: savedAlertRule } });
+      return;
+    }
+    if (route.request().method() === 'DELETE') {
+      savedAlertRule = undefined;
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
+    await route.fulfill({ json: { rules: savedAlertRule ? [savedAlertRule] : [] } });
+  });
 
   await page.goto('/');
   await page.getByText('Saved places', { exact: true }).click();
@@ -372,6 +408,22 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   await expect(page.getByRole('list', { name: 'Recorded observations' })).toHaveCount(0);
   expect(deleteAuthorization).toBe(`Bearer ${accessToken}`);
   expect(deletedSnapshotId).toBe('00000000-0000-4000-8000-000000000030');
+
+  await page.getByText('Alerts', { exact: true }).click();
+  await page.getByLabel('Threshold').fill('18');
+  await page.getByRole('button', { name: 'Add in-app rule' }).click();
+  await expect(page.locator('.in-app-alert-status')).toHaveText('Matches current forecast');
+  await expect(page.getByRole('list', { name: 'Your alert rules' })).toContainText(
+    'Temperature above 18°C',
+  );
+  expect(savedAlertRule).toMatchObject({ notification_channels: ['in-app'], enabled: true });
+  expect(alertAuthorization).toBe(`Bearer ${accessToken}`);
+
+  await page.getByRole('button', { name: 'Pause' }).click();
+  await expect(page.locator('.in-app-alert-status')).toHaveText('Paused');
+  await page.getByRole('button', { name: /Delete alert/ }).click();
+  await expect(page.locator('.in-app-alerts-status')).toContainText('Alert rule deleted');
+  await expect(page.getByRole('list', { name: 'Your alert rules' })).toHaveCount(0);
 });
 
 test('shows email-confirmation guidance after account creation', async ({ page }) => {

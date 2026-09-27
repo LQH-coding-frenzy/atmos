@@ -1,4 +1,4 @@
-import type { HourlyForecast, UnitSystem } from '@atmos/contracts';
+import type { CurrentWeather, HourlyForecast, UnitSystem } from '@atmos/contracts';
 
 export const plannerActivityKinds = [
   'running',
@@ -175,6 +175,82 @@ export interface AlertRule {
   schedule: AlertSchedule;
   notificationChannels: readonly AlertNotificationChannel[];
   enabled: boolean;
+}
+
+export type InAppAlertStatus =
+  'disabled' | 'outside-schedule' | 'triggered' | 'monitoring' | 'unsupported';
+
+export type InAppAlertWeather = {
+  current: Pick<
+    CurrentWeather,
+    'temperatureC' | 'apparentTemperatureC' | 'windSpeedKph' | 'condition'
+  >;
+  hourly: readonly Pick<HourlyForecast, 'precipitationProbability' | 'condition'>[];
+  timezone: string;
+};
+
+function inAppConditionMatches(
+  condition: AlertCondition,
+  weather: InAppAlertWeather,
+): boolean | undefined {
+  if ('expected' in condition) {
+    const occurred = (() => {
+      switch (condition.metric) {
+        case 'thunderstorm':
+          return (
+            weather.current.condition === 'thunderstorm' ||
+            weather.hourly.some((hour) => hour.condition === 'thunderstorm')
+          );
+        case 'freeze-risk':
+          return weather.current.temperatureC <= 0 || weather.current.apparentTemperatureC <= 0;
+        case 'extreme-heat':
+          return weather.current.temperatureC >= 35;
+        case 'provider-severe-weather-alert':
+          return undefined;
+      }
+    })();
+    return occurred === condition.expected;
+  }
+
+  let value: number | undefined;
+  switch (condition.metric) {
+    case 'temperature':
+      value = weather.current.temperatureC;
+      break;
+    case 'feels-like':
+      value = weather.current.apparentTemperatureC;
+      break;
+    case 'rain-probability':
+      value = weather.hourly.length
+        ? Math.max(...weather.hourly.map((hour) => hour.precipitationProbability))
+        : undefined;
+      break;
+    case 'wind':
+      value = weather.current.windSpeedKph;
+      break;
+    default:
+      return undefined;
+  }
+  if (value === undefined) return undefined;
+  return condition.comparison === 'above' ? value > condition.value : value < condition.value;
+}
+
+export function evaluateInAppAlertStatus(
+  rule: Pick<AlertRule, 'conditions' | 'enabled' | 'schedule'>,
+  weather: InAppAlertWeather,
+  now = new Date(),
+): InAppAlertStatus {
+  if (!rule.enabled) return 'disabled';
+  const weekday = new Intl.DateTimeFormat('en', {
+    weekday: 'long',
+    timeZone: weather.timezone,
+  })
+    .format(now)
+    .toLowerCase() as Weekday;
+  if (!rule.schedule.weekdays.includes(weekday)) return 'outside-schedule';
+  const matches = rule.conditions.map((condition) => inAppConditionMatches(condition, weather));
+  if (matches.some((match) => match === undefined)) return 'unsupported';
+  return matches.every((match) => match) ? 'triggered' : 'monitoring';
 }
 
 export function formatTemperature(temperatureC: number, units: UnitSystem): string {
