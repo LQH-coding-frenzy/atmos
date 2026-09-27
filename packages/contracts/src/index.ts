@@ -16,6 +16,24 @@ export type Location = z.infer<typeof locationSchema>;
 export const locationSearchResultSchema = locationSchema;
 export type LocationSearchResult = z.infer<typeof locationSearchResultSchema>;
 
+export const savedLocationSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(120),
+  latitude: z.number().gte(-90).lte(90),
+  longitude: z.number().gte(-180).lte(180),
+  created_at: z.string().datetime({ offset: true }),
+  updated_at: z.string().datetime({ offset: true }),
+});
+export type SavedLocation = z.infer<typeof savedLocationSchema>;
+
+export const savedLocationsResponseSchema = z.object({
+  locations: z.array(savedLocationSchema),
+});
+
+export const savedLocationResponseSchema = z.object({
+  location: savedLocationSchema,
+});
+
 export interface LocationSearchProvider {
   searchLocations(query: string): Promise<LocationSearchResult[]>;
 }
