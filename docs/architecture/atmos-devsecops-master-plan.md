@@ -3299,6 +3299,7 @@ DONE
 | FEAT-CHART-001 | charts | WEB-002 | feature |
 | FEAT-AQI-001 | AQI | WX-003, WEB-002 | feature |
 | FEAT-MAP-001 | map | WEB-002 | feature |
+| HIST-CAP-001 | authenticated user-captured weather history | FEAT-LOC-UI-001, FUNC-002, HIST-001, ROUTE-001, WEB-002 | feature |
 | FEAT-PLAN-001 | deterministic planner | DOM-002, FUNC-001 | feature |
 | FEAT-CMP-001 | comparison | FEAT-PLAN-001 | feature |
 | HIST-001 | snapshot schema | DB-001 | data tables |

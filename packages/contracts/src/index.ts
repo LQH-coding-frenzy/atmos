@@ -59,6 +59,49 @@ export const currentWeatherSchema = z.object({
 });
 export type CurrentWeather = z.infer<typeof currentWeatherSchema>;
 
+export const weatherSnapshotPayloadSchema = z.object({
+  location_name: z.string().min(1).max(80),
+  temperature_c: z.number().gte(-150).lte(100),
+  apparent_temperature_c: z.number().gte(-150).lte(100),
+  humidity_percent: z.number().min(0).max(100),
+  wind_speed_kph: z.number().nonnegative().max(500),
+  pressure_hpa: z.number().positive().max(1500),
+  condition: weatherConditionSchema,
+});
+export type WeatherSnapshotPayload = z.infer<typeof weatherSnapshotPayloadSchema>;
+
+export const createWeatherSnapshotRequestSchema = z.object({
+  latitude: z.number().gte(-90).lte(90),
+  longitude: z.number().gte(-180).lte(180),
+  observed_at: z.string().datetime(),
+  location_name: z.string().min(1).max(80),
+  temperatureC: z.number(),
+  apparentTemperatureC: z.number(),
+  humidityPercent: z.number().min(0).max(100),
+  windSpeedKph: z.number().nonnegative(),
+  pressureHpa: z.number().positive(),
+  condition: weatherConditionSchema,
+});
+
+export const weatherSnapshotSchema = z.object({
+  id: z.string().uuid(),
+  latitude: z.number().gte(-90).lte(90),
+  longitude: z.number().gte(-180).lte(180),
+  observed_at: z.string().datetime({ offset: true }),
+  provider: z.string().min(1).max(80),
+  payload: weatherSnapshotPayloadSchema,
+  created_at: z.string().datetime({ offset: true }),
+});
+export type WeatherSnapshot = z.infer<typeof weatherSnapshotSchema>;
+
+export const weatherSnapshotsResponseSchema = z.object({
+  snapshots: z.array(weatherSnapshotSchema),
+});
+
+export const weatherSnapshotResponseSchema = z.object({
+  snapshot: weatherSnapshotSchema,
+});
+
 export const hourlyForecastSchema = z.object({
   time: z.string().datetime(),
   temperatureC: z.number(),

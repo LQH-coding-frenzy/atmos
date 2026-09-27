@@ -155,6 +155,27 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   let savedBerlin: typeof paris | undefined;
   let forwardedAuthorization = '';
   let postedLocation: { name: string; latitude: number; longitude: number } | undefined;
+  let savedObservation:
+    | {
+        id: string;
+        latitude: number;
+        longitude: number;
+        observed_at: string;
+        provider: string;
+        payload: {
+          location_name: string;
+          temperature_c: number;
+          apparent_temperature_c: number;
+          humidity_percent: number;
+          wind_speed_kph: number;
+          pressure_hpa: number;
+          condition: string;
+        };
+        created_at: string;
+      }
+    | undefined;
+  let historyAuthorization = '';
+  let postedObservation: Record<string, unknown> | undefined;
 
   await page.route('**/auth/v1/token?grant_type=password', async (route) => {
     await route.fulfill({
@@ -222,13 +243,40 @@ test('authenticates, saves the current place, and switches to an API-returned sa
           },
         ],
         meta: {
-          provider: 'test',
+          provider: 'open-meteo',
           cached: false,
           stale: false,
           updatedAt: '2026-09-01T10:00:00.000Z',
         },
       },
     });
+  });
+  await page.route('**/api/v1/weather/history**', async (route) => {
+    historyAuthorization = route.request().headers().authorization ?? '';
+    if (route.request().method() === 'POST') {
+      postedObservation = route.request().postDataJSON();
+      const observation = postedObservation;
+      savedObservation = {
+        id: '00000000-0000-4000-8000-000000000030',
+        latitude: Number(observation.latitude),
+        longitude: Number(observation.longitude),
+        observed_at: String(observation.observed_at),
+        provider: 'open-meteo',
+        payload: {
+          location_name: String(observation.location_name),
+          temperature_c: Number(observation.temperatureC),
+          apparent_temperature_c: Number(observation.apparentTemperatureC),
+          humidity_percent: Number(observation.humidityPercent),
+          wind_speed_kph: Number(observation.windSpeedKph),
+          pressure_hpa: Number(observation.pressureHpa),
+          condition: String(observation.condition),
+        },
+        created_at: '2026-09-27T10:02:00.000Z',
+      };
+      await route.fulfill({ status: 201, json: { snapshot: savedObservation } });
+      return;
+    }
+    await route.fulfill({ json: { snapshots: savedObservation ? [savedObservation] : [] } });
   });
 
   await page.goto('/');
@@ -252,6 +300,19 @@ test('authenticates, saves the current place, and switches to an API-returned sa
     .click();
   await expect(page.locator('.location-name')).toHaveText('Paris');
   await expect(page).toHaveURL('/');
+
+  await page.getByText('History', { exact: true }).click();
+  await page.getByRole('button', { name: 'Record this observation' }).click();
+  await expect(page.locator('.weather-history-status')).toContainText('recorded.');
+  await expect(page.getByRole('list', { name: 'Recorded observations' })).toContainText('20 deg');
+  expect(postedObservation).toMatchObject({
+    latitude: 48.8534,
+    longitude: 2.3488,
+    observed_at: '2026-09-01T10:00:00.000Z',
+    location_name: 'Paris',
+    temperatureC: 20,
+  });
+  expect(historyAuthorization).toBe(`Bearer ${accessToken}`);
 });
 
 test('shows email-confirmation guidance after account creation', async ({ page }) => {

@@ -12,11 +12,13 @@ A live, location-aware weather dashboard and public DevSecOps case study.
 - View current conditions, the next 12 hours, and a seven-day forecast from Open-Meteo.
 - Switch temperature and wind units between metric and imperial.
 - Read a chart with an accessible textual equivalent and explicit data freshness.
+- Sign in to save locations and record current observations for a personal 7/30/90-day history.
 - Use the dashboard on desktop or mobile without mock-data fallbacks.
 
 Berlin remains the reliable default. The public weather journey works without an account; users may
-sign in with email/password to save places and switch between them. Alerts, queues, and notifications
-remain deferred.
+sign in with email/password to save places, switch between them, and explicitly record observations.
+Alerts, queues, notifications, automatic history collection, and provider history/backfill remain
+deferred; no earlier observations are backfilled.
 
 ## Architecture At A Glance
 
@@ -48,6 +50,7 @@ Worker candidate, exact smoke checks, and a content-gated Vercel promotion.
 ## Evidence
 
 - [Live production audit remediation](docs/evidence/cv-audit/2026-09-22-remediation.md)
+- [Authenticated user-captured weather history](docs/evidence/hist-cap-001/2026-09-27.md)
 - [CV runtime retirement](docs/evidence/cvret-001/2026-09-22.md)
 - [Verified ephemeral restore drill](docs/evidence/restore-001/2026-09-19.md)
 - [CV showcase maintenance boundary](docs/operations/cv-showcase-maintenance.md)
@@ -89,4 +92,5 @@ Do not commit secrets, Terraform state, database dumps, or generated backup arch
 
 Atmos is a maintained portfolio showcase, not a continuously operated commercial weather service. Do
 not add paid providers, Google OAuth, notifications, recurring backup/restore operations, AI advice,
-AQI/history products, or multi-provider failover without a defined user need and explicit owner approval.
+AQI products, provider history/backfill, or multi-provider failover without a defined user need and
+explicit owner approval.

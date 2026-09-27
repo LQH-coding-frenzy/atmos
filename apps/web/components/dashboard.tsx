@@ -29,6 +29,7 @@ import { ActivityPlanner } from './activity-planner';
 import { ForecastTrendChart } from './forecast-trend-chart';
 import { LocationSearch } from './location-search';
 import { SavedLocationsPanel } from './saved-locations-panel';
+import { WeatherHistoryPanel } from './weather-history-panel';
 import type { ForecastTrendMetric } from '../lib/forecast-trend';
 
 type DashboardProps = {
@@ -245,6 +246,14 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
               gatewayOrigin={gatewayOrigin}
               currentLocation={dashboard.location}
               onSelect={selectLocation}
+            />
+            <WeatherHistoryPanel
+              gatewayOrigin={gatewayOrigin}
+              location={dashboard.location}
+              current={dashboard.current}
+              provider={dashboard.meta.provider}
+              stale={dashboard.meta.stale}
+              units={units}
             />
             <button
               className="current-location-button"
