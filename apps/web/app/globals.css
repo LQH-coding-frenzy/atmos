@@ -230,12 +230,14 @@ button {
 }
 .saved-locations-panel,
 .weather-history-panel,
-.air-quality-panel {
+.air-quality-panel,
+.in-app-alerts-panel {
   position: relative;
 }
 .saved-locations-panel summary,
 .weather-history-panel summary,
-.air-quality-panel summary {
+.air-quality-panel summary,
+.in-app-alerts-panel summary {
   display: flex;
   min-height: 36px;
   align-items: center;
@@ -251,20 +253,24 @@ button {
 }
 .saved-locations-panel summary::-webkit-details-marker,
 .weather-history-panel summary::-webkit-details-marker,
-.air-quality-panel summary::-webkit-details-marker {
+.air-quality-panel summary::-webkit-details-marker,
+.in-app-alerts-panel summary::-webkit-details-marker {
   display: none;
 }
 .saved-locations-panel summary:focus-visible,
 .saved-locations-panel button:focus-visible,
 .weather-history-panel summary:focus-visible,
 .weather-history-panel button:focus-visible,
-.air-quality-panel summary:focus-visible {
+.air-quality-panel summary:focus-visible,
+.in-app-alerts-panel summary:focus-visible,
+.in-app-alerts-panel button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 .saved-locations-popover,
 .weather-history-popover,
-.air-quality-popover {
+.air-quality-popover,
+.in-app-alerts-popover {
   position: absolute;
   z-index: 10;
   top: calc(100% + 8px);
@@ -280,14 +286,16 @@ button {
 }
 .saved-locations-popover h2,
 .weather-history-popover h2,
-.air-quality-popover h2 {
+.air-quality-popover h2,
+.in-app-alerts-popover h2 {
   margin: 0;
   font-size: 18px;
   font-weight: 500;
 }
 .saved-locations-popover p,
 .weather-history-popover p,
-.air-quality-popover p {
+.air-quality-popover p,
+.in-app-alerts-popover p {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
@@ -567,6 +575,110 @@ button {
 }
 .air-quality-stale {
   color: #ffd78c !important;
+}
+.in-app-alerts-location {
+  color: var(--ink) !important;
+  font-weight: 600;
+}
+.in-app-alerts-note {
+  padding: 8px 9px;
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  background: #202329;
+}
+.in-app-alert-form {
+  display: grid;
+  gap: 7px;
+}
+.in-app-alert-form label {
+  color: var(--muted);
+  font-size: 12px;
+}
+.in-app-alert-form select,
+.in-app-alert-form input {
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #202329;
+  color: var(--ink);
+}
+.in-app-alert-threshold {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 8px;
+}
+.in-app-alert-form > button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+.in-app-alert-rules {
+  display: grid;
+  max-height: 220px;
+  gap: 7px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.in-app-alert-rules li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 10px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #202329;
+  font-size: 12px;
+}
+.in-app-alert-status {
+  color: var(--muted);
+}
+.alert-triggered {
+  color: #ffd78c;
+  font-weight: 700;
+}
+.alert-disabled,
+.alert-outside-schedule {
+  color: #929ba6;
+}
+.alert-stale,
+.in-app-alerts-stale {
+  color: #ffd78c !important;
+}
+.in-app-alert-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.in-app-alert-actions button {
+  min-height: 30px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 11px;
+}
+.in-app-alert-actions .delete-alert-rule {
+  display: grid;
+  width: 32px;
+  padding: 0;
+  place-items: center;
+  color: var(--muted);
+}
+.in-app-alert-actions button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+.in-app-alerts-empty,
+.in-app-alerts-status {
+  color: var(--muted);
+  font-size: 12px;
 }
 .saved-locations-empty {
   padding: 5px 0;

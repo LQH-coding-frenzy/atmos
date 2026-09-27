@@ -230,7 +230,7 @@ export function createApp(
         const allowedOrigin = context.env?.CORS_ORIGIN ?? 'http://127.0.0.1:3000';
         return origin === allowedOrigin ? origin : undefined;
       },
-      allowMethods: ['DELETE', 'GET', 'OPTIONS', 'POST'],
+      allowMethods: ['DELETE', 'GET', 'OPTIONS', 'PATCH', 'POST'],
       allowHeaders: ['Authorization', 'Content-Type', 'Traceparent', 'X-Request-Id'],
       maxAge: 86400,
     }),

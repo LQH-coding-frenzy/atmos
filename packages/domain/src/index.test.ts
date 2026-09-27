@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   alertOccurrenceMetrics,
   alertThresholdMetrics,
+  evaluateInAppAlertStatus,
   formatTemperature,
   formatWindSpeed,
   planActivity,
@@ -119,5 +120,82 @@ describe('planner and alert models', () => {
     expect(alert.conditions).toHaveLength(2);
     expect(alertThresholdMetrics).toContain('pm2.5');
     expect(alertOccurrenceMetrics).toContain('provider-severe-weather-alert');
+  });
+
+  it('evaluates supported in-app conditions against current dashboard weather only', () => {
+    const rule: AlertRule = {
+      id: 'rule-1',
+      locationId: 'berlin-de',
+      conditions: [
+        { metric: 'temperature', comparison: 'above', value: 30 },
+        { metric: 'rain-probability', comparison: 'above', value: 70 },
+      ],
+      schedule: { weekdays: ['monday'], cooldownMinutes: 60 },
+      notificationChannels: ['in-app'],
+      enabled: true,
+    };
+    const weather = {
+      current: {
+        temperatureC: 32,
+        apparentTemperatureC: 31,
+        windSpeedKph: 25,
+        condition: 'clear' as const,
+      },
+      hourly: [{ precipitationProbability: 80, condition: 'rain' as const }],
+      timezone: 'UTC',
+    };
+    const monday = new Date('2026-09-28T12:00:00.000Z');
+
+    expect(evaluateInAppAlertStatus(rule, weather, monday)).toBe('triggered');
+    expect(
+      evaluateInAppAlertStatus(
+        { ...rule, conditions: [{ metric: 'temperature', comparison: 'above', value: 33 }] },
+        weather,
+        monday,
+      ),
+    ).toBe('monitoring');
+    expect(evaluateInAppAlertStatus({ ...rule, enabled: false }, weather, monday)).toBe('disabled');
+    expect(
+      evaluateInAppAlertStatus(
+        { ...rule, conditions: [{ metric: 'aqi', comparison: 'above', value: 100 }] },
+        weather,
+        monday,
+      ),
+    ).toBe('unsupported');
+    expect(
+      evaluateInAppAlertStatus(
+        { ...rule, schedule: { weekdays: ['tuesday'], cooldownMinutes: 60 } },
+        weather,
+        monday,
+      ),
+    ).toBe('outside-schedule');
+  });
+
+  it('evaluates an in-app thunderstorm occurrence from the hourly forecast', () => {
+    const rule: AlertRule = {
+      id: 'rule-2',
+      locationId: 'berlin-de',
+      conditions: [{ metric: 'thunderstorm', expected: true }],
+      schedule: { weekdays: ['monday'], cooldownMinutes: 60 },
+      notificationChannels: ['in-app'],
+      enabled: true,
+    };
+
+    expect(
+      evaluateInAppAlertStatus(
+        rule,
+        {
+          current: {
+            temperatureC: 20,
+            apparentTemperatureC: 20,
+            windSpeedKph: 10,
+            condition: 'clear',
+          },
+          hourly: [{ precipitationProbability: 20, condition: 'thunderstorm' }],
+          timezone: 'UTC',
+        },
+        new Date('2026-09-28T12:00:00.000Z'),
+      ),
+    ).toBe('triggered');
   });
 });

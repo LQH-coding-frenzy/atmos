@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   airQualitySchema,
+  alertRuleResponseSchema,
+  alertRulesResponseSchema,
+  createAlertRuleRequestSchema,
   createWeatherSnapshotRequestSchema,
   locationInputSchema,
   savedLocationResponseSchema,
   savedLocationsResponseSchema,
   weatherSnapshotResponseSchema,
   weatherSnapshotsResponseSchema,
+  updateAlertRuleRequestSchema,
 } from './index';
 
 describe('locationInputSchema', () => {
@@ -143,5 +147,55 @@ describe('air-quality API contract', () => {
         pollutants: { ...airQuality.pollutants, pm10: 'high' },
       }),
     ).toThrow();
+  });
+});
+
+describe('in-app alert rule API contracts', () => {
+  const condition = { metric: 'temperature', comparison: 'above', value: 30 } as const;
+  const rule = {
+    id: '00000000-0000-4000-8000-000000000040',
+    location_id: 'berlin-de',
+    latitude: 52.52,
+    longitude: 13.405,
+    conditions: [condition],
+    schedule: {
+      weekdays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
+      cooldownMinutes: 60,
+    },
+    notification_channels: ['in-app'],
+    enabled: true,
+    created_at: '2026-09-27T10:00:00.000Z',
+    updated_at: '2026-09-27T10:00:00.000Z',
+  };
+
+  it('accepts in-app alert create, list, and update contracts', () => {
+    expect(
+      createAlertRuleRequestSchema.parse({
+        location_id: rule.location_id,
+        latitude: rule.latitude,
+        longitude: rule.longitude,
+        condition,
+      }),
+    ).toEqual({
+      location_id: rule.location_id,
+      latitude: rule.latitude,
+      longitude: rule.longitude,
+      condition,
+    });
+    expect(alertRulesResponseSchema.parse({ rules: [rule] }).rules).toEqual([rule]);
+    expect(alertRuleResponseSchema.parse({ rule }).rule).toEqual(rule);
+    expect(updateAlertRuleRequestSchema.parse({ enabled: false })).toEqual({ enabled: false });
+  });
+
+  it('rejects invalid alert thresholds and enabled patches', () => {
+    expect(() =>
+      createAlertRuleRequestSchema.parse({
+        location_id: 'berlin-de',
+        latitude: 52.52,
+        longitude: 13.405,
+        condition: { metric: 'rain-probability', comparison: 'above', value: 101 },
+      }),
+    ).toThrow();
+    expect(() => updateAlertRuleRequestSchema.parse({ enabled: 'yes' })).toThrow();
   });
 });

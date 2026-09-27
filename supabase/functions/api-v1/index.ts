@@ -5,6 +5,11 @@ import { createClient } from 'npm:@supabase/supabase-js@2.114.0';
 import { createCorrelation } from '../_shared/correlation.ts';
 import { databaseDependencyIsHealthy } from '../_shared/dependency-health.ts';
 import {
+  parseAlertRuleEnabledUpdate,
+  parseAlertRuleInsert,
+  parseAlertRuleLocation,
+} from '../_shared/alert-rules.ts';
+import {
   parseWeatherHistoryQuery,
   parseWeatherSnapshotInsert,
 } from '../_shared/weather-snapshot.ts';
@@ -62,7 +67,7 @@ app.use(
       return origin === allowedOrigin ? origin : allowedOrigin;
     },
     allowHeaders: ['Authorization', 'Content-Type', 'Traceparent', 'X-Request-Id'],
-    allowMethods: ['DELETE', 'GET', 'OPTIONS', 'POST'],
+    allowMethods: ['DELETE', 'GET', 'OPTIONS', 'PATCH', 'POST'],
     maxAge: 86400,
   }),
 );
@@ -263,6 +268,98 @@ app.delete('/api/v1/weather/history/:id', async (context) => {
     return error(context, 'HISTORY_UNAVAILABLE', 'Weather history is unavailable.', 503);
   }
   if (!data) return error(context, 'SNAPSHOT_NOT_FOUND', 'The observation was not found.', 404);
+  return context.body(null, 204);
+});
+
+const alertRuleSelect =
+  'id, location_id, latitude, longitude, conditions, schedule, notification_channels, enabled, created_at, updated_at';
+
+app.get('/api/v1/alerts', async (context) => {
+  context.header('cache-control', 'private, no-store');
+  const location = parseAlertRuleLocation(context.req.query('lat'), context.req.query('lon'));
+  if (!location) {
+    return error(context, 'INVALID_LOCATION', 'Valid coordinates are required.', 400);
+  }
+  const authenticated = await authenticatedClient(context);
+  if (!authenticated) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+
+  const { data, error: queryError } = await authenticated.client
+    .from('alert_rules')
+    .select(alertRuleSelect)
+    .eq('latitude', location.latitude)
+    .eq('longitude', location.longitude)
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (queryError) return error(context, 'ALERTS_UNAVAILABLE', 'Alert rules are unavailable.', 503);
+  return context.json({ rules: data });
+});
+
+app.post('/api/v1/alerts', async (context) => {
+  context.header('cache-control', 'private, no-store');
+  const authenticated = await authenticatedClient(context);
+  if (!authenticated) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+  const rule = parseAlertRuleInsert(
+    await context.req.json().catch(() => undefined),
+    authenticated.user.id,
+  );
+  if (!rule) {
+    return error(context, 'INVALID_ALERT_RULE', 'A supported in-app alert rule is required.', 400);
+  }
+
+  const { data, error: insertError } = await authenticated.client
+    .from('alert_rules')
+    .insert(rule)
+    .select(alertRuleSelect)
+    .single();
+  if (insertError || !data) {
+    return error(context, 'ALERTS_UNAVAILABLE', 'Alert rules are unavailable.', 503);
+  }
+  return context.json({ rule: data }, 201);
+});
+
+app.patch('/api/v1/alerts/:id', async (context) => {
+  context.header('cache-control', 'private, no-store');
+  const ruleId = context.req.param('id');
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ruleId)) {
+    return error(context, 'INVALID_ALERT_ID', 'A valid alert rule ID is required.', 400);
+  }
+  const authenticated = await authenticatedClient(context);
+  if (!authenticated) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+  const update = parseAlertRuleEnabledUpdate(await context.req.json().catch(() => undefined));
+  if (!update) return error(context, 'INVALID_ALERT_RULE', 'An enabled state is required.', 400);
+
+  const { data, error: updateError } = await authenticated.client
+    .from('alert_rules')
+    .update(update)
+    .eq('id', ruleId)
+    .select(alertRuleSelect)
+    .maybeSingle();
+  if (updateError) {
+    return error(context, 'ALERTS_UNAVAILABLE', 'Alert rules are unavailable.', 503);
+  }
+  if (!data) return error(context, 'ALERT_NOT_FOUND', 'The alert rule was not found.', 404);
+  return context.json({ rule: data });
+});
+
+app.delete('/api/v1/alerts/:id', async (context) => {
+  context.header('cache-control', 'private, no-store');
+  const ruleId = context.req.param('id');
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(ruleId)) {
+    return error(context, 'INVALID_ALERT_ID', 'A valid alert rule ID is required.', 400);
+  }
+  const authenticated = await authenticatedClient(context);
+  if (!authenticated) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+
+  const { data, error: deleteError } = await authenticated.client
+    .from('alert_rules')
+    .delete()
+    .eq('id', ruleId)
+    .select('id')
+    .maybeSingle();
+  if (deleteError) {
+    return error(context, 'ALERTS_UNAVAILABLE', 'Alert rules are unavailable.', 503);
+  }
+  if (!data) return error(context, 'ALERT_NOT_FOUND', 'The alert rule was not found.', 404);
   return context.body(null, 204);
 });
 
