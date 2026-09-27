@@ -14,8 +14,9 @@ A live, location-aware weather dashboard and public DevSecOps case study.
 - Read a chart with an accessible textual equivalent and explicit data freshness.
 - Use the dashboard on desktop or mobile without mock-data fallbacks.
 
-Berlin remains the reliable default. The public journey intentionally avoids authentication, saved
-locations, alerts, queues, and notification features until there is a concrete product need.
+Berlin remains the reliable default. The public weather journey works without an account; users may
+sign in with email/password to save places and switch between them. Alerts, queues, and notifications
+remain deferred.
 
 ## Architecture At A Glance
 
@@ -87,5 +88,5 @@ Do not commit secrets, Terraform state, database dumps, or generated backup arch
 ## Deliberately Deferred
 
 Atmos is a maintained portfolio showcase, not a continuously operated commercial weather service. Do
-not add paid providers, user accounts, notifications, recurring backup/restore operations, AI advice,
+not add paid providers, Google OAuth, notifications, recurring backup/restore operations, AI advice,
 AQI/history products, or multi-provider failover without a defined user need and explicit owner approval.
