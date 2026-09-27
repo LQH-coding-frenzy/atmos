@@ -1,5 +1,9 @@
 import {
+  airQualitySchema,
   dashboardSchema,
+  type AirQuality,
+  type AirQualityInput,
+  type AirQualityProvider,
   type Dashboard,
   type LocationInput,
   type LocationSearchProvider,
@@ -9,6 +13,7 @@ import {
 } from '@atmos/contracts';
 
 const openMeteoBaseUrl = 'https://api.open-meteo.com/v1/forecast';
+const openMeteoAirQualityBaseUrl = 'https://air-quality-api.open-meteo.com/v1/air-quality';
 const openMeteoGeocodingBaseUrl = 'https://geocoding-api.open-meteo.com/v1/search';
 
 export const openMeteoAttribution = {
@@ -154,6 +159,20 @@ type OpenMeteoGeocodingResponse = {
   }>;
 };
 
+type OpenMeteoAirQualityResponse = {
+  current: {
+    time: number;
+    us_aqi: number | null;
+    european_aqi: number | null;
+    pm2_5: number | null;
+    pm10: number | null;
+    carbon_monoxide: number | null;
+    nitrogen_dioxide: number | null;
+    sulphur_dioxide: number | null;
+    ozone: number | null;
+  };
+};
+
 function conditionFromCode(code: number): WeatherCondition {
   if (code === 0) return 'clear';
   if ([1, 2].includes(code)) return 'partly-cloudy';
@@ -220,7 +239,32 @@ function isOpenMeteoResponse(value: unknown): value is OpenMeteoResponse {
   );
 }
 
-export class OpenMeteoProvider implements WeatherProvider, LocationSearchProvider {
+function isAirQualityValue(value: unknown): value is number | null {
+  return value === null || (typeof value === 'number' && Number.isFinite(value));
+}
+
+function isOpenMeteoAirQualityResponse(value: unknown): value is OpenMeteoAirQualityResponse {
+  if (!value || typeof value !== 'object') return false;
+  const current = (value as Partial<OpenMeteoAirQualityResponse>).current;
+  return (
+    typeof current?.time === 'number' &&
+    Number.isFinite(current.time) &&
+    [
+      current.us_aqi,
+      current.european_aqi,
+      current.pm2_5,
+      current.pm10,
+      current.carbon_monoxide,
+      current.nitrogen_dioxide,
+      current.sulphur_dioxide,
+      current.ozone,
+    ].every(isAirQualityValue)
+  );
+}
+
+export class OpenMeteoProvider
+  implements WeatherProvider, LocationSearchProvider, AirQualityProvider
+{
   constructor(
     private readonly fetcher: typeof fetch = fetch.bind(globalThis),
     private readonly usageGuard = new OpenMeteoUsageGuard(),
@@ -306,6 +350,54 @@ export class OpenMeteoProvider implements WeatherProvider, LocationSearchProvide
     };
 
     return dashboardSchema.parse(dashboard);
+  }
+
+  async getAirQuality(input: AirQualityInput): Promise<AirQuality> {
+    this.usageGuard.reserve();
+    const url = new URL(openMeteoAirQualityBaseUrl);
+    url.searchParams.set('latitude', String(input.latitude));
+    url.searchParams.set('longitude', String(input.longitude));
+    url.searchParams.set(
+      'current',
+      'us_aqi,european_aqi,pm2_5,pm10,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone',
+    );
+    url.searchParams.set('timeformat', 'unixtime');
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    let response: Response;
+    try {
+      response = await this.fetcher(url, { signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (!response.ok) {
+      throw new Error(`Open-Meteo air-quality request failed with ${response.status}`);
+    }
+
+    const data: unknown = await response.json();
+    if (!isOpenMeteoAirQualityResponse(data)) {
+      throw new Error('Open-Meteo air-quality response has an invalid shape');
+    }
+    return airQualitySchema.parse({
+      observedAt: toIso(data.current.time),
+      usAqi: data.current.us_aqi,
+      europeanAqi: data.current.european_aqi,
+      pollutants: {
+        pm25: data.current.pm2_5,
+        pm10: data.current.pm10,
+        carbonMonoxide: data.current.carbon_monoxide,
+        nitrogenDioxide: data.current.nitrogen_dioxide,
+        sulphurDioxide: data.current.sulphur_dioxide,
+        ozone: data.current.ozone,
+      },
+      meta: {
+        provider: 'open-meteo',
+        cached: false,
+        stale: false,
+        updatedAt: new Date().toISOString(),
+      },
+    });
   }
 
   async searchLocations(query: string): Promise<LocationSearchResult[]> {

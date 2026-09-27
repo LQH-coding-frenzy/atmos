@@ -12,6 +12,7 @@ A live, location-aware weather dashboard and public DevSecOps case study.
 - View current conditions, the next 12 hours, and a seven-day forecast from Open-Meteo.
 - Switch temperature and wind units between metric and imperial.
 - Read a chart with an accessible textual equivalent and explicit data freshness.
+- Expand an on-demand Open-Meteo/CAMS air-quality panel with U.S./European AQI and pollutant values.
 - Sign in to save locations and record current observations for a personal 7/30/90-day history.
 - Use the dashboard on desktop or mobile without mock-data fallbacks.
 
@@ -26,7 +27,7 @@ deferred; no earlier observations are backfilled.
 Browser
   -> Next.js dashboard on Vercel
   -> Cloudflare Worker + Hono gateway
-  -> Open-Meteo forecast and geocoding APIs
+  -> Open-Meteo forecast, geocoding, and on-demand air-quality APIs
 
 Protected backend boundary
   -> Supabase Edge Functions, Postgres, Auth, and RLS
@@ -82,7 +83,7 @@ Hosted authentication setup is documented in [docs/auth.md](docs/auth.md).
 
 ## Attribution
 
-Live weather data is supplied by [Open-Meteo](https://open-meteo.com/) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) and its [Free API terms](https://open-meteo.com/en/terms). The Free endpoint is limited to non-commercial use; it must not be used with ads or subscriptions. Map styling uses OpenFreeMap/OpenStreetMap-compatible public map data; see [design provenance](docs/design/provenance.md).
+Live weather and AQI model data are supplied by [Open-Meteo](https://open-meteo.com/) under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); AQI also attributes [CAMS ENSEMBLE](https://atmosphere.copernicus.eu/). The [Free API terms](https://open-meteo.com/en/terms) are non-commercial and do not allow ads or subscriptions. Map styling uses OpenFreeMap/OpenStreetMap-compatible public map data; see [design provenance](docs/design/provenance.md).
 
 ## Security
 
@@ -92,5 +93,5 @@ Do not commit secrets, Terraform state, database dumps, or generated backup arch
 
 Atmos is a maintained portfolio showcase, not a continuously operated commercial weather service. Do
 not add paid providers, Google OAuth, notifications, recurring backup/restore operations, AI advice,
-AQI products, provider history/backfill, or multi-provider failover without a defined user need and
+historical AQI analysis, provider history/backfill, or multi-provider failover without a defined user need and
 explicit owner approval.

@@ -71,6 +71,55 @@ describe('weather providers', () => {
     expect(dashboard.daily[0]?.highC).toBe(23);
   });
 
+  it('normalizes current Air Quality API values using the shared quota guard', async () => {
+    const fetcher = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
+      void input;
+      void init;
+      return new Response(
+        JSON.stringify({
+          current: {
+            time: 1_788_256_800,
+            us_aqi: 42,
+            european_aqi: 18,
+            pm2_5: 7.2,
+            pm10: 12.4,
+            carbon_monoxide: 120,
+            nitrogen_dioxide: 4.3,
+            sulphur_dioxide: 1.1,
+            ozone: 65,
+          },
+        }),
+      );
+    });
+    const usageGuard = new OpenMeteoUsageGuard();
+    const provider = new OpenMeteoProvider(fetcher, usageGuard);
+
+    const result = await provider.getAirQuality({ latitude: 52.52, longitude: 13.405 });
+
+    expect(result).toMatchObject({
+      observedAt: '2026-09-01T10:00:00.000Z',
+      usAqi: 42,
+      europeanAqi: 18,
+      pollutants: {
+        pm25: 7.2,
+        pm10: 12.4,
+        carbonMonoxide: 120,
+        nitrogenDioxide: 4.3,
+        sulphurDioxide: 1.1,
+        ozone: 65,
+      },
+      meta: { provider: 'open-meteo', cached: false, stale: false },
+    });
+    const url = new URL(String(fetcher.mock.calls[0]?.[0]));
+    expect(url.origin).toBe('https://air-quality-api.open-meteo.com');
+    expect(url.pathname).toBe('/v1/air-quality');
+    expect(url.searchParams.get('current')).toContain('european_aqi');
+    expect(url.searchParams.get('current')).toContain('us_aqi');
+    expect(url.searchParams.get('latitude')).toBe('52.52');
+    expect(url.searchParams.get('longitude')).toBe('13.405');
+    expect(usageGuard.snapshot().requests.minute).toBe(1);
+  });
+
   it('normalizes bounded Open-Meteo geocoding results', async () => {
     const provider = new OpenMeteoProvider(
       async () =>

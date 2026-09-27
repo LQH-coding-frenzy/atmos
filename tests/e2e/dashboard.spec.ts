@@ -4,7 +4,7 @@ test('renders the responsive live-weather dashboard', async ({ page }) => {
   await page.goto('/');
 
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-  await expect(page.getByText('Berlin', { exact: true })).toBeVisible();
+  await expect(page.locator('.location-name')).toHaveText('Berlin');
   await expect(page.getByText('Live weather data: Open-Meteo.')).toBeVisible();
 
   await page.getByRole('button', { name: 'Fahrenheit' }).click();
@@ -22,6 +22,50 @@ test('renders the responsive live-weather dashboard', async ({ page }) => {
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
     .toBe(true);
+});
+
+test('loads attributed AQI estimates only after the user expands the panel', async ({ page }) => {
+  let calls = 0;
+  let requestedUrl = '';
+  await page.route('**/api/v1/weather/air-quality?**', async (route) => {
+    calls += 1;
+    requestedUrl = route.request().url();
+    await route.fulfill({
+      json: {
+        observedAt: '2026-09-27T10:00:00.000Z',
+        usAqi: 42,
+        europeanAqi: 18,
+        pollutants: {
+          pm25: 7.2,
+          pm10: 12.4,
+          carbonMonoxide: 120,
+          nitrogenDioxide: 4.3,
+          sulphurDioxide: 1.1,
+          ozone: 65,
+        },
+        meta: {
+          provider: 'open-meteo',
+          cached: false,
+          stale: false,
+          updatedAt: '2026-09-27T10:02:00.000Z',
+        },
+      },
+    });
+  });
+  await page.goto('/');
+
+  expect(calls).toBe(0);
+  await page.getByText('Air quality', { exact: true }).click();
+
+  await expect(page.locator('.aqi-index').nth(0)).toContainText('42');
+  await expect(page.locator('.aqi-index').nth(0)).toContainText('Good');
+  await expect(page.locator('.aqi-index').nth(1)).toContainText('18');
+  await expect(page.getByText('7.2 µg/m³', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open-Meteo Air Quality API' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'CAMS ENSEMBLE' })).toBeVisible();
+  expect(new URL(requestedUrl).searchParams.get('lat')).toBe('52.52');
+  expect(new URL(requestedUrl).searchParams.get('lon')).toBe('13.405');
+  expect(calls).toBe(1);
 });
 
 test('requests geolocation only after the user activates it and explains denied permission', async ({
@@ -122,7 +166,7 @@ test('loads weather from device coordinates without adding them to the page URL'
   await page.goto('/');
   await page.getByRole('button', { name: 'Use my current location' }).click();
 
-  await expect(page.getByText('Your location', { exact: true })).toBeVisible();
+  await expect(page.locator('.location-name')).toHaveText('Your location');
   await expect(page.locator('.location-status')).toContainText(
     'Showing weather for your current location',
   );
