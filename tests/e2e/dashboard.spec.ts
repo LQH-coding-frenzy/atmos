@@ -55,7 +55,7 @@ test('requests geolocation only after the user activates it and explains denied 
   ).toBe(0);
   await page.getByRole('button', { name: 'Use my current location' }).click();
 
-  await expect(page.getByRole('status')).toContainText('Location permission was denied');
+  await expect(page.locator('.location-status')).toContainText('Location permission was denied');
   expect(
     await page.evaluate(
       () => (window as Window & { __geolocationCalls: number }).__geolocationCalls,
@@ -123,7 +123,9 @@ test('loads weather from device coordinates without adding them to the page URL'
   await page.getByRole('button', { name: 'Use my current location' }).click();
 
   await expect(page.getByText('Your location', { exact: true })).toBeVisible();
-  await expect(page.getByRole('status')).toContainText('Showing weather for your current location');
+  await expect(page.locator('.location-status')).toContainText(
+    'Showing weather for your current location',
+  );
   expect(new URL(weatherRequest).searchParams.get('lat')).toBe('48.8534');
   expect(new URL(weatherRequest).searchParams.get('lon')).toBe('2.3488');
   await expect(page).toHaveURL('/');
@@ -240,7 +242,7 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   expect(forwardedAuthorization).toBe(`Bearer ${accessToken}`);
 
   await page.getByRole('button', { name: 'Save Berlin' }).click();
-  await expect(page.getByRole('status')).toContainText('Berlin saved to your places');
+  await expect(page.locator('.saved-location-status')).toContainText('Berlin saved to your places');
   expect(postedLocation).toEqual({ name: 'Berlin', latitude: 52.52, longitude: 13.405 });
   expect(forwardedAuthorization).toBe(`Bearer ${accessToken}`);
 
@@ -272,6 +274,8 @@ test('shows email-confirmation guidance after account creation', async ({ page }
   await page.getByLabel('Password').fill('safe-example-password');
   await page.getByRole('button', { name: 'Create account' }).click();
 
-  await expect(page.getByRole('status')).toContainText('check your email to confirm it');
+  await expect(page.locator('.saved-location-status')).toContainText(
+    'check your email to confirm it',
+  );
   await expect(page.getByText(user.email, { exact: true })).toHaveCount(0);
 });
