@@ -15,6 +15,7 @@ import {
   CloudSun,
   Droplets,
   Gauge,
+  LocateFixed,
   LayoutDashboard,
   Map,
   Menu,
@@ -96,6 +97,9 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
   const [units, setUnits] = useState<UnitSystem>('metric');
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [activeMetric, setActiveMetric] = useState<ForecastTrendMetric>('temperature');
+  const [locationStatus, setLocationStatus] = useState<
+    'idle' | 'locating' | 'success' | 'permission-denied' | 'unavailable' | 'weather-failed'
+  >('idle');
   const menuButton = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const [dashboard, setDashboard] = useState(initialDashboard);
@@ -116,7 +120,10 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
     return () => window.removeEventListener('keydown', closeOnEscape);
   }, [navigationOpen]);
 
-  async function selectLocation(location: LocationSearchResult) {
+  async function selectLocation(
+    location: LocationSearchResult,
+    updateUrl = true,
+  ): Promise<boolean> {
     const url = new URL('/api/v1/weather/dashboard', gatewayOrigin);
     url.search = new URLSearchParams({
       lat: String(location.latitude),
@@ -129,18 +136,54 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
       const parsed = dashboardSchema.safeParse(await response.json());
       if (!response.ok || !parsed.success) throw new Error('Weather request failed');
       setDashboard({ ...parsed.data, location });
-      const locationUrl = new URL(window.location.href);
-      locationUrl.search = new URLSearchParams({
-        lat: String(location.latitude),
-        lon: String(location.longitude),
-        timezone: location.timezone,
-        name: location.name,
-        country: location.country,
-      }).toString();
-      window.history.pushState({}, '', locationUrl);
+      if (updateUrl) {
+        const locationUrl = new URL(window.location.href);
+        locationUrl.search = new URLSearchParams({
+          lat: String(location.latitude),
+          lon: String(location.longitude),
+          timezone: location.timezone,
+          name: location.name,
+          country: location.country,
+        }).toString();
+        window.history.pushState({}, '', locationUrl);
+      } else {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+      return true;
     } catch {
       // The existing dashboard remains visible when a selected-location request fails.
+      return false;
     }
+  }
+
+  function useCurrentLocation() {
+    if (!navigator.geolocation) {
+      setLocationStatus('unavailable');
+      return;
+    }
+    setLocationStatus('locating');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        const location: LocationSearchResult = {
+          id: 'device-location',
+          name: 'Your location',
+          country: 'Device location',
+          latitude,
+          longitude,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        };
+        void selectLocation(location, false).then((loaded) => {
+          setLocationStatus(loaded ? 'success' : 'weather-failed');
+        });
+      },
+      (error) => {
+        setLocationStatus(
+          error.code === error.PERMISSION_DENIED ? 'permission-denied' : 'unavailable',
+        );
+      },
+      { enableHighAccuracy: false, maximumAge: 300_000, timeout: 10_000 },
+    );
   }
 
   return (
@@ -193,6 +236,16 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
           </div>
           <div className="topbar-actions">
             <LocationSearch gatewayOrigin={gatewayOrigin} onSelect={selectLocation} />
+            <button
+              className="current-location-button"
+              type="button"
+              onClick={useCurrentLocation}
+              disabled={locationStatus === 'locating'}
+              aria-label="Use my current location"
+            >
+              <LocateFixed size={17} aria-hidden="true" />
+              <span>{locationStatus === 'locating' ? 'Locating…' : 'My location'}</span>
+            </button>
             <div className="unit-switch" aria-label="Temperature unit">
               <button
                 className={units === 'metric' ? 'active' : ''}
@@ -213,6 +266,18 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
             </div>
           </div>
         </header>
+        {locationStatus !== 'idle' ? (
+          <p className="location-status" role="status" aria-live="polite">
+            {locationStatus === 'locating' && 'Requesting your location…'}
+            {locationStatus === 'success' && 'Showing weather for your current location.'}
+            {locationStatus === 'permission-denied' &&
+              'Location permission was denied. Allow location access in your browser settings to try again.'}
+            {locationStatus === 'unavailable' &&
+              'Your device location is unavailable. You can still search for a city.'}
+            {locationStatus === 'weather-failed' &&
+              'Weather for your current location could not be loaded. Please try again.'}
+          </p>
+        ) : null}
 
         <section className="dashboard-grid">
           <article className="current-card panel">

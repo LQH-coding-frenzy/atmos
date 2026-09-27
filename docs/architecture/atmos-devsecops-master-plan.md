@@ -3294,6 +3294,7 @@ DONE
 | PERF-001 | Worker CPU measurement gate | EDGE-004 | perf evidence |
 | ROUTE-001 | Worker -> versioned Supabase proxy | FUNC-001, EDGE-002 | split runtime |
 | FEAT-LOC-001 | saved locations | FUNC-002, RLS-002 | feature |
+| FEAT-GEO-001 | user-controlled browser geolocation | EDGE-004, WEB-002, WX-004 | feature |
 | FEAT-CHART-001 | charts | WEB-002 | feature |
 | FEAT-AQI-001 | AQI | WX-003, WEB-002 | feature |
 | FEAT-MAP-001 | map | WEB-002 | feature |
