@@ -26,6 +26,7 @@ task:
         packages/contracts/src/index.ts,
         packages/contracts/src/index.test.ts,
         tests/e2e/dashboard.spec.ts,
+        playwright.config.ts,
         README.md,
         docs/auth.md,
         docs/operations/cv-showcase-maintenance.md,
