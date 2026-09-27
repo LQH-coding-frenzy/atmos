@@ -1,7 +1,7 @@
 task:
   id: FEAT-GEO-001
   title: User-controlled browser geolocation
-  status: REVIEW
+  status: DONE
   objective: Let a user explicitly request local weather from the device's current coordinates without persisting or exposing them in the page URL.
   depends_on: [EDGE-004, WEB-002, WX-004]
   external_policy_checks: [none; uses browser permission and the existing public weather gateway]
