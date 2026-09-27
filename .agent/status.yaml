@@ -1,5 +1,5 @@
 project: atmos
-updated: 2026-09-22
+updated: 2026-09-27
 scope:
   profile: CV_SHOWCASE
   production_hardening: DEFERRED
@@ -20,6 +20,7 @@ tasks:
   FUNC-001: DONE
   FUNC-002: DONE
   FEAT-LOC-001: DONE
+  FEAT-LOC-UI-001: IN_PROGRESS
   FEAT-GEO-001: DONE
   ROUTE-001: DONE
   FEAT-PLAN-001: DONE

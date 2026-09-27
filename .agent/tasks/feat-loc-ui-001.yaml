@@ -1,0 +1,84 @@
+task:
+  id: FEAT-LOC-UI-001
+  title: Authenticated saved-locations dashboard UI
+  status: IN_PROGRESS
+  objective: Allow a user to sign up or sign in, save the current weather location, and load/switch to their saved locations through the existing authenticated gateway API.
+  depends_on: [AUTH-001, FEAT-LOC-001, ROUTE-001, WEB-002]
+  external_policy_checks:
+    [
+      Hosted email/password sign-up and https://rainify.dpdns.org Site URL/email-confirmation redirect verified after owner-approved configuration.,
+    ]
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Browser-owned authentication and saved-location controls use the existing gateway and Supabase Auth; persistence and authorization remain in Supabase.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/feat-loc-ui-001.yaml,
+        apps/web/package.json,
+        pnpm-lock.yaml,
+        apps/web/lib/supabase-browser.ts,
+        apps/web/components/saved-locations-panel.tsx,
+        apps/web/components/dashboard.tsx,
+        apps/web/app/globals.css,
+        packages/contracts/src/index.ts,
+        packages/contracts/src/index.test.ts,
+        tests/e2e/dashboard.spec.ts,
+        playwright.config.ts,
+        README.md,
+        docs/auth.md,
+        docs/operations/cv-showcase-maintenance.md,
+        docs/architecture/atmos-devsecops-master-plan.md,
+        docs/evidence/feat-loc-ui-001/2026-09-27.md,
+        Supabase Auth site_url and uri_allow_list,
+      ]
+    exclude:
+      [
+        Google OAuth,
+        saved-location delete/rename/reorder,
+        database schema or RLS changes,
+        new cloud resources,
+      ]
+  inputs:
+    required_config: [NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY]
+    required_secrets: []
+  outputs:
+    files: [apps/web/components/saved-locations-panel.tsx, packages/contracts/src/index.ts]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web, Supabase Auth URL configuration]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: until the previous Vercel deployment is retired
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run packages/contracts/src/index.test.ts,
+        corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts,
+        corepack pnpm typecheck,
+        corepack pnpm --filter @atmos/web build,
+      ]
+    expected:
+      [
+        Unauthenticated visitors retain public weather access; authenticated users can save,
+        list,
+        and select only API-returned saved locations.,
+      ]
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable, existing RLS tests]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: ['existing bounded api_proxy request group only; no location names or coordinates']
+    logs: ['no client logging of email, access tokens, or saved location data']
+    traces: ['existing request correlation only; never include credentials or location payloads']
+  evidence: [docs/evidence/feat-loc-ui-001/2026-09-27.md, pull request checks]
+  rollback:
+    strategy: Revert the frontend integration; retain the verified Atmos Auth Site URL and exact root redirect, which support the existing email confirmation flow and create no user data.
+  human_approval:
+    required: true
+    reason: Owner approval to set the production Site URL and exact root redirect was obtained before the configuration update.

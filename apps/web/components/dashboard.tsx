@@ -28,6 +28,7 @@ import { DashboardMap } from './dashboard-map';
 import { ActivityPlanner } from './activity-planner';
 import { ForecastTrendChart } from './forecast-trend-chart';
 import { LocationSearch } from './location-search';
+import { SavedLocationsPanel } from './saved-locations-panel';
 import type { ForecastTrendMetric } from '../lib/forecast-trend';
 
 type DashboardProps = {
@@ -122,7 +123,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
 
   async function selectLocation(
     location: LocationSearchResult,
-    updateUrl = true,
+    shareInUrl = true,
   ): Promise<boolean> {
     const url = new URL('/api/v1/weather/dashboard', gatewayOrigin);
     url.search = new URLSearchParams({
@@ -135,15 +136,19 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
       const response = await fetch(url);
       const parsed = dashboardSchema.safeParse(await response.json());
       if (!response.ok || !parsed.success) throw new Error('Weather request failed');
-      setDashboard({ ...parsed.data, location });
-      if (updateUrl) {
+      const selectedLocation = {
+        ...location,
+        timezone: location.timezone === 'auto' ? parsed.data.location.timezone : location.timezone,
+      };
+      setDashboard({ ...parsed.data, location: selectedLocation });
+      if (shareInUrl) {
         const locationUrl = new URL(window.location.href);
         locationUrl.search = new URLSearchParams({
-          lat: String(location.latitude),
-          lon: String(location.longitude),
-          timezone: location.timezone,
-          name: location.name,
-          country: location.country,
+          lat: String(selectedLocation.latitude),
+          lon: String(selectedLocation.longitude),
+          timezone: selectedLocation.timezone,
+          name: selectedLocation.name,
+          country: selectedLocation.country,
         }).toString();
         window.history.pushState({}, '', locationUrl);
       } else {
@@ -236,6 +241,11 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
           </div>
           <div className="topbar-actions">
             <LocationSearch gatewayOrigin={gatewayOrigin} onSelect={selectLocation} />
+            <SavedLocationsPanel
+              gatewayOrigin={gatewayOrigin}
+              currentLocation={dashboard.location}
+              onSelect={selectLocation}
+            />
             <button
               className="current-location-button"
               type="button"
