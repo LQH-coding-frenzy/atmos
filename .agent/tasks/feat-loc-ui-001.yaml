@@ -1,7 +1,7 @@
 task:
   id: FEAT-LOC-UI-001
   title: Authenticated saved-locations dashboard UI
-  status: IN_PROGRESS
+  status: DONE
   objective: Allow a user to sign up or sign in, save the current weather location, and load/switch to their saved locations through the existing authenticated gateway API.
   depends_on: [AUTH-001, FEAT-LOC-001, ROUTE-001, WEB-002]
   external_policy_checks:
