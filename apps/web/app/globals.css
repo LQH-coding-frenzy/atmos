@@ -211,6 +211,28 @@ button {
   color: var(--muted);
   font-size: 12px;
 }
+.current-location-button {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #2a2d35;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.current-location-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+.location-status {
+  margin: -12px 4px 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
 .unit-switch {
   display: flex;
   padding: 3px;
