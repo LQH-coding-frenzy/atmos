@@ -1,7 +1,7 @@
 task:
   id: HIST-CAP-001
   title: Authenticated user-captured weather history
-  status: IN_PROGRESS
+  status: DONE
   objective: Let a signed-in user explicitly record the currently displayed Open-Meteo observation and view a bounded 7/30/90-day temperature history for the selected coordinates.
   depends_on: [FEAT-LOC-UI-001, FUNC-002, HIST-001, ROUTE-001, WEB-002]
   external_policy_checks:
