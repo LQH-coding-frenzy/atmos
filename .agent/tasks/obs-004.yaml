@@ -1,0 +1,84 @@
+task:
+  id: OBS-004
+  title: Supabase Edge Function application telemetry
+  status: IN_PROGRESS
+  objective: Export sanitized HTTP server traces from the Supabase api-v1 Edge Function to the existing Grafana Cloud stack over OTLP without adding request-path latency.
+  depends_on: [OBS-002, FUNC-001]
+  external_policy_checks:
+    - Existing Grafana Cloud Free stack reports 40 of 10,000 metric series, zero of 50 GB trace usage, and no overage; no paid-plan change or new vendor.
+  runtime_placement:
+    allowed: [supabase-edge-function]
+    selected: supabase-edge-function
+    reason: The authenticated application API runs in the Supabase Edge Function and can export bounded traces near its request boundary.
+  scope:
+    include:
+      [
+        supabase/functions/_shared/otel.ts,
+        supabase/functions/_shared/otel.test.ts,
+        supabase/functions/api-v1/index.ts,
+        .agent/status.yaml,
+        .agent/tasks/obs-004.yaml,
+        docs/evidence/obs-004,
+        existing Grafana Cloud OTLP endpoint,
+        Supabase Production Edge Function configuration,
+      ]
+    exclude:
+      - Vercel telemetry (OBS-003)
+      - Worker telemetry
+      - database/schema/RLS changes
+      - request bodies, query values, authorization/cookie headers, and user identifiers
+      - logs or metrics export
+      - new vendors or paid resources
+  inputs:
+    required_config: [OTEL_EXPORTER_OTLP_ENDPOINT]
+    required_secrets: [OTEL_EXPORTER_OTLP_HEADERS]
+  outputs:
+    files:
+      [
+        supabase/functions/_shared/otel.ts,
+        supabase/functions/_shared/otel.test.ts,
+        supabase/functions/api-v1/index.ts,
+        docs/evidence/obs-004/2026-09-29.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [api-v1 Supabase Edge Function]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert the telemetry middleware; disable the two OTLP settings to stop export without changing application data.
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run supabase/functions/_shared/otel.test.ts,
+        corepack pnpm typecheck,
+        corepack pnpm exec eslint supabase/functions/_shared/otel.ts supabase/functions/_shared/otel.test.ts supabase/functions/api-v1/index.ts,
+        Deno check for the shared exporter in a read-only pinned runtime container,
+        Deno runtime smoke of the api-v1 health route with OTLP export disabled,
+        local Grafana OTEL-LGTM OTLP smoke using grafana/otel-lgtm:0.34.0,
+        protected production release and one sanitized trace verification,
+      ]
+    expected:
+      - missing OTLP configuration disables export without affecting requests
+      - a configured request produces one bounded server span
+      - span attributes exclude payloads, query values, credentials, cookies, and user identifiers
+      - exporter failure never changes the API response
+      - the production trace appears in the existing Grafana Cloud stack
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [none]
+    logs: [none; export failures are swallowed without logging credentials or payloads]
+    traces: [one sampled/sanitized HTTP server span per selected request]
+  evidence:
+    - docs/evidence/obs-004/2026-09-29.md
+    - local Docker OTLP smoke
+    - protected production trace verification
+  rollback:
+    strategy: Revert the exporter middleware and disable OTLP configuration; no database or user data changes exist.
+  human_approval:
+    required: true
+    reason: Owner authorized the Supabase production telemetry test, scoped Grafana OTLP credential, and Supabase Function configuration on 2026-09-29; paid-plan changes remain excluded.
