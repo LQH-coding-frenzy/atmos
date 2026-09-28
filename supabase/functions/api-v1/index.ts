@@ -4,6 +4,7 @@ import { secureHeaders } from 'npm:hono@4.13.5/secure-headers';
 import { createClient } from 'npm:@supabase/supabase-js@2.114.0';
 import { createCorrelation } from '../_shared/correlation.ts';
 import { databaseDependencyIsHealthy } from '../_shared/dependency-health.ts';
+import { exportOtlpTrace } from '../_shared/otel.ts';
 import {
   parseAlertRuleEnabledUpdate,
   parseAlertRuleInsert,
@@ -72,6 +73,40 @@ app.use(
   }),
 );
 app.use('*', secureHeaders());
+app.use('*', async (context, next) => {
+  const startTimeUnixNano = (BigInt(Date.now()) * 1_000_000n).toString();
+  try {
+    await next();
+  } finally {
+    const endTimeUnixNano = (BigInt(Date.now()) * 1_000_000n).toString();
+    const telemetryTask = exportOtlpTrace(
+      {
+        traceparent: context.get('traceparent'),
+        method: context.req.method,
+        route: context.req.routePath ?? 'unmatched',
+        statusCode: context.res.status,
+        startTimeUnixNano,
+        endTimeUnixNano,
+        releaseId: context.env.RELEASE_ID ?? Deno.env.get('RELEASE_ID'),
+      },
+      {
+        endpoint: Deno.env.get('OTEL_EXPORTER_OTLP_ENDPOINT'),
+        headers: Deno.env.get('OTEL_EXPORTER_OTLP_HEADERS'),
+      },
+    );
+    const edgeRuntime = (
+      globalThis as typeof globalThis & {
+        EdgeRuntime?: { waitUntil(promise: Promise<unknown>): void };
+      }
+    ).EdgeRuntime;
+    try {
+      if (edgeRuntime) edgeRuntime.waitUntil(telemetryTask);
+      else void telemetryTask;
+    } catch {
+      void telemetryTask;
+    }
+  }
+});
 
 app.get('/health', (context) => context.json({ status: 'ok' }));
 app.get('/health/dependencies', async (context) => {
