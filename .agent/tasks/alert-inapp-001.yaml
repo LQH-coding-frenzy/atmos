@@ -4,7 +4,10 @@ task:
   status: IN_PROGRESS
   objective: Let signed-in users create, pause, and delete in-app-only threshold rules and see their current match state against the open dashboard weather.
   depends_on: [ALERT-001, ALERT-002, DOM-002, FEAT-LOC-UI-001, FUNC-002, ROUTE-001, WEB-002]
-  external_policy_checks: [none; no external delivery provider or recurring job is enabled]
+  external_policy_checks:
+    [
+      Existing NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are required in Vercel Production; owner reports configuration is updated and the protected release must verify it.,
+    ]
   runtime_placement:
     allowed: [supabase-edge-function, vercel-nextjs]
     selected: supabase-edge-function
@@ -42,7 +45,7 @@ task:
         external alert vendor,
       ]
   inputs:
-    required_config: [existing Supabase URL and publishable key]
+    required_config: [NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY]
     required_secrets: []
   outputs:
     files: [supabase/functions/api-v1/index.ts, apps/web/components/in-app-alerts-panel.tsx]
@@ -86,5 +89,5 @@ task:
   rollback:
     strategy: Revert the API and in-app panel; retain existing user alert rules and RLS data, and leave queues/cron retired.
   human_approval:
-    required: false
-    reason: User selected in-app-only alert rules; no external delivery, scheduler, queue, migration, paid resource, or new vendor is added.
+    required: true
+    reason: Owner updated the existing public Supabase client configuration in Vercel Production; no value is read from or written to repository files.
