@@ -1,12 +1,12 @@
 task:
   id: ALERT-INAPP-001
   title: Authenticated in-app weather alert rules
-  status: IN_PROGRESS
+  status: DONE
   objective: Let signed-in users create, pause, and delete in-app-only threshold rules and see their current match state against the open dashboard weather.
   depends_on: [ALERT-001, ALERT-002, DOM-002, FEAT-LOC-UI-001, FUNC-002, ROUTE-001, WEB-002]
   external_policy_checks:
     [
-      Existing NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY are required in Vercel Production; owner reports configuration is updated and the protected release must verify it.,
+      Vercel Production Supabase browser configuration has been verified in the rebuilt production bundle.,
     ]
   runtime_placement:
     allowed: [supabase-edge-function, vercel-nextjs]
@@ -90,4 +90,4 @@ task:
     strategy: Revert the API and in-app panel; retain existing user alert rules and RLS data, and leave queues/cron retired.
   human_approval:
     required: true
-    reason: Owner updated the existing public Supabase client configuration in Vercel Production; no value is read from or written to repository files.
+    reason: The owner configured the existing public Supabase client values in Vercel Production; the rebuilt production dashboard verifies client initialization without exposing those values.
