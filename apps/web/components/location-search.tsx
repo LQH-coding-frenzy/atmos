@@ -3,6 +3,7 @@
 import { locationSearchResultSchema, type LocationSearchResult } from '@atmos/contracts';
 import { Search } from 'lucide-react';
 import { useState } from 'react';
+import { versionAffinityHeaders } from '../lib/version-affinity';
 
 type LocationSearchProps = {
   gatewayOrigin: string;
@@ -22,7 +23,7 @@ export function LocationSearch({ gatewayOrigin, onSelect }: LocationSearchProps)
     try {
       const url = new URL('/api/v1/locations/search', gatewayOrigin);
       url.searchParams.set('q', value);
-      const response = await fetch(url);
+      const response = await fetch(url, { headers: versionAffinityHeaders() });
       const parsed = locationSearchResultSchema.array().safeParse((await response.json()).results);
       if (!response.ok || !parsed.success) throw new Error('Location search failed');
       setResults(parsed.data);

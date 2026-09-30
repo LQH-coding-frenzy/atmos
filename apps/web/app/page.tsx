@@ -1,15 +1,16 @@
 import { dashboardSchema, type Dashboard as DashboardData } from '@atmos/contracts';
 import { Dashboard } from '../components/dashboard';
 
-const productionGatewayOrigin = 'https://atmos-gateway.rainify.workers.dev';
+const productionGatewayOrigin = 'https://api.rainify.dpdns.org';
+const defaultGatewayOrigin = 'https://atmos-gateway.rainify.workers.dev';
 
 // A failed build-time weather request must never be cached as the public page.
 export const dynamic = 'force-dynamic';
 
 function gatewayOrigin(): string {
-  // Production SSR uses the stable Workers hostname; local and CI can override it explicitly.
+  // Production uses the zone-routed API host so version affinity can be applied.
   if (process.env.VERCEL_ENV === 'production') return productionGatewayOrigin;
-  return process.env.ATMOS_GATEWAY_URL ?? productionGatewayOrigin;
+  return process.env.ATMOS_GATEWAY_URL ?? defaultGatewayOrigin;
 }
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;

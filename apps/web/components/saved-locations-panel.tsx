@@ -10,6 +10,7 @@ import type { Session } from '@supabase/supabase-js';
 import { Bookmark, LogIn, LogOut } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabaseBrowserClient } from '../lib/supabase-browser';
+import { versionAffinityHeaders } from '../lib/version-affinity';
 
 type SavedLocationsPanelProps = {
   gatewayOrigin: string;
@@ -22,7 +23,10 @@ type AuthMode = 'sign-in' | 'sign-up';
 async function fetchSavedLocations(gatewayOrigin: string, accessToken: string) {
   const response = await fetch(new URL('/api/v1/locations', gatewayOrigin), {
     cache: 'no-store',
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: {
+      ...versionAffinityHeaders(),
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
   const parsed = savedLocationsResponseSchema.safeParse(
     await response.json().catch(() => undefined),
@@ -179,6 +183,7 @@ export function SavedLocationsPanel({
       const response = await fetch(new URL('/api/v1/locations', gatewayOrigin), {
         method: 'POST',
         headers: {
+          ...versionAffinityHeaders(),
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },

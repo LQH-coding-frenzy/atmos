@@ -1,0 +1,104 @@
+task:
+  id: REL-005
+  title: Worker version affinity and request-header Transform Rule
+  status: IN_PROGRESS
+  objective: Keep browser requests in one Atmos session on the same Cloudflare Worker version during gradual deployments using a random session-only affinity key.
+  depends_on: [REL-004]
+  external_policy_checks:
+    - Existing Cloudflare Free zone and active api.rainify.dpdns.org custom hostname; no new paid resource or vendor.
+    - The http_request_late_transform entrypoint was not present at the owner-approved read-only preflight.
+  runtime_placement:
+    allowed: [cloudflare-worker, vercel-nextjs]
+    selected: cloudflare-worker
+    reason: Cloudflare Worker versions consume the platform affinity key; the Vercel client creates and sends a non-sensitive session key.
+  scope:
+    include:
+      [
+        apps/web/app/page.tsx,
+        apps/web/next.config.ts,
+        apps/web/next-config.test.ts,
+        apps/web/lib/version-affinity.ts,
+        apps/web/lib/version-affinity.test.ts,
+        apps/web/components,
+        workers/gateway/src/index.ts,
+        workers/gateway/src/index.test.ts,
+        infra/terraform/production-edge.tf,
+        docs/adr/0003-worker-version-affinity.md,
+        docs/operations/production-worker-canary.md,
+        PRODUCTION-CONTINUATION.md,
+        .agent/status.yaml,
+        .agent/tasks/rel-005.yaml,
+        docs/evidence/rel-005,
+      ]
+    exclude:
+      - authentication/authorization semantics
+      - user IDs, emails, JWTs, cookies, or durable server-side affinity state
+      - database/schema/RLS changes
+      - paid Workers plans or new vendors
+      - changing rollout percentages without separate rollout approval
+  inputs:
+    required_config:
+      [production API hostname api.rainify.dpdns.org, CORS header X-Atmos-Version-Key]
+    required_secrets: [none]
+  outputs:
+    files:
+      [
+        apps/web/app/page.tsx,
+        apps/web/next.config.ts,
+        apps/web/next-config.test.ts,
+        apps/web/lib/version-affinity.ts,
+        apps/web/lib/version-affinity.test.ts,
+        apps/web/components,
+        workers/gateway/src/index.ts,
+        workers/gateway/src/index.test.ts,
+        infra/terraform/production-edge.tf,
+        docs/adr/0003-worker-version-affinity.md,
+        docs/operations/production-worker-canary.md,
+        PRODUCTION-CONTINUATION.md,
+        docs/evidence/rel-005/2026-09-30.md,
+      ]
+    terraform_resources: [cloudflare_ruleset.http_request_late_transform]
+    database_changes: [none]
+    deployed_units:
+      [Vercel web API origin, Cloudflare Worker CORS, Cloudflare zone request-header transform rule]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Remove the transform rule and revert the production API origin; unkeyed requests continue to route normally.
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run apps/web/lib/version-affinity.test.ts workers/gateway/src/index.test.ts apps/web/next-config.test.ts,
+        corepack pnpm typecheck,
+        corepack pnpm --filter @atmos/web build,
+        corepack pnpm --filter @atmos/gateway build,
+        terraform fmt -check and validate for infra/terraform,
+        HCP Terraform speculative plan for atmos-edge-production,
+        protected production rule and exact-host smoke,
+        repeated-key affinity verification during an owner-approved version split,
+      ]
+    expected:
+      - the same browser tab reuses a random UUIDv4 across gateway requests
+      - requests without a valid affinity key continue normally and are not treated as authenticated
+      - CORS preflight permits X-Atmos-Version-Key only for the configured frontend origin
+      - the zone rule maps a valid key on api.rainify.dpdns.org to Cloudflare-Workers-Version-Key
+      - repeated requests with the same key remain on the same Worker version during a split
+      - affinity keys are absent from application logs, analytics, and telemetry attributes
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [existing per-version WAE telemetry only]
+    logs: [none; affinity key is not logged]
+    traces: [existing traceparent propagation only]
+  evidence:
+    - docs/evidence/rel-005/2026-09-30.md
+    - HCP speculative production plan
+    - protected Cloudflare rule verification and affinity smoke
+  rollback:
+    strategy: Remove only the version-key Transform Rule and revert the frontend API origin/CORS changes; preserve the existing custom hostname and Worker deployment history.
+  human_approval:
+    required: true
+    reason: Owner explicitly approved REL-005 production API-origin and Cloudflare request-header rule changes on 2026-09-30; any production traffic split still needs its own protected release confirmation.

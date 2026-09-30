@@ -14,6 +14,7 @@ import type { Session } from '@supabase/supabase-js';
 import { History, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabaseBrowserClient } from '../lib/supabase-browser';
+import { versionAffinityHeaders } from '../lib/version-affinity';
 
 type HistoryDays = 7 | 30 | 90;
 
@@ -72,7 +73,10 @@ async function fetchHistory(
   }).toString();
   const response = await fetch(url, {
     cache: 'no-store',
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: {
+      ...versionAffinityHeaders(),
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
   const parsed = weatherSnapshotsResponseSchema.safeParse(
     await response.json().catch(() => undefined),
@@ -185,6 +189,7 @@ export function WeatherHistoryPanel({
       const response = await fetch(new URL('/api/v1/weather/history', gatewayOrigin), {
         method: 'POST',
         headers: {
+          ...versionAffinityHeaders(),
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
@@ -219,7 +224,13 @@ export function WeatherHistoryPanel({
     try {
       const response = await fetch(
         new URL(`/api/v1/weather/history/${snapshotId}`, gatewayOrigin),
-        { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } },
+        {
+          method: 'DELETE',
+          headers: {
+            ...versionAffinityHeaders(),
+            Authorization: `Bearer ${accessToken}`,
+          },
+        },
       );
       if (response.status === 404) {
         await refreshHistory();

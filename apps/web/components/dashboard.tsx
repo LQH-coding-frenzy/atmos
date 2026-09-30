@@ -33,6 +33,7 @@ import { WeatherHistoryPanel } from './weather-history-panel';
 import { AirQualityPanel } from './air-quality-panel';
 import { InAppAlertsPanel } from './in-app-alerts-panel';
 import type { ForecastTrendMetric } from '../lib/forecast-trend';
+import { versionAffinityHeaders } from '../lib/version-affinity';
 
 type DashboardProps = {
   initialDashboard: DashboardData;
@@ -136,7 +137,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
       units: 'metric',
     }).toString();
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { headers: versionAffinityHeaders() });
       const parsed = dashboardSchema.safeParse(await response.json());
       if (!response.ok || !parsed.success) throw new Error('Weather request failed');
       const selectedLocation = {

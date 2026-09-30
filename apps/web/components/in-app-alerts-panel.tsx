@@ -16,6 +16,7 @@ import type { Session } from '@supabase/supabase-js';
 import { BellRing, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabaseBrowserClient } from '../lib/supabase-browser';
+import { versionAffinityHeaders } from '../lib/version-affinity';
 
 type InAppAlertMetric = 'temperature' | 'rain-probability' | 'wind' | 'thunderstorm';
 type Comparison = 'above' | 'below';
@@ -124,7 +125,10 @@ async function fetchAlertRules(
   }).toString();
   const response = await fetch(url, {
     cache: 'no-store',
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: {
+      ...versionAffinityHeaders(),
+      Authorization: `Bearer ${accessToken}`,
+    },
   });
   const parsed = alertRulesResponseSchema.safeParse(await response.json().catch(() => undefined));
   if (!response.ok || !parsed.success) throw new Error('Alert rules are unavailable');
@@ -239,6 +243,7 @@ export function InAppAlertsPanel({
       const response = await fetch(new URL('/api/v1/alerts', gatewayOrigin), {
         method: 'POST',
         headers: {
+          ...versionAffinityHeaders(),
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
@@ -268,6 +273,7 @@ export function InAppAlertsPanel({
       const response = await fetch(new URL(`/api/v1/alerts/${rule.id}`, gatewayOrigin), {
         method: 'PATCH',
         headers: {
+          ...versionAffinityHeaders(),
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
@@ -293,7 +299,10 @@ export function InAppAlertsPanel({
     try {
       const response = await fetch(new URL(`/api/v1/alerts/${rule.id}`, gatewayOrigin), {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: {
+          ...versionAffinityHeaders(),
+          Authorization: `Bearer ${accessToken}`,
+        },
       });
       if (!response.ok) throw new Error('Alert rule delete failed');
       await refreshRules();

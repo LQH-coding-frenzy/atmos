@@ -4,6 +4,7 @@ import { airQualitySchema, type AirQuality, type Location } from '@atmos/contrac
 import { Wind } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { classifyEuropeanAqi, classifyUsAqi, formatAqiValue } from '../lib/air-quality';
+import { versionAffinityHeaders } from '../lib/version-affinity';
 
 type AirQualityPanelProps = {
   gatewayOrigin: string;
@@ -42,7 +43,11 @@ export function AirQualityPanel({ gatewayOrigin, location }: AirQualityPanelProp
       lon: String(location.longitude),
     }).toString();
 
-    void fetch(url, { cache: 'no-store', signal: controller.signal })
+    void fetch(url, {
+      cache: 'no-store',
+      headers: versionAffinityHeaders(),
+      signal: controller.signal,
+    })
       .then(async (response) => {
         const parsed = airQualitySchema.safeParse(await response.json().catch(() => undefined));
         if (!response.ok || !parsed.success) throw new Error('Air quality is unavailable');
