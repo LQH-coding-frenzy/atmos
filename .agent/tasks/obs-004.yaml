@@ -1,7 +1,7 @@
 task:
   id: OBS-004
   title: Supabase Edge Function application telemetry
-  status: IN_PROGRESS
+  status: DONE
   objective: Export sanitized HTTP server traces from the Supabase api-v1 Edge Function to the existing Grafana Cloud stack over OTLP without adding request-path latency.
   depends_on: [OBS-002, FUNC-001]
   external_policy_checks:
@@ -39,6 +39,7 @@ task:
         supabase/functions/_shared/otel.test.ts,
         supabase/functions/api-v1/index.ts,
         docs/evidence/obs-004/2026-09-29.md,
+        docs/evidence/obs-004/2026-09-30.md,
       ]
     terraform_resources: [none]
     database_changes: [none]
@@ -75,10 +76,11 @@ task:
     traces: [one sampled/sanitized HTTP server span per selected request]
   evidence:
     - docs/evidence/obs-004/2026-09-29.md
+    - docs/evidence/obs-004/2026-09-30.md
     - local Docker OTLP smoke
     - protected production trace verification
   rollback:
     strategy: Revert the exporter middleware and disable OTLP configuration; no database or user data changes exist.
   human_approval:
     required: true
-    reason: Owner authorized the Supabase production telemetry test, scoped Grafana OTLP credential, and Supabase Function configuration on 2026-09-29; paid-plan changes remain excluded.
+    reason: Owner authorized the scoped Grafana OTLP credential, Supabase Function configuration, and protected Edge release confirmations on 2026-09-29 and 2026-09-30; paid-plan changes remain excluded.
