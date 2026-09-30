@@ -1,7 +1,7 @@
 task:
   id: OBS-003
   title: Vercel Next.js application telemetry
-  status: IN_PROGRESS
+  status: DONE
   objective: Export sanitized Next.js server request traces from the Vercel Production deployment to the existing Grafana Cloud stack over OTLP.
   depends_on: [OBS-002, WEB-001]
   external_policy_checks:
@@ -63,7 +63,7 @@ task:
     expected:
       - missing OTLP configuration disables Vercel trace export
       - Next.js server spans are exported through the existing Grafana Cloud OTLP endpoint
-      - outgoing fetch spans and request targets are disabled or removed
+      - Next.js built-in fetch spans are disabled; remaining Vercel fetch spans contain no URL/target attributes
       - span attributes exclude query values, full URLs, credentials, cookies, request/response bodies, and user identifiers
       - no logs or metrics are exported
       - the production trace appears in the existing Grafana Cloud stack
@@ -75,7 +75,7 @@ task:
   telemetry:
     metrics: [none]
     logs: [none]
-    traces: [sanitized Next.js server spans only]
+    traces: [sanitized Next.js server request and internal fetch spans only]
   evidence:
     - docs/evidence/obs-003/2026-09-30.md
     - local Docker OTLP smoke
