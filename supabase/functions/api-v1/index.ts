@@ -25,6 +25,12 @@ type Variables = {
   traceparent: string;
 };
 
+declare const EdgeRuntime:
+  | {
+      waitUntil(promise: Promise<unknown>): void;
+    }
+  | undefined;
+
 export const app = new Hono<{ Bindings: Bindings; Variables: Variables }>().basePath('/api-v1');
 
 function error(
@@ -79,6 +85,8 @@ app.use('*', async (context, next) => {
     await next();
   } finally {
     const endTimeUnixNano = (BigInt(Date.now()) * 1_000_000n).toString();
+    const endpoint = Deno.env.get('OTEL_EXPORTER_OTLP_ENDPOINT');
+    const headers = Deno.env.get('OTEL_EXPORTER_OTLP_HEADERS');
     const telemetryTask = exportOtlpTrace(
       {
         traceparent: context.get('traceparent'),
@@ -90,18 +98,16 @@ app.use('*', async (context, next) => {
         releaseId: context.env.RELEASE_ID ?? Deno.env.get('RELEASE_ID'),
       },
       {
-        endpoint: Deno.env.get('OTEL_EXPORTER_OTLP_ENDPOINT'),
-        headers: Deno.env.get('OTEL_EXPORTER_OTLP_HEADERS'),
+        endpoint,
+        headers,
       },
     );
-    const edgeRuntime = (
-      globalThis as typeof globalThis & {
-        EdgeRuntime?: { waitUntil(promise: Promise<unknown>): void };
-      }
-    ).EdgeRuntime;
     try {
-      if (edgeRuntime) edgeRuntime.waitUntil(telemetryTask);
-      else void telemetryTask;
+      if (endpoint && headers && typeof EdgeRuntime !== 'undefined') {
+        EdgeRuntime.waitUntil(telemetryTask);
+      } else {
+        void telemetryTask;
+      }
     } catch {
       void telemetryTask;
     }
