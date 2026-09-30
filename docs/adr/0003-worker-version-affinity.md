@@ -13,7 +13,7 @@ Cloudflare gradual deployments can route sequential requests from one browser se
 - Production browser API calls use `https://api.rainify.dpdns.org`.
 - The browser creates a random UUIDv4 and stores it in `sessionStorage` under `atmos_version_key` for the current tab session.
 - Browser calls send the value in `X-Atmos-Version-Key`. The Worker permits it in CORS preflight but does not use it for identity, authorization, or upstream forwarding.
-- A zone-scoped Cloudflare Request Header Transform Rule runs in `http_request_late_transform`, only for `api.rainify.dpdns.org` and a valid UUIDv4, and sets `Cloudflare-Workers-Version-Key` from the custom header.
+- A zone-scoped Cloudflare Request Header Transform Rule runs in `http_request_late_transform`, only for `api.rainify.dpdns.org` and a non-empty affinity header, and sets `Cloudflare-Workers-Version-Key` from the custom header. The client creates UUIDv4 values; Cloudflare only checks presence so the rule stays within the Free plan.
 - Requests with no usable key continue through the ordinary unkeyed routing path.
 
 ## Alternatives considered

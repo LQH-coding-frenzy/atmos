@@ -7,6 +7,7 @@ task:
   external_policy_checks:
     - Existing Cloudflare Free zone and active api.rainify.dpdns.org custom hostname; no new paid resource or vendor.
     - The http_request_late_transform entrypoint was not present at the owner-approved read-only preflight.
+    - Avoid the Rules Language Matches operator because the HCP plan reports it requires a paid Business/WAF Advanced plan.
   runtime_placement:
     allowed: [cloudflare-worker, vercel-nextjs]
     selected: cloudflare-worker
@@ -81,7 +82,7 @@ task:
       - the same browser tab reuses a random UUIDv4 across gateway requests
       - requests without a valid affinity key continue normally and are not treated as authenticated
       - CORS preflight permits X-Atmos-Version-Key only for the configured frontend origin
-      - the zone rule maps a valid key on api.rainify.dpdns.org to Cloudflare-Workers-Version-Key
+      - the zone rule maps a non-empty key on api.rainify.dpdns.org to Cloudflare-Workers-Version-Key; the client creates UUIDv4 values
       - repeated requests with the same key remain on the same Worker version during a split
       - affinity keys are absent from application logs, analytics, and telemetry attributes
   security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]

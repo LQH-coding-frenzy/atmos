@@ -35,7 +35,7 @@ resource "cloudflare_ruleset" "worker_version_affinity" {
     ref         = "atmos_api_version_affinity"
     description = "Set Worker version affinity for the production API hostname."
     enabled     = true
-    expression  = "(http.host eq \"api.rainify.dpdns.org\" and any(http.request.headers[\"x-atmos-version-key\"][*] matches \"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"))"
+    expression  = "(http.host eq \"api.rainify.dpdns.org\" and any(http.request.headers[\"x-atmos-version-key\"][*] ne \"\"))"
     action      = "rewrite"
     action_parameters = {
       headers = {

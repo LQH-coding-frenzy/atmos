@@ -190,7 +190,7 @@ Use the Section 29 backlog and exact dependency checks rather than treating this
 - `DOC-002`: ready immediately after GAME-002 becomes `DONE`.
 - `REL-005`: reopened with owner approval on 2026-09-30. The custom API hostname `api.rainify.dpdns.org` is live; the production browser-origin change and Cloudflare request-header Transform Rule are the remaining task outputs.
 - Frontend live-data activation is complete. The production web app still uses the `workers.dev` API hostname pending the REL-005 switch to `api.rainify.dpdns.org`.
-- `TF-001`, `TF-002`, `CF-IAC-001`, `SUPA-IAC-001`, and `VERCEL-IAC-001`: HCP Terraform organization/workspaces and credentials are unavailable.
+- HCP Terraform remote planning for `atmos-edge-production` is active and successfully refreshes existing Cloudflare resources. `SUPA-IAC-001` and `VERCEL-IAC-001` platform workspaces/scopes remain unverified and deferred.
 - `GHCR-001`, `CTR-001`, `CTR-002`, and `CTR-003`: not started. These are likely the next safe local/protected-CI chain after DOC-002 because they can establish immutable container publishing, hardening, image scan/SBOM, signing, and exact-digest verification before Azure exists.
 - `AZ-001`, `AZ-OIDC-001`, `AZ-TF-OIDC-001`, `AZ-IAC-001`, `AZJOB-001`, `AZJOB-002`, `OBS-005`, and `GAME-007`: blocked until Azure for Students status, remaining credit, budget alert, and tooling are verified. Never upgrade to pay-as-you-go.
 - `R2BACK-001`, `BACKUP-001`, `BACKUP-002`, `RESTORE-001`, and `GAME-006`: Cloudflare R2 is disabled with provider error `10042`; Azure backup execution is also unavailable. Supabase Free has no automatic backup, so this remains a production-completion blocker.
