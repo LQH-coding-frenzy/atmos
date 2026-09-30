@@ -1,0 +1,87 @@
+task:
+  id: OBS-003
+  title: Vercel Next.js application telemetry
+  status: IN_PROGRESS
+  objective: Export sanitized Next.js server request traces from the Vercel Production deployment to the existing Grafana Cloud stack over OTLP.
+  depends_on: [OBS-002, WEB-001]
+  external_policy_checks:
+    - Existing Grafana Cloud Free stack has current included quotas and no reported overage; no paid-plan change or new vendor.
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Next.js server instrumentation belongs in the Vercel-hosted application runtime.
+  scope:
+    include:
+      [
+        apps/web/instrumentation.ts,
+        apps/web/lib/otel-exporter.ts,
+        apps/web/lib/otel-exporter.test.ts,
+        apps/web/package.json,
+        pnpm-lock.yaml,
+        .agent/status.yaml,
+        .agent/tasks/obs-003.yaml,
+        docs/evidence/obs-003,
+        Vercel Production telemetry configuration,
+      ]
+    exclude:
+      - Supabase Function telemetry (OBS-004)
+      - Worker telemetry
+      - browser/client-side telemetry
+      - logs and metrics export
+      - query values, full URLs, request headers/cookies, bodies, and user identifiers
+      - new vendors or paid resources
+  inputs:
+    required_config: [OTEL_EXPORTER_OTLP_ENDPOINT, NEXT_OTEL_FETCH_DISABLED=1]
+    required_secrets: [OTEL_EXPORTER_OTLP_HEADERS]
+  outputs:
+    files:
+      [
+        apps/web/instrumentation.ts,
+        apps/web/lib/otel-exporter.ts,
+        apps/web/lib/otel-exporter.test.ts,
+        apps/web/package.json,
+        pnpm-lock.yaml,
+        docs/evidence/obs-003/2026-09-30.md,
+      ]
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [Vercel Production Next.js application]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert Next.js instrumentation and disable the Vercel OTLP settings; no application data is changed.
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run apps/web/lib/otel-exporter.test.ts,
+        corepack pnpm typecheck,
+        corepack pnpm exec eslint apps/web/instrumentation.ts apps/web/lib/otel-exporter.ts apps/web/lib/otel-exporter.test.ts,
+        corepack pnpm --filter @atmos/web build,
+        local Grafana OTEL-LGTM OTLP smoke using grafana/otel-lgtm:0.34.0,
+        protected Vercel Production release and one sanitized server trace verification,
+      ]
+    expected:
+      - missing OTLP configuration disables Vercel trace export
+      - Next.js server spans are exported through the existing Grafana Cloud OTLP endpoint
+      - outgoing fetch spans and request targets are disabled or removed
+      - span attributes exclude query values, full URLs, credentials, cookies, request/response bodies, and user identifiers
+      - no logs or metrics are exported
+      - the production trace appears in the existing Grafana Cloud stack
+  security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [none]
+    logs: [none]
+    traces: [sanitized Next.js server spans only]
+  evidence:
+    - docs/evidence/obs-003/2026-09-30.md
+    - local Docker OTLP smoke
+    - protected Vercel Production trace verification
+  rollback:
+    strategy: Revert the instrumentation and disable Vercel OTLP settings; no database or user data changes exist.
+  human_approval:
+    required: true
+    reason: Owner selected the Vercel production telemetry test and approved the scoped Grafana OTLP credential/configuration and protected production validation on 2026-09-30; paid-plan changes remain excluded.
