@@ -231,7 +231,13 @@ export function createApp(
         return origin === allowedOrigin ? origin : undefined;
       },
       allowMethods: ['DELETE', 'GET', 'OPTIONS', 'PATCH', 'POST'],
-      allowHeaders: ['Authorization', 'Content-Type', 'Traceparent', 'X-Request-Id'],
+      allowHeaders: [
+        'Authorization',
+        'Content-Type',
+        'Traceparent',
+        'X-Request-Id',
+        'X-Atmos-Version-Key',
+      ],
       maxAge: 86400,
     }),
   );

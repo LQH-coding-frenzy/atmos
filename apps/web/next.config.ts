@@ -6,7 +6,7 @@ const contentSecurityPolicy = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' blob: data:",
   "font-src 'self' data:",
-  "connect-src 'self' https://*.supabase.co https://*.workers.dev",
+  "connect-src 'self' https://*.supabase.co https://*.workers.dev https://api.rainify.dpdns.org",
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'self'",

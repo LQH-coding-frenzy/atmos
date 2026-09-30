@@ -12,6 +12,8 @@
 - Keep database credentials out of command arguments, logs, evidence, and the repository.
 - Stop before any destructive migration, paid-resource change, custom route, or candidate traffic assignment.
 
+REL-005 is an owner-approved exception for the existing `api.rainify.dpdns.org` host and its request-header affinity rule only. It does not authorize a new hostname or an ordinary-traffic percentage split.
+
 ## Expand production schema
 
 Use the production database password through the process environment or an interactive prompt, never a command argument:
@@ -44,6 +46,13 @@ Require exact `/health` and `/version` responses from both function URLs before 
 For a Worker that does not yet exist, `wrangler versions upload` cannot create its first version. Run `wrangler deploy --env=""` from the previous protected `main` release with the stable secrets file; this creates the Worker, deploys stable at 100 percent, and configures its Worker triggers. For an existing Worker, use version upload followed by an explicit 100-percent deployment instead.
 
 Require ordinary requests to the production `workers.dev` route to return the stable release and pass bounded weather and authorization smoke.
+
+## REL-005 Browser Version Affinity
+
+- Production browser API requests use `https://api.rainify.dpdns.org`; keep the `workers.dev` route for release smoke and local/CI fallback.
+- The Vercel client stores a random UUIDv4 in tab-scoped `sessionStorage` under `atmos_version_key` and sends it as `X-Atmos-Version-Key`. It is routing state only, not authentication.
+- The zone `http_request_late_transform` rule maps a valid key on the custom API hostname to `Cloudflare-Workers-Version-Key`; the Worker CORS policy allows the custom request header only from the configured frontend origin.
+- Verify affinity with repeat requests using one key during an approved two-version deployment. A production percentage split requires a separate owner decision and protected release confirmation.
 
 If the first deployment fails, no prior production route exists to restore. Correct the inactive version or delete the new Worker only after confirming it never received ordinary traffic.
 

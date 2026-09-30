@@ -8,6 +8,8 @@ The owner changed Atmos from an end-to-end production-completion effort to a CV 
 
 Keep the deployed application and existing evidence, but do not pursue recurring backup schedules, R2 lifecycle retention, continuous DR operations, additional paid-resource work, or remaining production-only Section 29 tasks unless the owner explicitly reopens production hardening.
 
+The owner reopened production hardening on 2026-09-30 for `OBS-003`, `OBS-004`, and `REL-005` only. Other deferred backup/DR, Azure, notification, and paid-resource work remains deferred.
+
 The showcase includes a successful encrypted R2 archive and an ephemeral Supabase restore drill. Temporary restore resources and sensitive handoffs were deleted after verification.
 
 ## Historical Continuation Directive
@@ -186,16 +188,16 @@ The current shell has working `GRAFANA_URL` and `GRAFANA_SERVICE_ACCOUNT_TOKEN` 
 Use the Section 29 backlog and exact dependency checks rather than treating this list as a replacement plan.
 
 - `DOC-002`: ready immediately after GAME-002 becomes `DONE`.
-- `REL-005`: blocked by absent production custom hostname and Cloudflare request-header Transform Rule. It requires provider/DNS ownership and must follow the provider-dashboard rule.
-- Frontend live-data activation is unfinished: `apps/web/app/page.tsx` still uses `MockWeatherProvider`. Final production must switch the dashboard to the live gateway with contract, failure, responsive, build, E2E, and protected Vercel production evidence.
-- `TF-001`, `TF-002`, `CF-IAC-001`, `SUPA-IAC-001`, and `VERCEL-IAC-001`: HCP Terraform organization/workspaces and credentials are unavailable.
+- `REL-005`: reopened with owner approval on 2026-09-30. The custom API hostname `api.rainify.dpdns.org` is live; the production browser-origin change and Cloudflare request-header Transform Rule are the remaining task outputs.
+- Frontend live-data activation is complete. The production web app still uses the `workers.dev` API hostname pending the REL-005 switch to `api.rainify.dpdns.org`.
+- HCP Terraform remote planning for `atmos-edge-production` is active and successfully refreshes existing Cloudflare resources. `SUPA-IAC-001` and `VERCEL-IAC-001` platform workspaces/scopes remain unverified and deferred.
 - `GHCR-001`, `CTR-001`, `CTR-002`, and `CTR-003`: not started. These are likely the next safe local/protected-CI chain after DOC-002 because they can establish immutable container publishing, hardening, image scan/SBOM, signing, and exact-digest verification before Azure exists.
 - `AZ-001`, `AZ-OIDC-001`, `AZ-TF-OIDC-001`, `AZ-IAC-001`, `AZJOB-001`, `AZJOB-002`, `OBS-005`, and `GAME-007`: blocked until Azure for Students status, remaining credit, budget alert, and tooling are verified. Never upgrade to pay-as-you-go.
 - `R2BACK-001`, `BACKUP-001`, `BACKUP-002`, `RESTORE-001`, and `GAME-006`: Cloudflare R2 is disabled with provider error `10042`; Azure backup execution is also unavailable. Supabase Free has no automatic backup, so this remains a production-completion blocker.
-- `OBS-003` Vercel OTel and `OBS-004` Supabase app telemetry are not started; `OBS-005` depends on Azure.
+- `OBS-003` Vercel OTel and `OBS-004` Supabase app telemetry completed on 2026-09-30; `OBS-005` remains blocked until Azure is approved.
 - Grafana alerts are visible in Grafana but no approved external notification receiver/contact point exists.
 - `PORT-001` and `PORT-002` remain blocked by container supply-chain and backup/restore dependencies.
-- Production API still uses the `workers.dev` hostname; custom API DNS/TLS and version-affinity controls are absent.
+- The custom API hostname `api.rainify.dpdns.org` is live. The REL-005 client affinity key and Cloudflare Transform Rule are being implemented; do not treat the rule as active until its protected Terraform apply and smoke evidence are recorded.
 - Open-Meteo Free use must remain non-commercial with attribution and quota controls.
 - Private vulnerability reporting remains disabled.
 - An unintended Supabase project `axcigtnxaulqcbegmqhw` was previously observed and is not confirmed deleted. Provider dashboard action requires owner involvement.
