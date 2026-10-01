@@ -105,6 +105,7 @@ task:
     - docs/evidence/rel-005/2026-09-30.md
     - HCP speculative production plan
     - protected Cloudflare rule verification and affinity smoke
+    - protected Vercel exact-candidate and production smoke, plus sanitized browser same-key API smoke
   rollback:
     strategy: Remove only the version-key Transform Rule and revert the frontend API origin/CORS changes; preserve the existing custom hostname and Worker deployment history.
   human_approval:
