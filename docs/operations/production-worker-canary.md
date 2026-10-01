@@ -49,7 +49,7 @@ Require ordinary requests to the production `workers.dev` route to return the st
 
 ## REL-005 Browser Version Affinity
 
-- Production browser API requests use `https://api.rainify.dpdns.org`; keep the `workers.dev` route for release smoke and local/CI fallback.
+- Production browser API requests use `https://api.rainify.dpdns.org`; the initial server-rendered request and release smoke remain on `workers.dev`.
 - The Vercel client stores a random UUIDv4 in tab-scoped `sessionStorage` under `atmos_version_key` and sends it as `X-Atmos-Version-Key`. It is routing state only, not authentication.
 - The zone `http_request_late_transform` rule maps a valid key on the custom API hostname to `Cloudflare-Workers-Version-Key`; the Worker CORS policy allows the custom request header only from the configured frontend origin.
 - Verify affinity with repeat requests using one key during an approved two-version deployment. A production percentage split requires a separate owner decision and protected release confirmation.

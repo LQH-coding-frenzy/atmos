@@ -189,7 +189,7 @@ Use the Section 29 backlog and exact dependency checks rather than treating this
 
 - `DOC-002`: ready immediately after GAME-002 becomes `DONE`.
 - `REL-005`: reopened with owner approval on 2026-09-30. The custom API hostname `api.rainify.dpdns.org` and Cloudflare request-header Transform Rule are live; the protected Vercel origin-switch release and affinity split verification remain.
-- Frontend live-data activation is complete. The production web app still uses the `workers.dev` API hostname pending the REL-005 switch to `api.rainify.dpdns.org`.
+- Frontend live-data activation is complete. REL-005 keeps the initial server render on `workers.dev` and switches browser API requests to `api.rainify.dpdns.org` after the protected Vercel release.
 - HCP Terraform remote planning for `atmos-edge-production` is active and successfully refreshes existing Cloudflare resources. `SUPA-IAC-001` and `VERCEL-IAC-001` platform workspaces/scopes remain unverified and deferred.
 - `GHCR-001`, `CTR-001`, `CTR-002`, and `CTR-003`: not started. These are likely the next safe local/protected-CI chain after DOC-002 because they can establish immutable container publishing, hardening, image scan/SBOM, signing, and exact-digest verification before Azure exists.
 - `AZ-001`, `AZ-OIDC-001`, `AZ-TF-OIDC-001`, `AZ-IAC-001`, `AZJOB-001`, `AZJOB-002`, `OBS-005`, and `GAME-007`: blocked until Azure for Students status, remaining credit, budget alert, and tooling are verified. Never upgrade to pay-as-you-go.
@@ -197,7 +197,7 @@ Use the Section 29 backlog and exact dependency checks rather than treating this
 - `OBS-003` Vercel OTel and `OBS-004` Supabase app telemetry completed on 2026-09-30; `OBS-005` remains blocked until Azure is approved.
 - Grafana alerts are visible in Grafana but no approved external notification receiver/contact point exists.
 - `PORT-001` and `PORT-002` remain blocked by container supply-chain and backup/restore dependencies.
-- The custom API hostname `api.rainify.dpdns.org`, REL-005 client affinity key, and Cloudflare Transform Rule are active. The Vercel production alias still needs the protected origin-switch release; no percentage split has been exercised.
+- The custom API hostname `api.rainify.dpdns.org`, REL-005 client affinity key, and Cloudflare Transform Rule are active. The Vercel production alias still needs the protected browser-origin release; no percentage split has been exercised.
 - Open-Meteo Free use must remain non-commercial with attribution and quota controls.
 - Private vulnerability reporting remains disabled.
 - An unintended Supabase project `axcigtnxaulqcbegmqhw` was previously observed and is not confirmed deleted. Provider dashboard action requires owner involvement.

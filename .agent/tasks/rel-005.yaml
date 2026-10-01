@@ -18,6 +18,8 @@ task:
         apps/web/app/page.tsx,
         apps/web/next.config.ts,
         apps/web/next-config.test.ts,
+        apps/web/lib/gateway-origin.ts,
+        apps/web/lib/gateway-origin.test.ts,
         apps/web/lib/version-affinity.ts,
         apps/web/lib/version-affinity.test.ts,
         apps/web/components,
@@ -48,6 +50,8 @@ task:
         apps/web/app/page.tsx,
         apps/web/next.config.ts,
         apps/web/next-config.test.ts,
+        apps/web/lib/gateway-origin.ts,
+        apps/web/lib/gateway-origin.test.ts,
         apps/web/lib/version-affinity.ts,
         apps/web/lib/version-affinity.test.ts,
         apps/web/components,
@@ -71,7 +75,7 @@ task:
   validation:
     commands:
       [
-        corepack pnpm exec vitest run apps/web/lib/version-affinity.test.ts workers/gateway/src/index.test.ts apps/web/next-config.test.ts,
+        corepack pnpm exec vitest run apps/web/lib/version-affinity.test.ts apps/web/lib/gateway-origin.test.ts workers/gateway/src/index.test.ts apps/web/next-config.test.ts,
         corepack pnpm typecheck,
         corepack pnpm --filter @atmos/web build,
         corepack pnpm --filter @atmos/gateway build,
@@ -82,6 +86,7 @@ task:
       ]
     expected:
       - the same browser tab reuses a random UUIDv4 across gateway requests
+      - production server rendering stays on the stable unkeyed hostname while browser requests use the custom affinity hostname
       - requests without a valid affinity key continue normally and are not treated as authenticated
       - CORS preflight permits X-Atmos-Version-Key only for the configured frontend origin
       - the zone rule maps a non-empty key on api.rainify.dpdns.org to Cloudflare-Workers-Version-Key; the client creates UUIDv4 values

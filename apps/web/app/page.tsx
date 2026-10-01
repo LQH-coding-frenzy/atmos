@@ -1,17 +1,9 @@
 import { dashboardSchema, type Dashboard as DashboardData } from '@atmos/contracts';
 import { Dashboard } from '../components/dashboard';
-
-const productionGatewayOrigin = 'https://api.rainify.dpdns.org';
-const defaultGatewayOrigin = 'https://atmos-gateway.rainify.workers.dev';
+import { browserGatewayOrigin, serverGatewayOrigin } from '../lib/gateway-origin';
 
 // A failed build-time weather request must never be cached as the public page.
 export const dynamic = 'force-dynamic';
-
-function gatewayOrigin(): string {
-  // Production uses the zone-routed API host so version affinity can be applied.
-  if (process.env.VERCEL_ENV === 'production') return productionGatewayOrigin;
-  return process.env.ATMOS_GATEWAY_URL ?? defaultGatewayOrigin;
-}
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -60,8 +52,11 @@ function selectedLocation(searchParams: Record<string, string | string[] | undef
   };
 }
 
-async function getDashboard(location = defaultLocation): Promise<DashboardData | undefined> {
-  const url = new URL('/api/v1/weather/dashboard', gatewayOrigin());
+async function getDashboard(
+  location = defaultLocation,
+  apiOrigin = serverGatewayOrigin(),
+): Promise<DashboardData | undefined> {
+  const url = new URL('/api/v1/weather/dashboard', apiOrigin);
   url.search = new URLSearchParams({
     lat: String(location.latitude),
     lon: String(location.longitude),
@@ -95,7 +90,10 @@ async function getDashboard(location = defaultLocation): Promise<DashboardData |
 
 export default async function Home({ searchParams }: { searchParams: SearchParams }) {
   const location = selectedLocation(await searchParams);
-  const dashboard = await getDashboard(location);
+  const dashboard = await getDashboard(
+    location,
+    serverGatewayOrigin(process.env.VERCEL_ENV, process.env.ATMOS_GATEWAY_URL),
+  );
 
   if (!dashboard) {
     return (
@@ -111,5 +109,10 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
     );
   }
 
-  return <Dashboard initialDashboard={dashboard} gatewayOrigin={gatewayOrigin()} />;
+  return (
+    <Dashboard
+      initialDashboard={dashboard}
+      gatewayOrigin={browserGatewayOrigin(process.env.VERCEL_ENV, process.env.ATMOS_GATEWAY_URL)}
+    />
+  );
 }

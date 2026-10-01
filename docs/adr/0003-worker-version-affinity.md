@@ -10,7 +10,7 @@ Cloudflare gradual deployments can route sequential requests from one browser se
 
 ## Decision
 
-- Production browser API calls use `https://api.rainify.dpdns.org`.
+- Production browser API calls use `https://api.rainify.dpdns.org`; the initial server-rendered weather request stays on the stable `workers.dev` hostname because it has no tab-scoped key.
 - The browser creates a random UUIDv4 and stores it in `sessionStorage` under `atmos_version_key` for the current tab session.
 - Browser calls send the value in `X-Atmos-Version-Key`. The Worker permits it in CORS preflight but does not use it for identity, authorization, or upstream forwarding.
 - A zone-scoped Cloudflare Request Header Transform Rule runs in `http_request_late_transform`, only for `api.rainify.dpdns.org` and a non-empty affinity header, and sets `Cloudflare-Workers-Version-Key` from the custom header. The client creates UUIDv4 values; Cloudflare only checks presence so the rule stays within the Free plan.
@@ -24,7 +24,7 @@ Cloudflare gradual deployments can route sequential requests from one browser se
 
 ## Consequences
 
-- The first server-rendered dashboard request is unkeyed; browser requests after hydration reuse the session key for the tab's multi-request flow.
+- The first server-rendered dashboard request is unkeyed and uses `workers.dev`; browser requests after hydration use the custom API hostname and reuse the session key for the tab's multi-request flow.
 - CORS preflight must permit `X-Atmos-Version-Key` only for the configured frontend origin.
 - The key is random routing state only. It is not logged, stored server-side, or included in telemetry attributes.
 - Rollback removes the Transform Rule and reverts the frontend API origin/CORS configuration; the existing custom hostname remains intact.
