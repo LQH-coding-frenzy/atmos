@@ -10,9 +10,9 @@
 - Confirm Cloudflare Workers and Analytics Engine remain within Free allowances.
 - Confirm the production Supabase project is healthy and the migration dry-run contains only reviewed, additive migrations.
 - Keep database credentials out of command arguments, logs, evidence, and the repository.
-- Stop before any destructive migration, paid-resource change, custom route, or candidate traffic assignment.
+- Stop before any destructive migration, paid-resource change, custom route, or candidate traffic assignment not explicitly approved for the active task.
 
-REL-005 is an owner-approved exception for the existing `api.rainify.dpdns.org` host and its request-header affinity rule only. It does not authorize a new hostname or an ordinary-traffic percentage split.
+REL-005 is an owner-approved exception for the existing `api.rainify.dpdns.org` host and its request-header affinity rule. The owner separately authorized one protected 90/10 affinity-verification test with automatic restoration to the captured stable Worker at 100 percent. It does not authorize an ongoing rollout, another percentage split, or a new hostname.
 
 ## Expand production schema
 
@@ -52,7 +52,9 @@ Require ordinary requests to the production `workers.dev` route to return the st
 - Production browser API requests use `https://api.rainify.dpdns.org`; the initial server-rendered request and release smoke remain on `workers.dev`.
 - The Vercel client stores a random UUIDv4 in tab-scoped `sessionStorage` under `atmos_version_key` and sends it as `X-Atmos-Version-Key`. It is routing state only, not authentication.
 - The zone `http_request_late_transform` rule maps a valid key on the custom API hostname to `Cloudflare-Workers-Version-Key`; the Worker CORS policy allows the custom request header only from the configured frontend origin.
-- Verify affinity with repeat requests using one key during an approved two-version deployment. A production percentage split requires a separate owner decision and protected release confirmation.
+- The protected `REL-005 affinity verification` workflow requires the exact `RUN_REL005_AFFINITY_TEST` confirmation on `main`, serializes against other production Worker releases/rollbacks, smoke-tests a zero-percent candidate, and temporarily assigns stable 90 percent / candidate 10 percent.
+- Its bounded `/version` probe uses random UUIDv4 keys, repeats each key, and requires at least 30 requests per release to remain on one release. WAE and all four fresh Grafana synthetics must pass. A finalizer restores the originally captured stable Worker at 100 percent after success or failure and verifies the final inventory and production smoke.
+- This is a one-time, owner-approved verification only. Any later percentage split or ongoing rollout requires a separate owner decision and protected release confirmation.
 
 If the first deployment fails, no prior production route exists to restore. Correct the inactive version or delete the new Worker only after confirming it never received ordinary traffic.
 
@@ -82,8 +84,8 @@ If candidate smoke fails, deploy the stable version alone at 100 percent. Keep b
 
 ## CV Showcase Promotion Boundary
 
-The CV showcase uses the protected zero-percent candidate and exact smoke workflow. It does not claim an active percentage-based canary because its low organic traffic cannot reliably satisfy the WAE sampling threshold.
+The CV showcase does not claim an ongoing percentage-based canary because organic traffic is insufficient for reliable rollout analysis. The separately approved REL-005 diagnostic uses bounded controlled `/version` requests to meet the WAE sample floor, runs the same synthetic gate, then restores stable to 100 percent.
 
-Percentage-based 10/25/50/100 promotion, WAE sampling, and Grafana synthetic gates remain future production-hardening controls. Do not represent the standalone `WAE release gate` workflow as an active release dependency until an owner adopts that operating profile.
+Progressive 10/25/50/100 promotion remains future production-hardening. Do not treat the standalone `WAE release gate` workflow as authorization for another traffic change; only the separately approved one-time REL-005 test uses it here.
 
 After promotion, preserve the previous Worker and Edge Function releases. REL-007 owns cleanup only after a separate rollback-window decision.

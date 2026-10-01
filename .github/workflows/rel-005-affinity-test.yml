@@ -1,0 +1,279 @@
+name: REL-005 affinity verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type RUN_REL005_AFFINITY_TEST for the one-time 90/10 test with automatic restore
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atmos-production-edge-release
+  cancel-in-progress: false
+
+jobs:
+  affinity-test:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: Production
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: oxgwprvkotfvyacpqayx
+      API_ORIGIN: https://api.rainify.dpdns.org
+      GRAFANA_URL: https://stouttortoise1569.grafana.net
+      CONFIRMATION: ${{ inputs.confirmation }}
+    steps:
+      - name: Require protected test confirmation
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$CONFIRMATION" = "RUN_REL005_AFFINITY_TEST"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$SUPABASE_ACCESS_TOKEN"
+          test -n "$GRAFANA_SERVICE_ACCOUNT_TOKEN"
+        env:
+          GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.GRAFANA_SERVICE_ACCOUNT_TOKEN }}
+      - name: Check out protected source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.14.1
+      - name: Enable Corepack and install locked dependencies
+        run: corepack enable && pnpm install --frozen-lockfile
+      - name: Build the queue-free Worker
+        run: pnpm --filter @atmos/gateway build
+      - name: Preflight WAE and Grafana read access
+        env:
+          GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.GRAFANA_SERVICE_ACCOUNT_TOKEN }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { queryWae } from './scripts/wae-release-gate.mjs';
+
+          const rows = await queryWae({
+            accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+            token: process.env.CLOUDFLARE_API_TOKEN,
+            query: "SELECT count() AS sample_count FROM atmos_worker_requests WHERE timestamp > NOW() - INTERVAL '60' MINUTE",
+          });
+          if (!Array.isArray(rows)) throw new Error('WAE access preflight returned invalid rows.');
+          process.stdout.write('WAE read access preflight passed.\n');
+          NODE
+          node scripts/grafana-synthetic-gate.mjs --max-age-seconds 1800
+      - name: Identify current stable Worker
+        id: stable
+        env:
+          CANDIDATE_RELEASE_ID: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          release_id="${CANDIDATE_RELEASE_ID:0:12}"
+          pnpm --filter @atmos/gateway exec wrangler versions list --env="" --json > "$RUNNER_TEMP/versions-before.json"
+          pnpm --filter @atmos/gateway exec wrangler deployments list --env="" --json > "$RUNNER_TEMP/deployments-before.json"
+          plan="$(node scripts/worker-affinity-smoke.mjs plan \
+            "$RUNNER_TEMP/deployments-before.json" \
+            "$RUNNER_TEMP/versions-before.json" \
+            "$release_id")"
+          stable_version_id="$(jq -r '.stableVersionId' <<< "$plan")"
+          stable_release_id="$(jq -r '.stableReleaseId' <<< "$plan")"
+          previous_deployment_id="$(jq -r '.previousDeploymentId' <<< "$plan")"
+          test -n "$stable_version_id"
+          test -n "$stable_release_id"
+          test -n "$previous_deployment_id"
+          printf 'version_id=%s\nrelease_id=%s\nprevious_deployment_id=%s\ncandidate_release_id=%s\n' \
+            "$stable_version_id" "$stable_release_id" "$previous_deployment_id" "$release_id" >> "$GITHUB_OUTPUT"
+          {
+            echo '## REL-005 affinity test plan'
+            echo
+            echo "- Stable release: \`$stable_release_id\`"
+            echo "- Candidate release: \`$release_id\`"
+            echo '- Planned traffic: stable 90%, candidate 10%'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Deploy and verify versioned Supabase candidate
+        id: backend
+        env:
+          RELEASE_ID: ${{ steps.stable.outputs.candidate_release_id }}
+        run: |
+          set -euo pipefail
+          function_name="$(pnpm release:supabase:stage)"
+          pnpm exec supabase functions deploy "$function_name" --project-ref "$SUPABASE_PROJECT_REF" --no-verify-jwt
+          function_url="https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/$function_name"
+          curl --fail --silent --show-error "$function_url/health" | jq --exit-status '.status == "ok"' >/dev/null
+          curl --fail --silent --show-error "$function_url/version" | jq --exit-status --arg release "$RELEASE_ID" '.release == $release' >/dev/null
+          printf 'function_name=%s\nfunction_url=%s\n' "$function_name" "$function_url" >> "$GITHUB_OUTPUT"
+      - name: Upload candidate and hold it at zero percent
+        id: hold
+        env:
+          STABLE_VERSION_ID: ${{ steps.stable.outputs.version_id }}
+          STABLE_RELEASE_ID: ${{ steps.stable.outputs.release_id }}
+          CANDIDATE_RELEASE_ID: ${{ steps.stable.outputs.candidate_release_id }}
+          FUNCTION_URL: ${{ steps.backend.outputs.function_url }}
+        run: |
+          set -euo pipefail
+          secrets_file="$RUNNER_TEMP/worker-secrets.env"
+          umask 077
+          trap 'rm -f "$secrets_file"' EXIT
+          printf 'SUPABASE_FUNCTION_URL=%s\n' "$FUNCTION_URL" > "$secrets_file"
+          pnpm --filter @atmos/gateway exec wrangler versions upload --env="" \
+            --tag "$CANDIDATE_RELEASE_ID" \
+            --message "REL-005 affinity test candidate $CANDIDATE_RELEASE_ID" \
+            --secrets-file "$secrets_file"
+          pnpm --filter @atmos/gateway exec wrangler versions list --env="" --json > "$RUNNER_TEMP/versions-with-candidate.json"
+          candidate_version_id="$(CANDIDATE_RELEASE_ID="$CANDIDATE_RELEASE_ID" node -e "const versions=require(process.argv[1]);const matches=versions.filter((item)=>item.annotations?.['workers/tag']===process.env.CANDIDATE_RELEASE_ID);if(matches.length!==1||!/^[0-9a-f-]{36}$/.test(matches[0]?.id??''))process.exit(1);process.stdout.write(matches[0].id)" "$RUNNER_TEMP/versions-with-candidate.json")"
+          test "$candidate_version_id" != "$STABLE_VERSION_ID"
+          printf 'candidate_version_id=%s\nrestore_required=true\n' "$candidate_version_id" >> "$GITHUB_OUTPUT"
+          pnpm --filter @atmos/gateway exec wrangler versions deploy \
+            "$STABLE_VERSION_ID@100" "$candidate_version_id@0" \
+            --env="" --message "REL-005 $CANDIDATE_RELEASE_ID zero-percent candidate" --yes
+          pnpm --filter @atmos/gateway exec wrangler deployments list --env="" --json > "$RUNNER_TEMP/deployments-held.json"
+          node scripts/worker-affinity-smoke.mjs verify-held \
+            "$RUNNER_TEMP/deployments-held.json" "$STABLE_VERSION_ID" "$candidate_version_id"
+      - name: Smoke exact zero-percent candidate
+        env:
+          CANDIDATE_VERSION_ID: ${{ steps.hold.outputs.candidate_version_id }}
+          CANDIDATE_RELEASE_ID: ${{ steps.stable.outputs.candidate_release_id }}
+        run: >-
+          node scripts/worker-rollback.mjs smoke
+          "$API_ORIGIN/"
+          "$CANDIDATE_RELEASE_ID"
+          "$CANDIDATE_VERSION_ID"
+      - name: Assign temporary 90/10 affinity-test traffic
+        id: activate
+        env:
+          STABLE_VERSION_ID: ${{ steps.stable.outputs.version_id }}
+          CANDIDATE_VERSION_ID: ${{ steps.hold.outputs.candidate_version_id }}
+        run: |
+          set -euo pipefail
+          pnpm --filter @atmos/gateway exec wrangler deployments list --env="" --json > "$RUNNER_TEMP/deployments-before-split.json"
+          node scripts/worker-affinity-smoke.mjs verify-held \
+            "$RUNNER_TEMP/deployments-before-split.json" "$STABLE_VERSION_ID" "$CANDIDATE_VERSION_ID"
+          printf 'split_started=true\n' >> "$GITHUB_OUTPUT"
+          pnpm --filter @atmos/gateway exec wrangler versions deploy \
+            "$STABLE_VERSION_ID@90" "$CANDIDATE_VERSION_ID@10" \
+            --env="" --message "REL-005 temporary 90/10 affinity verification" --yes
+          for attempt in {1..6}; do
+            pnpm --filter @atmos/gateway exec wrangler deployments list --env="" --json > "$RUNNER_TEMP/deployments-split.json"
+            if node scripts/worker-affinity-smoke.mjs verify-split \
+              "$RUNNER_TEMP/deployments-split.json" "$STABLE_VERSION_ID" "$CANDIDATE_VERSION_ID"; then
+              break
+            fi
+            if [ "$attempt" = "6" ]; then
+              exit 1
+            fi
+            sleep 10
+          done
+      - name: Verify repeated-key version affinity
+        id: affinity
+        env:
+          STABLE_RELEASE_ID: ${{ steps.stable.outputs.release_id }}
+          CANDIDATE_RELEASE_ID: ${{ steps.stable.outputs.candidate_release_id }}
+        run: |
+          set -euo pipefail
+          report="$(node scripts/worker-affinity-smoke.mjs smoke \
+            --origin "$API_ORIGIN" \
+            --stable-release "$STABLE_RELEASE_ID" \
+            --candidate-release "$CANDIDATE_RELEASE_ID")"
+          printf '%s\n' "$report"
+          {
+            echo '### Repeated-key affinity results'
+            echo
+            echo '```json'
+            printf '%s\n' "$report"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Run WAE release gate
+        if: ${{ always() && steps.activate.outputs.split_started == 'true' && steps.activate.outcome == 'success' }}
+        env:
+          STABLE_VERSION_ID: ${{ steps.stable.outputs.version_id }}
+          STABLE_RELEASE_ID: ${{ steps.stable.outputs.release_id }}
+          CANDIDATE_VERSION_ID: ${{ steps.hold.outputs.candidate_version_id }}
+          CANDIDATE_RELEASE_ID: ${{ steps.stable.outputs.candidate_release_id }}
+          CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          for attempt in {1..5}; do
+            if node scripts/wae-release-gate.mjs \
+              --dataset atmos_worker_requests \
+              --stable-version "$STABLE_VERSION_ID" \
+              --stable-release "$STABLE_RELEASE_ID" \
+              --candidate-version "$CANDIDATE_VERSION_ID" \
+              --candidate-release "$CANDIDATE_RELEASE_ID" \
+              --lookback-minutes 60 \
+              --minimum-samples 30 > "$RUNNER_TEMP/wae-report.json"; then
+              cat "$RUNNER_TEMP/wae-report.json"
+              {
+                echo '### WAE release gate'
+                echo
+                echo '```json'
+                cat "$RUNNER_TEMP/wae-report.json"
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            else
+              status=$?
+              if [ "$status" -ne 3 ]; then
+                cat "$RUNNER_TEMP/wae-report.json"
+                exit "$status"
+              fi
+            fi
+            sleep 15
+          done
+          cat "$RUNNER_TEMP/wae-report.json"
+          exit 3
+      - name: Verify production Grafana synthetics
+        if: ${{ always() && steps.activate.outputs.split_started == 'true' && steps.activate.outcome == 'success' }}
+        env:
+          GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.GRAFANA_SERVICE_ACCOUNT_TOKEN }}
+        run: node scripts/grafana-synthetic-gate.mjs --max-age-seconds 1800
+      - name: Restore original stable Worker to 100 percent
+        if: ${{ always() && steps.hold.outputs.restore_required == 'true' }}
+        id: restore
+        env:
+          STABLE_VERSION_ID: ${{ steps.stable.outputs.version_id }}
+          CANDIDATE_VERSION_ID: ${{ steps.hold.outputs.candidate_version_id }}
+          PREVIOUS_DEPLOYMENT_ID: ${{ steps.stable.outputs.previous_deployment_id }}
+        run: |
+          set -euo pipefail
+          pnpm --filter @atmos/gateway exec wrangler deployments list --env="" --json > "$RUNNER_TEMP/deployments-before-restore.json"
+          plan="$(node scripts/worker-affinity-smoke.mjs restore-plan \
+            "$RUNNER_TEMP/deployments-before-restore.json" \
+            "$PREVIOUS_DEPLOYMENT_ID" "$STABLE_VERSION_ID" "$CANDIDATE_VERSION_ID")"
+          action="$(jq -r '.action' <<< "$plan")"
+          if [ "$action" = "RESTORE" ]; then
+            pnpm --filter @atmos/gateway exec wrangler rollback "$STABLE_VERSION_ID" \
+              --message "REL-005 affinity verification restore stable" --yes
+          elif [ "$action" != "NOOP" ]; then
+            exit 1
+          fi
+          printf 'restore_action=%s\n' "$action" >> "$GITHUB_OUTPUT"
+      - name: Verify stable 100 percent and smoke production API
+        if: ${{ always() && steps.hold.outputs.restore_required == 'true' }}
+        env:
+          STABLE_VERSION_ID: ${{ steps.stable.outputs.version_id }}
+          STABLE_RELEASE_ID: ${{ steps.stable.outputs.release_id }}
+        run: |
+          set -euo pipefail
+          pnpm --filter @atmos/gateway exec wrangler deployments list --env="" --json > "$RUNNER_TEMP/deployments-restored.json"
+          node scripts/worker-affinity-smoke.mjs verify-restored \
+            "$RUNNER_TEMP/deployments-restored.json" "$STABLE_VERSION_ID"
+          node scripts/worker-rollback.mjs smoke "$API_ORIGIN/" "$STABLE_RELEASE_ID"
+      - name: Record final deployment inventory
+        if: ${{ always() && steps.hold.outputs.restore_required == 'true' }}
+        run: |
+          {
+            echo '### Final Worker deployment inventory'
+            echo
+            echo '```json'
+            pnpm --filter @atmos/gateway exec wrangler deployments list --env="" --json | \
+              node -e "let input='';process.stdin.setEncoding('utf8');process.stdin.on('data',(part)=>input+=part);process.stdin.on('end',()=>{const deployments=JSON.parse(input);const latest=[...deployments].sort((left,right)=>Date.parse(right.created_on)-Date.parse(left.created_on))[0];process.stdout.write(JSON.stringify({deploymentId:latest?.id,versions:latest?.versions},null,2)+'\\n')})"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
