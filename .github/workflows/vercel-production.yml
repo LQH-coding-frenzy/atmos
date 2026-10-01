@@ -44,8 +44,10 @@ jobs:
       - name: Validate release configuration
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
         run: |
           test -n "$VERCEL_TOKEN"
+          test -n "$VERCEL_PROTECTION_BYPASS"
           test -n "$VERCEL_ORG_ID"
           test -n "$VERCEL_PROJECT_ID"
           test -n "$VERCEL_SCOPE"
@@ -80,9 +82,10 @@ jobs:
         env:
           DEPLOYMENT_URL: ${{ steps.candidate.outputs.url }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
         run: |
-          status="$(pnpm dlx vercel@59.15.1 --token="$VERCEL_TOKEN" --scope="$VERCEL_SCOPE" \
-            curl / --deployment "$DEPLOYMENT_URL" -- \
+          status="$(pnpm dlx vercel@59.15.1 curl / --deployment "$DEPLOYMENT_URL" \
+            --protection-bypass "$VERCEL_PROTECTION_BYPASS" -- \
             --silent --show-error --dump-header "$RUNNER_TEMP/candidate-headers" \
             --output "$RUNNER_TEMP/candidate.html" --write-out '%{http_code}')"
           node scripts/verify-frontend-response.mjs "$status" "$RUNNER_TEMP/candidate-headers" "$RUNNER_TEMP/candidate.html"

@@ -41,7 +41,7 @@ task:
   inputs:
     required_config:
       [production API hostname api.rainify.dpdns.org, CORS header X-Atmos-Version-Key]
-    required_secrets: [none]
+    required_secrets: [VERCEL_PROTECTION_BYPASS]
   outputs:
     files:
       [
@@ -104,4 +104,4 @@ task:
     strategy: Remove only the version-key Transform Rule and revert the frontend API origin/CORS changes; preserve the existing custom hostname and Worker deployment history.
   human_approval:
     required: true
-    reason: Owner explicitly approved REL-005 production API-origin and Cloudflare request-header rule changes on 2026-09-30; any production traffic split still needs its own protected release confirmation.
+    reason: Owner explicitly approved the REL-005 Cloudflare/API-origin changes, the Vercel deployment-protection bypass secret, and Vercel production validation on 2026-09-30 and 2026-10-01; any production traffic split still needs its own approval.
