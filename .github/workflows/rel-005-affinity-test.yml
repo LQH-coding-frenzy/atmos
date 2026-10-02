@@ -62,12 +62,15 @@ jobs:
       candidate_release_id: ${{ steps.stable.outputs.candidate_release_id }}
       previous_deployment_id: ${{ steps.stable.outputs.previous_deployment_id }}
       restore_required: ${{ steps.hold.outputs.restore_required }}
+      split_started: ${{ steps.activate.outputs.split_started }}
+      activation_outcome: ${{ steps.activate.outcome }}
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_REF: oxgwprvkotfvyacpqayx
       API_ORIGIN: https://api.rainify.dpdns.org
+      WORKER_SMOKE_URL: https://atmos-gateway.rainify.workers.dev/
       GRAFANA_URL: https://stouttortoise1569.grafana.net
       CONFIRMATION: ${{ inputs.confirmation }}
     steps:
@@ -171,7 +174,7 @@ jobs:
           CANDIDATE_RELEASE_ID: ${{ steps.stable.outputs.candidate_release_id }}
         run: >-
           node scripts/worker-rollback.mjs smoke
-          "$API_ORIGIN/"
+          "$WORKER_SMOKE_URL"
           "$CANDIDATE_RELEASE_ID"
           "$CANDIDATE_VERSION_ID"
       - name: Assign temporary 90/10 affinity-test traffic
@@ -254,7 +257,7 @@ jobs:
           pnpm --filter @atmos/gateway exec wrangler deployments list --env="" --json > "$RUNNER_TEMP/deployments-restored.json"
           node scripts/worker-affinity-smoke.mjs verify-restored \
             "$RUNNER_TEMP/deployments-restored.json" "$STABLE_VERSION_ID"
-          node scripts/worker-rollback.mjs smoke "$API_ORIGIN/" "$STABLE_RELEASE_ID"
+          node scripts/worker-rollback.mjs smoke "$WORKER_SMOKE_URL" "$STABLE_RELEASE_ID"
       - name: Record final deployment inventory
         if: ${{ always() && steps.hold.outputs.restore_required == 'true' }}
         run: |
@@ -267,7 +270,7 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
   wae-gate:
-    if: ${{ always() && needs.affinity-test.outputs.restore_required == 'true' }}
+    if: ${{ always() && needs.affinity-test.outputs.split_started == 'true' && needs.affinity-test.outputs.activation_outcome == 'success' }}
     needs: affinity-test
     runs-on: ubuntu-24.04
     timeout-minutes: 5
