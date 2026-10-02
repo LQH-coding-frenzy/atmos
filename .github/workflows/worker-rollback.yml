@@ -40,7 +40,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: atmos-worker-production-rollback
+  group: atmos-production-edge-release
   cancel-in-progress: false
 
 jobs:

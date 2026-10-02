@@ -20,6 +20,8 @@ task:
         apps/web/next-config.test.ts,
         apps/web/lib/gateway-origin.ts,
         apps/web/lib/gateway-origin.test.ts,
+        scripts/worker-affinity-smoke.mjs,
+        scripts/worker-affinity-smoke.test.mjs,
         apps/web/lib/version-affinity.ts,
         apps/web/lib/version-affinity.test.ts,
         apps/web/components,
@@ -27,6 +29,9 @@ task:
         workers/gateway/src/index.test.ts,
         infra/terraform/production-edge.tf,
         .github/workflows/vercel-production.yml,
+        .github/workflows/rel-005-affinity-test.yml,
+        .github/workflows/release-edge-runtime.yml,
+        .github/workflows/worker-rollback.yml,
         docs/adr/0003-worker-version-affinity.md,
         docs/operations/production-worker-canary.md,
         PRODUCTION-CONTINUATION.md,
@@ -39,11 +44,22 @@ task:
       - user IDs, emails, JWTs, cookies, or durable server-side affinity state
       - database/schema/RLS changes
       - paid Workers plans or new vendors
-      - changing rollout percentages without separate rollout approval
+      - any rollout percentage change beyond the single owner-approved REL-005 test
   inputs:
     required_config:
-      [production API hostname api.rainify.dpdns.org, CORS header X-Atmos-Version-Key]
-    required_secrets: [VERCEL_PROTECTION_BYPASS]
+      [
+        production API hostname api.rainify.dpdns.org,
+        CORS header X-Atmos-Version-Key,
+        existing Grafana Cloud stack URL,
+      ]
+    required_secrets:
+      [
+        VERCEL_PROTECTION_BYPASS,
+        VERCEL_TOKEN,
+        CLOUDFLARE_API_TOKEN,
+        SUPABASE_ACCESS_TOKEN,
+        GRAFANA_SERVICE_ACCOUNT_TOKEN,
+      ]
   outputs:
     files:
       [
@@ -52,6 +68,8 @@ task:
         apps/web/next-config.test.ts,
         apps/web/lib/gateway-origin.ts,
         apps/web/lib/gateway-origin.test.ts,
+        scripts/worker-affinity-smoke.mjs,
+        scripts/worker-affinity-smoke.test.mjs,
         apps/web/lib/version-affinity.ts,
         apps/web/lib/version-affinity.test.ts,
         apps/web/components,
@@ -59,6 +77,9 @@ task:
         workers/gateway/src/index.test.ts,
         infra/terraform/production-edge.tf,
         .github/workflows/vercel-production.yml,
+        .github/workflows/rel-005-affinity-test.yml,
+        .github/workflows/release-edge-runtime.yml,
+        .github/workflows/worker-rollback.yml,
         docs/adr/0003-worker-version-affinity.md,
         docs/operations/production-worker-canary.md,
         PRODUCTION-CONTINUATION.md,
@@ -67,22 +88,29 @@ task:
     terraform_resources: [cloudflare_ruleset.http_request_late_transform]
     database_changes: [none]
     deployed_units:
-      [Vercel web API origin, Cloudflare Worker CORS, Cloudflare zone request-header transform rule]
+      [
+        Vercel web API origin,
+        Cloudflare Worker CORS,
+        Cloudflare zone request-header transform rule,
+        one-time temporary affinity test split,
+      ]
   compatibility:
     requires_expand_contract: false
     stable_version_compatible: true
-    rollback_window: Remove the transform rule and revert the production API origin; unkeyed requests continue to route normally.
+    rollback_window: The test workflow restores the captured stable version to 100 percent; feature rollback removes the transform rule and reverts the production API origin while preserving the custom hostname.
   validation:
     commands:
       [
         corepack pnpm exec vitest run apps/web/lib/version-affinity.test.ts apps/web/lib/gateway-origin.test.ts workers/gateway/src/index.test.ts apps/web/next-config.test.ts,
+        node --test scripts/worker-affinity-smoke.test.mjs,
         corepack pnpm typecheck,
         corepack pnpm --filter @atmos/web build,
         corepack pnpm --filter @atmos/gateway build,
         terraform fmt -check and validate for infra/terraform,
         HCP Terraform speculative plan for atmos-edge-production,
         protected production rule and exact-host smoke,
-        repeated-key affinity verification during an owner-approved version split,
+        protected one-time 90/10 affinity verification during an owner-approved version split,
+        WAE and Grafana synthetic gates plus automatic restoration to the original stable version at 100 percent,
       ]
     expected:
       - the same browser tab reuses a random UUIDv4 across gateway requests
@@ -91,6 +119,7 @@ task:
       - CORS preflight permits X-Atmos-Version-Key only for the configured frontend origin
       - the zone rule maps a non-empty key on api.rainify.dpdns.org to Cloudflare-Workers-Version-Key; the client creates UUIDv4 values
       - repeated requests with the same key remain on the same Worker version during a split
+      - the test is bounded, the stable release is restored at 100 percent, and final deployment inventory is verified
       - affinity keys are absent from application logs, analytics, and telemetry attributes
   security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
   budget_checks:
@@ -105,9 +134,10 @@ task:
     - docs/evidence/rel-005/2026-09-30.md
     - HCP speculative production plan
     - protected Cloudflare rule verification and affinity smoke
+    - protected REL-005 affinity workflow run with WAE/Grafana decisions and final stable 100-percent inventory
     - protected Vercel exact-candidate and production smoke, plus sanitized browser same-key API smoke
   rollback:
-    strategy: Remove only the version-key Transform Rule and revert the frontend API origin/CORS changes; preserve the existing custom hostname and Worker deployment history.
+    strategy: The protected affinity test always restores the captured stable Worker to 100 percent after the test. For feature rollback, remove only the version-key Transform Rule and revert frontend API-origin/CORS changes; preserve the existing custom hostname and Worker deployment history.
   human_approval:
     required: true
-    reason: Owner explicitly approved the REL-005 Cloudflare/API-origin changes, the Vercel deployment-protection bypass secret, and Vercel production validation on 2026-09-30 and 2026-10-01; any production traffic split still needs its own approval.
+    reason: Owner explicitly approved the REL-005 Cloudflare/API-origin changes, the Vercel deployment-protection bypass secret, and Vercel production validation on 2026-09-30 and 2026-10-01. On 2026-10-02 the owner separately approved one protected 90/10 affinity test, automatic restoration to the captured stable version at 100 percent, and storage of the existing Grafana service token in the GitHub Production environment. This does not authorize an ongoing rollout or any other percentage split.
