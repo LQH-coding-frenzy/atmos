@@ -157,6 +157,7 @@ jobs:
           pnpm --filter @atmos/gateway exec wrangler versions upload --env="" \
             --tag "$CANDIDATE_RELEASE_ID" \
             --message "REL-005 affinity test candidate $CANDIDATE_RELEASE_ID" \
+            --var "RELEASE_ID:$CANDIDATE_RELEASE_ID" \
             --secrets-file "$secrets_file"
           pnpm --filter @atmos/gateway exec wrangler versions list --env="" --json > "$RUNNER_TEMP/versions-with-candidate.json"
           candidate_version_id="$(CANDIDATE_RELEASE_ID="$CANDIDATE_RELEASE_ID" node -e "const versions=require(process.argv[1]);const matches=versions.filter((item)=>item.annotations?.['workers/tag']===process.env.CANDIDATE_RELEASE_ID);if(matches.length!==1||!/^[0-9a-f-]{36}$/.test(matches[0]?.id??''))process.exit(1);process.stdout.write(matches[0].id)" "$RUNNER_TEMP/versions-with-candidate.json")"
