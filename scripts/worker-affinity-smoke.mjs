@@ -267,10 +267,9 @@ export async function runAffinitySmoke({
         return;
       }
       if (nextKey >= maximumKeys) return;
-      const keyIndex = nextKey;
       nextKey += 1;
       try {
-        await probeKey(keyFactory(keyIndex));
+        await probeKey(keyFactory());
       } catch (error) {
         failure = error;
       }
