@@ -57,6 +57,7 @@ task:
         VERCEL_PROTECTION_BYPASS,
         VERCEL_TOKEN,
         CLOUDFLARE_API_TOKEN,
+        CLOUDFLARE_ANALYTICS_TOKEN (existing Staging environment),
         SUPABASE_ACCESS_TOKEN,
         GRAFANA_SERVICE_ACCOUNT_TOKEN,
       ]
