@@ -16,11 +16,52 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  wae-preflight:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: Staging
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.CLOUDFLARE_ANALYTICS_TOKEN }}
+    steps:
+      - name: Require protected main
+        run: test "$GITHUB_REF" = "refs/heads/main"
+      - name: Check out protected source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.14.1
+      - name: Preflight production WAE read access
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { queryWae } from './scripts/wae-release-gate.mjs';
+
+          const rows = await queryWae({
+            accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+            token: process.env.CLOUDFLARE_ANALYTICS_TOKEN,
+            query: "SELECT count() AS sample_count FROM atmos_worker_requests WHERE timestamp > NOW() - INTERVAL '60' MINUTE",
+          });
+          if (!Array.isArray(rows)) throw new Error('WAE access preflight returned invalid rows.');
+          process.stdout.write('Production WAE read access preflight passed.\n');
+          NODE
   affinity-test:
     if: github.ref == 'refs/heads/main'
+    needs: wae-preflight
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     environment: Production
+    outputs:
+      stable_version_id: ${{ steps.stable.outputs.version_id }}
+      stable_release_id: ${{ steps.stable.outputs.release_id }}
+      candidate_version_id: ${{ steps.hold.outputs.candidate_version_id }}
+      candidate_release_id: ${{ steps.stable.outputs.candidate_release_id }}
+      previous_deployment_id: ${{ steps.stable.outputs.previous_deployment_id }}
+      restore_required: ${{ steps.hold.outputs.restore_required }}
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -53,23 +94,10 @@ jobs:
         run: corepack enable && pnpm install --frozen-lockfile
       - name: Build the queue-free Worker
         run: pnpm --filter @atmos/gateway build
-      - name: Preflight WAE and Grafana read access
+      - name: Preflight production Grafana synthetics
         env:
           GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.GRAFANA_SERVICE_ACCOUNT_TOKEN }}
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          import { queryWae } from './scripts/wae-release-gate.mjs';
-
-          const rows = await queryWae({
-            accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
-            token: process.env.CLOUDFLARE_API_TOKEN,
-            query: "SELECT count() AS sample_count FROM atmos_worker_requests WHERE timestamp > NOW() - INTERVAL '60' MINUTE",
-          });
-          if (!Array.isArray(rows)) throw new Error('WAE access preflight returned invalid rows.');
-          process.stdout.write('WAE read access preflight passed.\n');
-          NODE
-          node scripts/grafana-synthetic-gate.mjs --max-age-seconds 1800
+        run: node scripts/grafana-synthetic-gate.mjs --max-age-seconds 1800
       - name: Identify current stable Worker
         id: stable
         env:
@@ -190,45 +218,6 @@ jobs:
             printf '%s\n' "$report"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Run WAE release gate
-        if: ${{ always() && steps.activate.outputs.split_started == 'true' && steps.activate.outcome == 'success' }}
-        env:
-          STABLE_VERSION_ID: ${{ steps.stable.outputs.version_id }}
-          STABLE_RELEASE_ID: ${{ steps.stable.outputs.release_id }}
-          CANDIDATE_VERSION_ID: ${{ steps.hold.outputs.candidate_version_id }}
-          CANDIDATE_RELEASE_ID: ${{ steps.stable.outputs.candidate_release_id }}
-          CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          set -euo pipefail
-          for attempt in {1..5}; do
-            if node scripts/wae-release-gate.mjs \
-              --dataset atmos_worker_requests \
-              --stable-version "$STABLE_VERSION_ID" \
-              --stable-release "$STABLE_RELEASE_ID" \
-              --candidate-version "$CANDIDATE_VERSION_ID" \
-              --candidate-release "$CANDIDATE_RELEASE_ID" \
-              --lookback-minutes 60 \
-              --minimum-samples 30 > "$RUNNER_TEMP/wae-report.json"; then
-              cat "$RUNNER_TEMP/wae-report.json"
-              {
-                echo '### WAE release gate'
-                echo
-                echo '```json'
-                cat "$RUNNER_TEMP/wae-report.json"
-                echo '```'
-              } >> "$GITHUB_STEP_SUMMARY"
-              exit 0
-            else
-              status=$?
-              if [ "$status" -ne 3 ]; then
-                cat "$RUNNER_TEMP/wae-report.json"
-                exit "$status"
-              fi
-            fi
-            sleep 15
-          done
-          cat "$RUNNER_TEMP/wae-report.json"
-          exit 3
       - name: Verify production Grafana synthetics
         if: ${{ always() && steps.activate.outputs.split_started == 'true' && steps.activate.outcome == 'success' }}
         env:
@@ -274,6 +263,62 @@ jobs:
             echo
             echo '```json'
             pnpm --filter @atmos/gateway exec wrangler deployments list --env="" --json | \
-              node -e "let input='';process.stdin.setEncoding('utf8');process.stdin.on('data',(part)=>input+=part);process.stdin.on('end',()=>{const deployments=JSON.parse(input);const latest=[...deployments].sort((left,right)=>Date.parse(right.created_on)-Date.parse(left.created_on))[0];process.stdout.write(JSON.stringify({deploymentId:latest?.id,versions:latest?.versions},null,2)+'\\n')})"
+            node -e "let input='';process.stdin.setEncoding('utf8');process.stdin.on('data',(part)=>input+=part);process.stdin.on('end',()=>{const deployments=JSON.parse(input);const latest=[...deployments].sort((left,right)=>Date.parse(right.created_on)-Date.parse(left.created_on))[0];process.stdout.write(JSON.stringify({deploymentId:latest?.id,versions:latest?.versions},null,2)+'\\n')})"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+  wae-gate:
+    if: ${{ always() && needs.affinity-test.outputs.restore_required == 'true' }}
+    needs: affinity-test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: Staging
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.CLOUDFLARE_ANALYTICS_TOKEN }}
+      STABLE_VERSION_ID: ${{ needs.affinity-test.outputs.stable_version_id }}
+      STABLE_RELEASE_ID: ${{ needs.affinity-test.outputs.stable_release_id }}
+      CANDIDATE_VERSION_ID: ${{ needs.affinity-test.outputs.candidate_version_id }}
+      CANDIDATE_RELEASE_ID: ${{ needs.affinity-test.outputs.candidate_release_id }}
+    steps:
+      - name: Require protected main
+        run: test "$GITHUB_REF" = "refs/heads/main"
+      - name: Check out protected source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.14.1
+      - name: Evaluate production WAE samples after stable restore
+        run: |
+          set -euo pipefail
+          for attempt in {1..5}; do
+            if node scripts/wae-release-gate.mjs \
+              --dataset atmos_worker_requests \
+              --stable-version "$STABLE_VERSION_ID" \
+              --stable-release "$STABLE_RELEASE_ID" \
+              --candidate-version "$CANDIDATE_VERSION_ID" \
+              --candidate-release "$CANDIDATE_RELEASE_ID" \
+              --lookback-minutes 60 \
+              --minimum-samples 30 > "$RUNNER_TEMP/wae-report.json"; then
+              cat "$RUNNER_TEMP/wae-report.json"
+              {
+                echo '### WAE release gate (evaluated after stable restoration)'
+                echo
+                echo '```json'
+                cat "$RUNNER_TEMP/wae-report.json"
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            else
+              status=$?
+              if [ "$status" -ne 3 ]; then
+                cat "$RUNNER_TEMP/wae-report.json"
+                exit "$status"
+              fi
+            fi
+            sleep 15
+          done
+          cat "$RUNNER_TEMP/wae-report.json"
+          exit 3
