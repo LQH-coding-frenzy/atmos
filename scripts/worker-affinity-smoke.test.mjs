@@ -156,6 +156,7 @@ test('plans a no-op when production never left stable and restores only known RE
 
 test('repeats each UUIDv4 key and confirms it remains on one of the two releases', async () => {
   const keys = [stableVersionId, candidateVersionId];
+  let nextKey = 0;
   const report = await runAffinitySmoke({
     origin: 'https://api.rainify.dpdns.org/',
     stableReleaseId,
@@ -164,7 +165,7 @@ test('repeats each UUIDv4 key and confirms it remains on one of the two releases
     maxKeys: 2,
     requestsPerKey: 3,
     concurrency: 2,
-    keyFactory: (index) => keys[index],
+    keyFactory: () => keys[nextKey++],
     fetcher: async (_url, options) => ({
       ok: true,
       status: 200,
@@ -180,6 +181,32 @@ test('repeats each UUIDv4 key and confirms it remains on one of the two releases
   assert.equal(report.candidateSamples, 3);
   assert.equal(report.stableKeys, 1);
   assert.equal(report.candidateKeys, 1);
+  assert.equal(report.keysTested, 2);
+});
+
+test('uses crypto.randomUUID as the default key factory', async () => {
+  const assignedRelease = new Map();
+  let nextRelease = 0;
+  const report = await runAffinitySmoke({
+    origin: 'https://api.rainify.dpdns.org/',
+    stableReleaseId,
+    candidateReleaseId,
+    minimumSamplesPerRelease: 3,
+    maxKeys: 2,
+    requestsPerKey: 3,
+    concurrency: 1,
+    fetcher: async (_url, options) => {
+      const key = options.headers['X-Atmos-Version-Key'];
+      let release = assignedRelease.get(key);
+      if (!release) {
+        release = nextRelease++ === 0 ? stableReleaseId : candidateReleaseId;
+        assignedRelease.set(key, release);
+      }
+      return { ok: true, status: 200, json: async () => ({ release }) };
+    },
+  });
+
+  assert.equal(report.decision, 'PASS');
   assert.equal(report.keysTested, 2);
 });
 
