@@ -188,7 +188,7 @@ The current shell has working `GRAFANA_URL` and `GRAFANA_SERVICE_ACCOUNT_TOKEN` 
 Use the Section 29 backlog and exact dependency checks rather than treating this list as a replacement plan.
 
 - `DOC-002`: ready immediately after GAME-002 becomes `DONE`.
-- `REL-005`: reopened with owner approval on 2026-09-30. The custom API hostname `api.rainify.dpdns.org`, Cloudflare request-header Transform Rule, and protected Vercel origin-switch release are live. Two owner-approved 90/10 attempts restored stable to 100% but did not confirm repeated-key affinity; one final local-network probe attempt remains authorized.
+- `REL-005`: reopened with owner approval on 2026-09-30. The custom API hostname `api.rainify.dpdns.org`, Cloudflare request-header Transform Rule, and protected Vercel origin-switch release are live. Three bounded 90/10 attempts restored stable to 100%, but the final local probe found one key routed to multiple Worker versions. Any further Transform Rule adjustment or traffic split requires renewed owner approval.
 - Frontend live-data activation is complete. The initial server render stays on `workers.dev`; hydrated browser API requests use `api.rainify.dpdns.org` and the tab-scoped affinity key. Protected release `36902363961` passed both exact-candidate and production-domain smoke checks.
 - HCP Terraform remote planning for `atmos-edge-production` is active and successfully refreshes existing Cloudflare resources. `SUPA-IAC-001` and `VERCEL-IAC-001` platform workspaces/scopes remain unverified and deferred.
 - `GHCR-001`, `CTR-001`, `CTR-002`, and `CTR-003`: not started. These are likely the next safe local/protected-CI chain after DOC-002 because they can establish immutable container publishing, hardening, image scan/SBOM, signing, and exact-digest verification before Azure exists.
@@ -197,7 +197,7 @@ Use the Section 29 backlog and exact dependency checks rather than treating this
 - `OBS-003` Vercel OTel and `OBS-004` Supabase app telemetry completed on 2026-09-30; `OBS-005` remains blocked until Azure is approved.
 - Grafana alerts are visible in Grafana but no approved external notification receiver/contact point exists.
 - `PORT-001` and `PORT-002` remain blocked by container supply-chain and backup/restore dependencies.
-- The custom API hostname `api.rainify.dpdns.org`, REL-005 client affinity key, Cloudflare Transform Rule, and protected Vercel browser-origin release are active. Production browser search and dashboard requests returned HTTP `200` with the same session key. The authorized split attempts both restored the stable Worker to 100%; the affinity test remains unverified.
+- The custom API hostname `api.rainify.dpdns.org`, REL-005 client affinity key, Cloudflare Transform Rule, and protected Vercel browser-origin release are active. Production browser search and dashboard requests returned HTTP `200` with the same session key. The last protected test restored stable to 100%; repeated-key affinity failed during the two-version check and remains unverified.
 - Open-Meteo Free use must remain non-commercial with attribution and quota controls.
 - Private vulnerability reporting remains disabled.
 - An unintended Supabase project `axcigtnxaulqcbegmqhw` was previously observed and is not confirmed deleted. Provider dashboard action requires owner involvement.
@@ -208,7 +208,7 @@ Use the Section 29 backlog and exact dependency checks rather than treating this
 2. Complete DOC-002 postmortem.
 3. Re-evaluate all dependency-ready tasks from Section 29.
 4. Prefer safe GHCR/container supply-chain work while HCP, Azure, R2, custom-domain, and external-alert blockers remain.
-5. Complete REL-005 only after the authorized local probe verifies same-key routing during the final bounded two-version test; no ongoing canary is authorized.
+5. Keep REL-005 IN_PROGRESS until the owner decides whether to authorize further Transform Rule remediation and a new controlled verification split.
 6. At approval gates or task boundaries, ask through the owner question box whether to continue or pause.
 7. At the true permitted end, report completed production capabilities and exact externally blocked items.
 
