@@ -157,6 +157,7 @@ test('plans a no-op when production never left stable and restores only known RE
 test('repeats each UUIDv4 key and confirms it remains on one of the two releases', async () => {
   const keys = [stableVersionId, candidateVersionId];
   let nextKey = 0;
+  const observedHeaders = [];
   const report = await runAffinitySmoke({
     origin: 'https://api.rainify.dpdns.org/',
     stableReleaseId,
@@ -166,14 +167,19 @@ test('repeats each UUIDv4 key and confirms it remains on one of the two releases
     requestsPerKey: 3,
     concurrency: 2,
     keyFactory: () => keys[nextKey++],
-    fetcher: async (_url, options) => ({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        release:
-          options.headers['X-Atmos-Version-Key'] === keys[0] ? stableReleaseId : candidateReleaseId,
-      }),
-    }),
+    fetcher: async (_url, options) => {
+      observedHeaders.push(options.headers);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          release:
+            options.headers['X-Atmos-Version-Key'] === keys[0]
+              ? stableReleaseId
+              : candidateReleaseId,
+        }),
+      };
+    },
   });
 
   assert.equal(report.decision, 'PASS');
@@ -182,6 +188,9 @@ test('repeats each UUIDv4 key and confirms it remains on one of the two releases
   assert.equal(report.stableKeys, 1);
   assert.equal(report.candidateKeys, 1);
   assert.equal(report.keysTested, 2);
+  assert.equal(observedHeaders[0].Origin, 'https://rainify.dpdns.org');
+  assert.equal(observedHeaders[0].Referer, 'https://rainify.dpdns.org/');
+  assert.equal(observedHeaders[0]['X-Atmos-Version-Key'], keys[0]);
 });
 
 test('uses crypto.randomUUID as the default key factory', async () => {
