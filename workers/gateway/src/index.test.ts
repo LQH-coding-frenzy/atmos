@@ -164,7 +164,7 @@ describe('gateway', () => {
           origin: 'https://rainify.dpdns.org',
           'access-control-request-method': 'POST',
           'access-control-request-headers':
-            'authorization,traceparent,x-request-id,x-atmos-version-key',
+            'authorization,traceparent,x-request-id,x-atmos-version-key,cloudflare-workers-version-key',
         },
       },
       { CORS_ORIGIN: 'https://rainify.dpdns.org' },
@@ -175,6 +175,9 @@ describe('gateway', () => {
     expect(response.headers.get('access-control-allow-methods')).toContain('POST');
     expect(response.headers.get('access-control-allow-headers')).toContain('Traceparent');
     expect(response.headers.get('access-control-allow-headers')).toContain('X-Atmos-Version-Key');
+    expect(response.headers.get('access-control-allow-headers')).toContain(
+      'Cloudflare-Workers-Version-Key',
+    );
 
     const deleteResponse = await app.request(
       'http://localhost/api/v1/weather/history/00000000-0000-4000-8000-000000000001',

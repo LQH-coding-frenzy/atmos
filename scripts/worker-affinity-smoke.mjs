@@ -236,6 +236,7 @@ export async function runAffinitySmoke({
         response = await fetcher(new URL('/version', base), {
           headers: {
             'X-Atmos-Version-Key': key,
+            'Cloudflare-Workers-Version-Key': key,
             Origin: 'https://rainify.dpdns.org',
             Referer: 'https://rainify.dpdns.org/',
           },

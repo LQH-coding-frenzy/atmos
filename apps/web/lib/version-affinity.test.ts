@@ -42,6 +42,7 @@ describe('version affinity key', () => {
     const second = versionAffinityHeaders();
 
     expect(first).toEqual(second);
+    expect(first['Cloudflare-Workers-Version-Key']).toBe(first['X-Atmos-Version-Key']);
     expect(first['X-Atmos-Version-Key']).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );

@@ -191,6 +191,7 @@ test('repeats each UUIDv4 key and confirms it remains on one of the two releases
   assert.equal(observedHeaders[0].Origin, 'https://rainify.dpdns.org');
   assert.equal(observedHeaders[0].Referer, 'https://rainify.dpdns.org/');
   assert.equal(observedHeaders[0]['X-Atmos-Version-Key'], keys[0]);
+  assert.equal(observedHeaders[0]['Cloudflare-Workers-Version-Key'], keys[0]);
 });
 
 test('uses crypto.randomUUID as the default key factory', async () => {
