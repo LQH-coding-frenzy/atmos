@@ -234,7 +234,11 @@ export async function runAffinitySmoke({
       let response;
       try {
         response = await fetcher(new URL('/version', base), {
-          headers: { 'X-Atmos-Version-Key': key },
+          headers: {
+            'X-Atmos-Version-Key': key,
+            Origin: 'https://rainify.dpdns.org',
+            Referer: 'https://rainify.dpdns.org/',
+          },
           signal: AbortSignal.timeout(10_000),
         });
       } catch {

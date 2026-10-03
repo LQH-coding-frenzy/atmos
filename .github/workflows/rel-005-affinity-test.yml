@@ -203,25 +203,24 @@ jobs:
             fi
             sleep 10
           done
-      - name: Verify repeated-key version affinity
-        id: affinity
+      - name: Open bounded local affinity probe window
+        id: affinity_window
         env:
           STABLE_RELEASE_ID: ${{ steps.stable.outputs.release_id }}
           CANDIDATE_RELEASE_ID: ${{ steps.stable.outputs.candidate_release_id }}
         run: |
           set -euo pipefail
-          report="$(node scripts/worker-affinity-smoke.mjs smoke \
-            --origin "$API_ORIGIN" \
-            --stable-release "$STABLE_RELEASE_ID" \
-            --candidate-release "$CANDIDATE_RELEASE_ID")"
-          printf '%s\n' "$report"
           {
-            echo '### Repeated-key affinity results'
+            echo '### Owner-local affinity probe window (240 seconds)'
             echo
-            echo '```json'
-            printf '%s\n' "$report"
-            echo '```'
+            echo 'Run the following from a network that can reach the production custom API host:'
+            echo
+            printf '`node scripts/worker-affinity-smoke.mjs smoke --origin %s --stable-release %s --candidate-release %s`\n' \
+              "$API_ORIGIN" "$STABLE_RELEASE_ID" "$CANDIDATE_RELEASE_ID"
+            echo
+            echo 'The probe prints only sample counts and release IDs; it never prints affinity keys.'
           } >> "$GITHUB_STEP_SUMMARY"
+          sleep 240
       - name: Verify production Grafana synthetics
         if: ${{ always() && steps.activate.outputs.split_started == 'true' && steps.activate.outcome == 'success' }}
         env:

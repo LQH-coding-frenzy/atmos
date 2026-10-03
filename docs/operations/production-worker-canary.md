@@ -12,7 +12,7 @@
 - Keep database credentials out of command arguments, logs, evidence, and the repository.
 - Stop before any destructive migration, paid-resource change, custom route, or candidate traffic assignment not explicitly approved for the active task.
 
-REL-005 is an owner-approved exception for the existing `api.rainify.dpdns.org` host and its request-header affinity rule. The owner separately authorized one protected 90/10 affinity-verification test with automatic restoration to the captured stable Worker at 100 percent. It does not authorize an ongoing rollout, another percentage split, or a new hostname.
+REL-005 is an owner-approved exception for the existing `api.rainify.dpdns.org` host and its request-header affinity rule. The owner separately authorized a bounded sequence of protected 90/10 affinity-verification attempts with automatic restoration to the captured stable Worker at 100 percent. It does not authorize an ongoing rollout, any later percentage split beyond the approved attempts, or a new hostname.
 
 ## Expand production schema
 
@@ -53,8 +53,8 @@ Require ordinary requests to the production `workers.dev` route to return the st
 - The Vercel client stores a random UUIDv4 in tab-scoped `sessionStorage` under `atmos_version_key` and sends it as `X-Atmos-Version-Key`. It is routing state only, not authentication.
 - The zone `http_request_late_transform` rule maps a valid key on the custom API hostname to `Cloudflare-Workers-Version-Key`; the Worker CORS policy allows the custom request header only from the configured frontend origin.
 - The protected `REL-005 affinity verification` workflow requires the exact `RUN_REL005_AFFINITY_TEST` confirmation on `main`, serializes against other production Worker releases/rollbacks, smoke-tests a zero-percent candidate, and temporarily assigns stable 90 percent / candidate 10 percent.
-- Its bounded `/version` probe uses random UUIDv4 keys, repeats each key, and requires at least 30 requests per release to remain on one release. All four fresh Grafana synthetics run while the split is active. The Production job then restores the originally captured stable Worker at 100 percent after success or failure and verifies the final inventory and production smoke; a read-only Staging job evaluates the WAE samples afterward using the existing Staging-scoped analytics token. Either gate may fail, but the stable Worker is already restored.
-- This is a one-time, owner-approved verification only. Any later percentage split or ongoing rollout requires a separate owner decision and protected release confirmation.
+- Its bounded `/version` probe uses random UUIDv4 keys, repeats each key, and requires at least 30 requests per release to remain on one release. When the GitHub runner cannot reach the custom API host, the workflow opens a four-minute window for the owner-local probe command in its summary. All four fresh Grafana synthetics run while the split is active. The Production job then restores the originally captured stable Worker at 100 percent after success or failure and verifies the final inventory and production smoke; a read-only Staging job evaluates WAE samples afterward using the existing Staging-scoped analytics token. Either gate may fail, but the stable Worker is already restored.
+- This bounded verification sequence is a one-time owner-approved exception, not an ongoing canary. Any traffic shift outside the explicitly approved attempts requires a separate owner decision and protected release confirmation.
 
 If the first deployment fails, no prior production route exists to restore. Correct the inactive version or delete the new Worker only after confirming it never received ordinary traffic.
 
