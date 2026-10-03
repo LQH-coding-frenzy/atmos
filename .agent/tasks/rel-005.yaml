@@ -49,7 +49,7 @@ task:
     required_config:
       [
         production API hostname api.rainify.dpdns.org,
-        CORS header X-Atmos-Version-Key,
+        CORS headers X-Atmos-Version-Key and Cloudflare-Workers-Version-Key,
         existing Grafana Cloud stack URL,
       ]
     required_secrets:
@@ -117,7 +117,7 @@ task:
       - the same browser tab reuses a random UUIDv4 across gateway requests
       - production server rendering stays on the stable unkeyed hostname while browser requests use the custom affinity hostname
       - requests without a valid affinity key continue normally and are not treated as authenticated
-      - CORS preflight permits X-Atmos-Version-Key only for the configured frontend origin
+      - CORS preflight permits both version-key headers only for the configured frontend origin
       - the zone rule maps a non-empty key on api.rainify.dpdns.org to Cloudflare-Workers-Version-Key; the client creates UUIDv4 values
       - repeated requests with the same key remain on the same Worker version during a split
       - the test is bounded, the stable release is restored at 100 percent, and final deployment inventory is verified
@@ -141,4 +141,4 @@ task:
     strategy: The protected affinity test always restores the captured stable Worker to 100 percent after the test. For feature rollback, remove only the version-key Transform Rule and revert frontend API-origin/CORS changes; preserve the existing custom hostname and Worker deployment history.
   human_approval:
     required: true
-    reason: Owner explicitly approved the REL-005 Cloudflare/API-origin changes, the Vercel deployment-protection bypass secret, and Vercel production validation on 2026-09-30 and 2026-10-01. On 2026-10-02 the owner separately approved a bounded protected 90/10 affinity-verification sequence with automatic restoration to the captured stable version at 100 percent, storage of the existing Grafana service token in the GitHub Production environment, one retry after a probe defect, and one final local-network retry after GitHub runner egress blocked the custom API host. The final local probe detected a same-key version change, so any further Transform Rule remediation or traffic split requires renewed owner approval.
+    reason: Owner explicitly approved the REL-005 Cloudflare/API-origin changes, the Vercel deployment-protection bypass secret, and Vercel production validation on 2026-09-30 and 2026-10-01. On 2026-10-02 the owner separately approved a bounded protected 90/10 affinity-verification sequence with automatic restoration to the captured stable version at 100 percent, storage of the existing Grafana service token in the GitHub Production environment, one retry after a probe defect, and one final local-network retry after GitHub runner egress blocked the custom API host. On 2026-10-03 the owner authorized a direct native-header fallback and another protected test; production deployment still requires the exact release gates.

@@ -237,6 +237,7 @@ export function createApp(
         'Traceparent',
         'X-Request-Id',
         'X-Atmos-Version-Key',
+        'Cloudflare-Workers-Version-Key',
       ],
       maxAge: 86400,
     }),

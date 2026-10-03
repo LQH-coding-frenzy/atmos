@@ -19,8 +19,10 @@ export function getOrCreateAtmosVersionKey(
 export function versionAffinityHeaders(): Record<string, string> {
   if (typeof window === 'undefined') return {};
   try {
+    const key = getOrCreateAtmosVersionKey(window.sessionStorage);
     return {
-      'X-Atmos-Version-Key': getOrCreateAtmosVersionKey(window.sessionStorage),
+      'X-Atmos-Version-Key': key,
+      'Cloudflare-Workers-Version-Key': key,
     };
   } catch {
     return {};
