@@ -1,7 +1,7 @@
 task:
   id: REL-005
   title: Worker version affinity and request-header Transform Rule
-  status: IN_PROGRESS
+  status: DONE
   objective: Keep browser requests in one Atmos session on the same Cloudflare Worker version during gradual deployments using a random session-only affinity key.
   depends_on: [REL-004]
   external_policy_checks:

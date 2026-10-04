@@ -188,7 +188,7 @@ The current shell has working `GRAFANA_URL` and `GRAFANA_SERVICE_ACCOUNT_TOKEN` 
 Use the Section 29 backlog and exact dependency checks rather than treating this list as a replacement plan.
 
 - `DOC-002`: ready immediately after GAME-002 becomes `DONE`.
-- `REL-005`: the custom API hostname, Transform Rule, and direct native-header fallback are live. Protected Edge release `37141293496` and Vercel release `37141524659` deployed the fallback; browser search/dashboard calls return HTTP `200` with both headers carrying the same tab key. Three earlier 90/10 attempts restored stable to 100% but failed affinity; the owner approved one post-fix 90/10 verification, with stable currently at 100% on release `7e4929a91856`.
+- `REL-005` is `DONE`: the custom API hostname, Transform Rule, and direct native-header fallback are live. Protected Edge release `37141293496` and Vercel release `37141524659` deployed the fallback; browser search/dashboard calls return HTTP `200` with both headers carrying the same tab key. Post-fix run [37215758944](https://github.com/LQH-coding-frenzy/atmos/actions/runs/37215758944) passed same-key routing, WAE, and Grafana gates, then restored stable to 100% on release `7e4929a91856`.
 - Frontend live-data activation is complete. The initial server render stays on `workers.dev`; hydrated browser API requests use `api.rainify.dpdns.org` and the tab-scoped affinity key. Protected release `36902363961` passed both exact-candidate and production-domain smoke checks.
 - HCP Terraform remote planning for `atmos-edge-production` is active and successfully refreshes existing Cloudflare resources. `SUPA-IAC-001` and `VERCEL-IAC-001` platform workspaces/scopes remain unverified and deferred.
 - `GHCR-001`, `CTR-001`, `CTR-002`, and `CTR-003`: not started. These are likely the next safe local/protected-CI chain after DOC-002 because they can establish immutable container publishing, hardening, image scan/SBOM, signing, and exact-digest verification before Azure exists.
@@ -197,7 +197,7 @@ Use the Section 29 backlog and exact dependency checks rather than treating this
 - `OBS-003` Vercel OTel and `OBS-004` Supabase app telemetry completed on 2026-09-30; `OBS-005` remains blocked until Azure is approved.
 - Grafana alerts are visible in Grafana but no approved external notification receiver/contact point exists.
 - `PORT-001` and `PORT-002` remain blocked by container supply-chain and backup/restore dependencies.
-- The custom API hostname `api.rainify.dpdns.org`, REL-005 client affinity key, Cloudflare Transform Rule, direct native-header fallback, and protected Vercel browser-origin release are active. Production browser search and dashboard requests returned HTTP `200` with both affinity headers carrying the same session key. Stable remains at 100%; the owner-approved post-fix split verification is pending.
+- The custom API hostname `api.rainify.dpdns.org`, REL-005 client affinity key, Cloudflare Transform Rule, direct native-header fallback, and protected Vercel browser-origin release are active. Production browser search and dashboard requests returned HTTP `200` with both affinity headers carrying the same session key. The post-fix two-version affinity check passed; stable remains at 100% on `7e4929a91856`.
 - Open-Meteo Free use must remain non-commercial with attribution and quota controls.
 - Private vulnerability reporting remains disabled.
 - An unintended Supabase project `axcigtnxaulqcbegmqhw` was previously observed and is not confirmed deleted. Provider dashboard action requires owner involvement.
@@ -208,7 +208,7 @@ Use the Section 29 backlog and exact dependency checks rather than treating this
 2. Complete DOC-002 postmortem.
 3. Re-evaluate all dependency-ready tasks from Section 29.
 4. Prefer safe GHCR/container supply-chain work while HCP, Azure, R2, custom-domain, and external-alert blockers remain.
-5. Run the owner-approved post-fix REL-005 test; close the task only if same-key routing, WAE/Grafana gates, and stable restoration all pass.
+5. Keep REL-005 complete; any additional production traffic split requires new owner approval.
 6. At approval gates or task boundaries, ask through the owner question box whether to continue or pause.
 7. At the true permitted end, report completed production capabilities and exact externally blocked items.
 
