@@ -1,7 +1,7 @@
 task:
   id: SUPA-IAC-001
   title: Manage approved production Supabase Auth URLs with Terraform
-  status: BLOCKED
+  status: DONE
   objective: Import the existing production Supabase Auth settings into the HCP data-production workspace and manage only the previously owner-approved Site URL and redirect allowlist values without changing live authentication behavior.
   depends_on: [TF-002]
   external_policy_checks:
@@ -95,4 +95,4 @@ task:
     strategy: No apply before review. If an approved plan changes a setting, stop and reconcile the plan; revert the Terraform configuration through protected Git without deleting the Supabase project or remote state.
   human_approval:
     required: true
-    reason: Owner authorized HCP variables, a plan-only run, and one apply on 2026-10-05. The apply imported the resource but stopped at the provider's Realtime service-health gate before the Auth update. Current services are healthy; no retry is authorized until the owner approves it.
+    reason: Owner authorized HCP variables, plan-only review, and one manual retry after Realtime health recovered on 2026-10-05. Provider v1.11.0 applied only the configured partial Auth URL update; the follow-up plan is clean. No further settings scope or traffic changes are authorized by this approval.
