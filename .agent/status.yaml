@@ -1,5 +1,5 @@
 project: atmos
-updated: 2026-09-30
+updated: 2026-10-05
 scope:
   profile: CV_SHOWCASE
   production_hardening: IN_PROGRESS
@@ -103,6 +103,7 @@ tasks:
   SBOM-001: DONE
   TF-001: DONE
   TF-002: DONE
+  SUPA-IAC-001: IN_PROGRESS
   CF-IAC-001: DONE
   R2BACK-001: DONE
   BACKUP-001: DONE
