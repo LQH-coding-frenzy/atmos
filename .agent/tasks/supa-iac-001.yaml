@@ -1,0 +1,98 @@
+task:
+  id: SUPA-IAC-001
+  title: Manage approved production Supabase Auth URLs with Terraform
+  status: IN_PROGRESS
+  objective: Import the existing production Supabase Auth settings into the HCP data-production workspace and manage only the previously owner-approved Site URL and redirect allowlist values without changing live authentication behavior.
+  depends_on: [TF-002]
+  external_policy_checks:
+    - Use the existing Supabase production project and HCP atmos-data-production workspace; create no project or paid resource.
+    - Supabase provider is pinned to the approved 1.11.0 release.
+    - Do not create or copy provider credentials without explicit owner approval.
+  runtime_placement:
+    allowed: [hcp-terraform]
+    selected: hcp-terraform
+    reason: Project Auth settings are control-plane configuration and should be versioned and reviewed through the existing remote/manual-apply workspace.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/supa-iac-001.yaml,
+        PRODUCTION-CONTINUATION.md,
+        infra/terraform/supabase-production/main.tf,
+        infra/terraform/supabase-production/.terraform.lock.hcl,
+        docs/evidence/supa-iac-001/2026-10-05.md,
+      ]
+    exclude:
+      [
+        supabase_project creation or deletion,
+        staging project settings,
+        Auth settings other than site_url and uri_allow_list,
+        'database schema, migrations, grants, and RLS',
+        network restrictions and database/API/storage settings,
+        HCP sensitive-variable creation or provider-token rotation,
+        remote state import or Terraform apply without separate owner approval,
+      ]
+  inputs:
+    required_config:
+      [
+        HCP workspace atmos-data-production,
+        existing production Supabase project reference,
+        site_url https://rainify.dpdns.org,
+        uri_allow_list https://rainify.dpdns.org,
+      ]
+    required_secrets: [HCP sensitive environment variable SUPABASE_ACCESS_TOKEN]
+  outputs:
+    files:
+      [
+        .agent/status.yaml,
+        .agent/tasks/supa-iac-001.yaml,
+        PRODUCTION-CONTINUATION.md,
+        infra/terraform/supabase-production/main.tf,
+        infra/terraform/supabase-production/.terraform.lock.hcl,
+        docs/evidence/supa-iac-001/2026-10-05.md,
+      ]
+    terraform_resources: [imported supabase_settings.production]
+    database_changes: [none]
+    deployed_units: [none; existing HCP remote workspace only]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: No live setting update is intended; retain the existing owner-approved Auth URLs and revert only Terraform configuration through protected Git.
+  validation:
+    commands:
+      [
+        terraform fmt -check infra/terraform/supabase-production,
+        terraform -chdir=infra/terraform/supabase-production init -backend=false,
+        terraform -chdir=infra/terraform/supabase-production validate,
+        protected pull request checks,
+        HCP speculative plan after approved provider credentials are configured,
+      ]
+    expected:
+      [
+        configuration imports the existing settings resource and selects only the previously approved Auth URL fields,
+        speculative plan proposes no creation/deletion or changes beyond import and those fields,
+        any unexpected live-setting drift is held for owner review,
+      ]
+  security_checks:
+    [
+      existing resource import only,
+      prevent_destroy on settings resource,
+      SUPABASE_ACCESS_TOKEN only as an HCP sensitive variable,
+      no credentials or Terraform state in Git,
+      no database/RLS changes,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [none; control-plane settings]
+    logs: [HCP plan outcome without provider payloads or credentials]
+    traces: [HCP run ID and commit SHA]
+  evidence:
+    - docs/evidence/supa-iac-001/2026-10-05.md
+  rollback:
+    strategy: No apply before review. If an approved plan changes a setting, stop and reconcile the plan; revert the Terraform configuration through protected Git without deleting the Supabase project or remote state.
+  human_approval:
+    required: true
+    reason: Owner selected SUPA-IAC-001. The prior Auth URL values were owner-approved on 2026-09-27; adding a Supabase provider token to HCP, importing remote state, and applying any setting change still require separate explicit approval.
