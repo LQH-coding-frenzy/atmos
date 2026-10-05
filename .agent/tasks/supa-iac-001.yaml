@@ -95,4 +95,4 @@ task:
     strategy: No apply before review. If an approved plan changes a setting, stop and reconcile the plan; revert the Terraform configuration through protected Git without deleting the Supabase project or remote state.
   human_approval:
     required: true
-    reason: Owner authorized HCP variables, a plan-only run, and the exact state import/partial Auth update on 2026-10-05. The apply run errored after the imported resource persisted in HCP state; live Auth URL checks still match the approved values, while a fresh plan retains one in-place update. No further apply/retry is approved pending owner direction.
+    reason: Owner authorized HCP variables, a plan-only run, and one apply on 2026-10-05. The apply imported the resource but stopped at the provider's Realtime service-health gate before the Auth update. Current services are healthy; no retry is authorized until the owner approves it.
