@@ -95,4 +95,4 @@ task:
     strategy: No apply before review. If an approved plan changes a setting, stop and reconcile the plan; revert the Terraform configuration through protected Git without deleting the Supabase project or remote state.
   human_approval:
     required: true
-    reason: Owner selected SUPA-IAC-001 and explicitly authorized the existing Supabase token as an HCP sensitive variable, the non-sensitive project_ref variable, and a plan-only remote run on 2026-10-05. The plan displayed broad state diffs; provider v1.11.0 uses partial category/Auth updates, but import reads all settings into HCP state. No import or apply is approved; pause for owner review of the exact state and API effects.
+    reason: Owner authorized HCP variables, a plan-only run, and the exact state import/partial Auth update on 2026-10-05. The apply run errored after the imported resource persisted in HCP state; live Auth URL checks still match the approved values, while a fresh plan retains one in-place update. No further apply/retry is approved pending owner direction.
