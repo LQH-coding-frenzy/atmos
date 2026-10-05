@@ -69,9 +69,9 @@ task:
       ]
     expected:
       [
-        configuration imports the existing settings resource and selects only the previously approved Auth URL fields,
-        speculative plan proposes no creation/deletion or changes beyond import and those fields,
-        any unexpected live-setting drift is held for owner review,
+        configuration imports the existing settings resource and sets only the previously approved Auth URL fields,
+        provider update calls are limited to non-null changed categories and the configured partial Auth JSON,
+        review the import/state diff separately from provider API updates; hold any unexpected API category update for owner review,
       ]
   security_checks:
     [
@@ -95,4 +95,4 @@ task:
     strategy: No apply before review. If an approved plan changes a setting, stop and reconcile the plan; revert the Terraform configuration through protected Git without deleting the Supabase project or remote state.
   human_approval:
     required: true
-    reason: Owner selected SUPA-IAC-001 and explicitly authorized the existing Supabase token as an HCP sensitive variable, the non-sensitive project_ref variable, and a plan-only remote run on 2026-10-05. The plan showed out-of-scope changes across multiple settings categories. No import or apply is approved; pause until the owner resolves scope.
+    reason: Owner selected SUPA-IAC-001 and explicitly authorized the existing Supabase token as an HCP sensitive variable, the non-sensitive project_ref variable, and a plan-only remote run on 2026-10-05. The plan displayed broad state diffs; provider v1.11.0 uses partial category/Auth updates, but import reads all settings into HCP state. No import or apply is approved; pause for owner review of the exact state and API effects.
