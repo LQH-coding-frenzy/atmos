@@ -1,0 +1,96 @@
+task:
+  id: VERCEL-IAC-001
+  title: Manage the existing Vercel production domain association
+  status: IN_PROGRESS
+  objective: Import the existing rainify.dpdns.org association for the existing Atmos Vercel project into the atmos-vercel HCP workspace without changing project settings, DNS, deployments, or domain behavior.
+  depends_on: [TF-002]
+  external_policy_checks:
+    - Use the existing Vercel Hobby project and existing production domain; create no project, domain, paid feature, or deployment.
+    - Pin the Vercel Terraform provider to the approved 5.16.0 release.
+    - Store provider credentials only as an HCP sensitive environment variable after explicit owner approval.
+  runtime_placement:
+    allowed: [hcp-terraform]
+    selected: hcp-terraform
+    reason: The existing Vercel project-domain association is control-plane configuration owned by the existing remote/manual-apply HCP workspace.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/vercel-iac-001.yaml,
+        PRODUCTION-CONTINUATION.md,
+        infra/terraform/vercel-production/main.tf,
+        infra/terraform/vercel-production/.terraform.lock.hcl,
+        docs/evidence/vercel-iac-001/2026-10-05.md,
+      ]
+    exclude:
+      [
+        Vercel project creation or settings,
+        Vercel environment variables and secrets,
+        'Vercel deployment, alias, promotion, and rollback operations',
+        DNS records and domain registrar settings,
+        HCP sensitive-variable creation or Vercel-token rotation,
+        remote state import or Terraform apply without separate owner approval,
+      ]
+  inputs:
+    required_config:
+      [
+        HCP workspace atmos-vercel,
+        existing Vercel team_id and project_id from Production variables,
+        existing production domain rainify.dpdns.org,
+      ]
+    required_secrets: [HCP sensitive environment variable VERCEL_API_TOKEN]
+  outputs:
+    files:
+      [
+        .agent/status.yaml,
+        .agent/tasks/vercel-iac-001.yaml,
+        PRODUCTION-CONTINUATION.md,
+        infra/terraform/vercel-production/main.tf,
+        infra/terraform/vercel-production/.terraform.lock.hcl,
+        docs/evidence/vercel-iac-001/2026-10-05.md,
+      ]
+    terraform_resources: [imported vercel_project_domain.production]
+    database_changes: [none]
+    deployed_units: [none; existing Vercel project/domain only]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: The existing domain remains attached; prevent_destroy guards the resource. Revert Terraform configuration through protected Git without deleting the project or domain.
+  validation:
+    commands:
+      [
+        terraform fmt -check infra/terraform/vercel-production,
+        terraform -chdir=infra/terraform/vercel-production init -backend=false,
+        terraform -chdir=infra/terraform/vercel-production validate,
+        protected pull request checks,
+        HCP speculative plan after approved workspace variables and provider credential are configured,
+      ]
+    expected:
+      [
+        plan imports the existing domain association without project/domain creation or deletion,
+        'no project, domain, DNS, environment-variable, deployment, or alias change is proposed',
+        any unexpected domain drift is held for owner review,
+      ]
+  security_checks:
+    [
+      existing domain import only,
+      prevent_destroy on domain resource,
+      VERCEL_API_TOKEN only as an HCP sensitive variable,
+      no credentials or Terraform state in Git,
+      no deployment token in plan logs,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [none; domain association control-plane resource]
+    logs: [HCP plan outcome without credentials or provider response bodies]
+    traces: [HCP run ID and commit SHA]
+  evidence:
+    - docs/evidence/vercel-iac-001/2026-10-05.md
+  rollback:
+    strategy: No apply before review. Do not destroy the existing domain or change production deployment aliases; revert only Terraform code through protected Git.
+  human_approval:
+    required: true
+    reason: Owner selected VERCEL-IAC-001. Copying the existing team-scoped Vercel token into HCP and importing/applying the production domain resource require separate explicit approval.
