@@ -1,7 +1,7 @@
 task:
   id: AZ-IAC-001
   title: Provision the Consumption-only Azure Container Apps environment
-  status: IN_PROGRESS
+  status: BLOCKED
   objective: Define one reusable Azure Container Apps Consumption environment for future finite Atmos jobs without enabling paid log storage or changing existing Azure resources.
 
   depends_on: [AZ-OIDC-001, TF-002]
@@ -11,6 +11,7 @@ task:
     - Preserve the monthly USD 10 alert-only budget and the existing AZ-001 approved USD 10 maximum initial Azure credit consumption.
     - Never upgrade to pay-as-you-go; stop before exceeding the approved USD 10 consumption limit.
     - Microsoft.App is already registered and the managed-environment resource type is available in Southeast Asia; do not register providers in this task.
+    - Azure subscription policy `Allowed resource deployment regions` rejects `southeastasia`; do not choose a substitute region without the owner's decision.
     - The owner selected AZ-IAC-001 deployment; any remote apply must be limited to the reviewed plan and receive plan-specific approval.
 
   runtime_placement:
@@ -25,7 +26,7 @@ task:
       - .agent/tasks/az-iac-001.yaml
       - docs/evidence/az-iac-001/2026-10-06.md
       - PRODUCTION-CONTINUATION.md
-      - One azurerm_container_app_environment in southeastasia within the existing rg-atmos-prod resource group
+      - One azurerm_container_app_environment in an owner-selected policy-allowed region within the existing rg-atmos-prod resource group
     exclude:
       - Changes to the existing Container Instance backup or restore resources
       - Resource-group creation, deletion, or import
@@ -73,7 +74,7 @@ task:
       - The plan adds only azurerm_container_app_environment.production.
       - The plan has no changes or destroys for the existing Container Instance resources.
       - No Log Analytics workspace, Azure Monitor persistence, dedicated profile, network, or app/job is created.
-      - The environment uses Consumption workload profile and Southeast Asia.
+      - The environment uses Consumption workload profile and an owner-selected region allowed by the subscription policy.
 
   security_checks:
     - Azure provider authentication remains OIDC-based with no client secret.
@@ -104,4 +105,4 @@ task:
 
   human_approval:
     required: true
-    reason: The owner selected AZ-IAC-001 deployment. A plan-specific review is still required before HCP apply; stop if costs may exceed the existing USD 10 initial-consumption approval or if the plan includes any out-of-scope changes.
+    reason: The owner selected AZ-IAC-001 deployment, but Azure rejected the Southeast Asia create due to the subscription's allowed-regions policy. No environment was created. Wait for the owner to select an allowed region, then generate and review a fresh plan before any apply.
