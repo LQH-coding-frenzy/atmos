@@ -192,7 +192,7 @@ Use the Section 29 backlog and exact dependency checks rather than treating this
 - Frontend live-data activation is complete. The initial server render stays on `workers.dev`; hydrated browser API requests use `api.rainify.dpdns.org` and the tab-scoped affinity key. Protected release `36902363961` passed both exact-candidate and production-domain smoke checks.
 - HCP Terraform remote planning for `atmos-edge-production` is active and successfully refreshes existing Cloudflare resources. `SUPA-IAC-001` is `DONE`: after Realtime health recovered, the owner-approved retry imported and applied the partial Auth URL settings; a read-only check passed and the follow-up HCP plan reports no changes. `VERCEL-IAC-001` is `DONE`: the owner-approved import-only apply adopted the existing domain association, the live site remains HTTP `200`, and the follow-up HCP plan is clean.
 - `GHCR-001`, `CTR-001`, `CTR-002`, and `CTR-003` are `DONE`; the immutable container supply-chain chain is complete.
-- `AZ-001`, `AZ-OIDC-001`, and `AZ-TF-OIDC-001` are `DONE`. HCP plan/apply Azure OIDC federations and workspace variables were verified with a successful no-change plan. The 2026-10-06 preflight found Azure enabled, the USD 10/month Owner-alert budget intact, and `Microsoft.App` registered without Container Apps resources; the owner reported USD 100 remaining credit with an expiration far away (exact date not supplied). `AZ-IAC-001` is `BLOCKED`: Azure rejected the planned Consumption-only `southeastasia` environment with a subscription allowed-regions policy. No environment was created; existing backup Container Instance is unchanged. The policy currently permits `koreacentral`, `indonesiacentral`, `centralindia`, `uaenorth`, and `indiasouthcentral`; wait for the owner to select an allowed region before replanning. Preserve the USD 10 initial-consumption ceiling and never upgrade to pay-as-you-go.
+- `AZ-001`, `AZ-OIDC-001`, and `AZ-TF-OIDC-001` are `DONE`. HCP plan/apply Azure OIDC federations and workspace variables were verified with a successful no-change plan. The 2026-10-06 preflight found Azure enabled, the USD 10/month Owner-alert budget intact, and `Microsoft.App` registered without Container Apps resources; the owner reported USD 100 remaining credit with an expiration far away (exact date not supplied). Azure rejected the first AZ-IAC-001 attempt in `southeastasia` due to the subscription's allowed-region policy; no environment was created and the existing backup Container Instance is unchanged. The owner selected `indonesiacentral`; the revised HCP plan proposes one create, zero changes, and zero destroys. Await plan-specific review before retrying; preserve the USD 10 initial-consumption ceiling and never upgrade to pay-as-you-go.
 - `R2BACK-001`, `BACKUP-001`, and `RESTORE-001` are `DONE`, including one verified encrypted R2 backup and an ephemeral restore drill. Automatic retention/scheduling (`BACKUP-002`) and recurring restore exercises (`GAME-006`) remain deferred by the CV-showcase profile.
 - `OBS-003` Vercel OTel and `OBS-004` Supabase app telemetry completed on 2026-09-30; `OBS-005` remains blocked until Azure is approved.
 - Grafana alerts are visible in Grafana but no approved external notification receiver/contact point exists.
@@ -206,14 +206,14 @@ Use the Section 29 backlog and exact dependency checks rather than treating this
 
 1. Re-evaluate Section 29 and ask the owner to select the next item; `SUPA-IAC-001`, `VERCEL-IAC-001`, and `AZ-TF-OIDC-001` are `DONE`.
 2. Keep recurring restore (`GAME-006`) and backup retention (`BACKUP-002`) deferred under the CV-showcase profile unless the owner explicitly opts into future production operations and the relevant quota/policy preflight passes.
-3. AZ-IAC-001 is blocked until the owner selects a region from the Azure subscription's allowed list; then generate a fresh additive HCP plan, review it, and preserve the USD 10 initial-consumption limit. Never upgrade to pay-as-you-go.
+3. AZ-IAC-001 now targets owner-selected `indonesiacentral`; its fresh HCP plan proposes one create and no destroys. Obtain plan-specific review before retrying, and preserve the USD 10 initial-consumption limit. Never upgrade to pay-as-you-go.
 4. Keep REL-005 complete; any additional production traffic split requires new owner approval.
 5. At approval gates or task boundaries, ask through the owner question box whether to continue or pause.
 6. At the true permitted end, report completed production capabilities and exact externally blocked items.
 
 ## Git And Workspace Safety
 
-Current branch is the task-specific `docs/az-tf-oidc-closeout`; PRs #285 (owner credit update) and #286 (AZ-IAC-001 Terraform scope) are merged. AZ-IAC-001 is blocked by the Azure subscription's allowed-region policy.
+Current branch is the task-specific `docs/az-tf-oidc-closeout`; PRs #285 (owner credit update), #286 (AZ-IAC-001 Terraform scope), and #287 (region-policy evidence) are merged. AZ-IAC-001 targets `indonesiacentral`; its fresh HCP plan awaits owner review before apply.
 
 Preserve these unrelated local items exactly; do not stage, edit, delete, or revert them:
 
