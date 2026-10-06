@@ -180,3 +180,35 @@ test('requires the HCP workspace to remain remote with auto-apply disabled', asy
   );
   assert.equal(variableCalls, 0);
 });
+
+test('does not expose HCP response bodies when variable creation fails', async () => {
+  const responseBody = 'sensitive-hcp-response-body';
+  const fetchImpl = async (url, options = {}) => {
+    const parsed = new URL(url);
+    if (parsed.pathname.endsWith('/organizations/atmos_uit/workspaces/atmos-vercel')) {
+      return jsonResponse(workspaceResponse());
+    }
+    if (parsed.pathname.endsWith('/workspaces/ws-vercel/vars') && options.method === 'POST') {
+      return new Response(responseBody, { status: 403 });
+    }
+    if (parsed.pathname.endsWith('/workspaces/ws-vercel/vars')) {
+      return jsonResponse({ data: [], links: {} });
+    }
+    throw new Error(`Unexpected request path: ${parsed.pathname}`);
+  };
+
+  await assert.rejects(
+    configureVercelHcpVariables({
+      fetchImpl,
+      hcpToken: 'fake-hcp-token',
+      vercelToken: 'fake-vercel-token',
+      teamId: 'team-test',
+      projectId: 'prj-test',
+    }),
+    (error) => {
+      assert.match(error.message, /team_id with HTTP 403/);
+      assert.doesNotMatch(error.message, new RegExp(responseBody));
+      return true;
+    },
+  );
+});
