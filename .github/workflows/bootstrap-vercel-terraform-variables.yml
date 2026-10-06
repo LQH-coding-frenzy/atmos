@@ -1,0 +1,51 @@
+name: Configure Vercel Terraform variables
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type CONFIGURE_VERCEL_IAC_VARIABLES to store the approved HCP variables
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: atmos-hcp-vercel-variables
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: Production
+    permissions:
+      contents: read
+    env:
+      CONFIRMATION: ${{ inputs.confirmation }}
+      TF_ORG_TOKEN: ${{ secrets.TF_ORG_TOKEN }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Require protected main and explicit confirmation
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$CONFIRMATION" = "CONFIGURE_VERCEL_IAC_VARIABLES"
+          test -n "$TF_ORG_TOKEN"
+          test -n "$VERCEL_TOKEN"
+          test -n "$VERCEL_ORG_ID"
+          test -n "$VERCEL_PROJECT_ID"
+      - name: Check out protected source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.14.1
+      - name: Configure approved Vercel HCP variables
+        run: node scripts/hcp-vercel-variables.mjs

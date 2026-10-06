@@ -7,6 +7,7 @@ task:
   external_policy_checks:
     - Use the existing Vercel Hobby project and existing production domain; create no project, domain, paid feature, or deployment.
     - Pin the Vercel Terraform provider to the approved 5.16.0 release.
+    - Use the existing team-scoped VERCEL_TOKEN, which expires 2026-12-11; do not create or rotate a token.
     - Store provider credentials only as an HCP sensitive environment variable after explicit owner approval.
   runtime_placement:
     allowed: [hcp-terraform]
@@ -18,6 +19,12 @@ task:
         .agent/status.yaml,
         .agent/tasks/vercel-iac-001.yaml,
         PRODUCTION-CONTINUATION.md,
+        pnpm-workspace.yaml,
+        pnpm-lock.yaml,
+        .github/workflows/bootstrap-vercel-terraform-variables.yml,
+        scripts/hcp-vercel-variables.mjs,
+        scripts/hcp-vercel-variables.test.mjs,
+        docs/operations/vercel-terraform.md,
         infra/terraform/vercel-production/main.tf,
         infra/terraform/vercel-production/.terraform.lock.hcl,
         docs/evidence/vercel-iac-001/2026-10-05.md,
@@ -25,10 +32,10 @@ task:
     exclude:
       [
         Vercel project creation or settings,
-        Vercel environment variables and secrets,
+        Vercel project environment variables and secrets,
         'Vercel deployment, alias, promotion, and rollback operations',
         DNS records and domain registrar settings,
-        HCP sensitive-variable creation or Vercel-token rotation,
+        creating or rotating a Vercel API token,
         remote state import or Terraform apply without separate owner approval,
       ]
   inputs:
@@ -38,13 +45,24 @@ task:
         existing Vercel team_id and project_id from Production variables,
         existing production domain rainify.dpdns.org,
       ]
-    required_secrets: [HCP sensitive environment variable VERCEL_API_TOKEN]
+    required_secrets:
+      [
+        GitHub TF_ORG_TOKEN,
+        GitHub Production VERCEL_TOKEN,
+        HCP sensitive environment variable VERCEL_API_TOKEN,
+      ]
   outputs:
     files:
       [
         .agent/status.yaml,
         .agent/tasks/vercel-iac-001.yaml,
         PRODUCTION-CONTINUATION.md,
+        pnpm-workspace.yaml,
+        pnpm-lock.yaml,
+        .github/workflows/bootstrap-vercel-terraform-variables.yml,
+        scripts/hcp-vercel-variables.mjs,
+        scripts/hcp-vercel-variables.test.mjs,
+        docs/operations/vercel-terraform.md,
         infra/terraform/vercel-production/main.tf,
         infra/terraform/vercel-production/.terraform.lock.hcl,
         docs/evidence/vercel-iac-001/2026-10-05.md,
@@ -62,7 +80,9 @@ task:
         terraform fmt -check infra/terraform/vercel-production,
         terraform -chdir=infra/terraform/vercel-production init -backend=false,
         terraform -chdir=infra/terraform/vercel-production validate,
+        node --test scripts/hcp-vercel-variables.test.mjs,
         protected pull request checks,
+        protected HCP variable setup dispatch after owner approval,
         HCP speculative plan after approved workspace variables and provider credential are configured,
       ]
     expected:
