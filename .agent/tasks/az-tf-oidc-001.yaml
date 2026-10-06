@@ -1,0 +1,90 @@
+task:
+  id: AZ-TF-OIDC-001
+  title: HCP Terraform to Azure dynamic OIDC authentication
+  status: DONE
+  objective: Verify HCP Terraform can use its existing short-lived OIDC federation with AzureRM without storing an Azure client secret or changing Azure resources.
+  depends_on: [AZ-001, TF-001]
+  external_policy_checks:
+    - Preserve the Azure for Students subscription and alert-only budget; never upgrade to pay-as-you-go.
+    - This task is identity verification only and must create no Azure compute, networking, or paid resources.
+    - Use the exact HCP workspace plan/apply federation subjects and api://AzureADTokenExchange audience.
+  runtime_placement:
+    allowed: [hcp-terraform, azure-control-plane]
+    selected: hcp-terraform
+    reason: HCP Terraform obtains short-lived Azure credentials through its native OIDC integration; provider execution remains in the remote workspace.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/az-tf-oidc-001.yaml,
+        infra/terraform/azure-production/main.tf,
+        docs/evidence/az-tf-oidc-001/2026-10-06.md,
+      ]
+    exclude:
+      [
+        Azure resource provisioning or deletion,
+        Azure RBAC role assignments,
+        client secrets or certificates,
+        new Entra applications or service principals,
+        pay-as-you-go changes,
+      ]
+  inputs:
+    required_config:
+      [
+        HCP workspace atmos-azure-production,
+        existing Entra application and HCP plan/apply federated credentials,
+        existing TFC_AZURE_PROVIDER_AUTH and client/tenant/subscription variables,
+      ]
+    required_secrets: [TF_ORG_TOKEN]
+  outputs:
+    files:
+      [
+        .agent/status.yaml,
+        .agent/tasks/az-tf-oidc-001.yaml,
+        docs/evidence/az-tf-oidc-001/2026-10-06.md,
+      ]
+    terraform_resources: [none; existing federated credentials verified read-only]
+    database_changes: [none]
+    deployed_units: [none]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: No identity or Azure resource changes were made; removal of existing federations requires separate owner approval.
+  validation:
+    commands:
+      [
+        HCP Azure variable metadata-only inspection,
+        az account show with non-secret state fields only,
+        az ad app federated-credential list with sanitized output,
+        HCP remote plan with plan-only=true,
+        protected pull request checks,
+      ]
+    expected:
+      [
+        'HCP OIDC is enabled and run client, tenant, and subscription settings are internally consistent',
+        'plan and apply FICs match HCP issuer, workspace subjects, and token-exchange audience',
+        the remote plan completes with no infrastructure changes,
+        no Azure client secret or Azure resource mutation occurs,
+      ]
+  security_checks:
+    [
+      no Azure client secret,
+      exact plan/apply FIC subjects,
+      no subscription-wide role assignment added,
+      workspace variable values and Azure response bodies are not logged,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [none; identity configuration verification]
+    logs: [sanitized workspace variable metadata and HCP plan status]
+    traces: [HCP run ID and commit SHA]
+  evidence:
+    - docs/evidence/az-tf-oidc-001/2026-10-06.md
+  rollback:
+    strategy: No change was made; retain existing plan/apply federated credentials. Revoke them only through a separately owner-approved Azure identity change.
+  human_approval:
+    required: true
+    reason: Owner selected AZ-TF-OIDC-001. Read-only checks confirmed the existing HCP/Azure OIDC configuration and a no-change plan; no Azure resources, credentials, or federations were changed.
