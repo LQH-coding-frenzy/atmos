@@ -1,5 +1,5 @@
 project: atmos
-updated: 2026-10-05
+updated: 2026-10-06
 scope:
   profile: CV_SHOWCASE
   production_hardening: IN_PROGRESS
@@ -104,7 +104,7 @@ tasks:
   TF-001: DONE
   TF-002: DONE
   SUPA-IAC-001: DONE
-  VERCEL-IAC-001: IN_PROGRESS
+  VERCEL-IAC-001: DONE
   CF-IAC-001: DONE
   R2BACK-001: DONE
   BACKUP-001: DONE
