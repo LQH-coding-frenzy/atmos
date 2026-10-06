@@ -67,7 +67,7 @@ task:
       - terraform fmt -check infra/terraform/azure-production/main.tf
       - terraform init -backend=false in infra/terraform/azure-production
       - terraform validate in infra/terraform/azure-production
-      - HCP Terraform speculative plan for atmos-azure-production
+      - HCP Terraform remote plan for atmos-azure-production
       - Protected pull request checks
     expected:
       - The plan adds only azurerm_container_app_environment.production.
