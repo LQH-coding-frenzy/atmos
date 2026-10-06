@@ -192,7 +192,7 @@ Use the Section 29 backlog and exact dependency checks rather than treating this
 - Frontend live-data activation is complete. The initial server render stays on `workers.dev`; hydrated browser API requests use `api.rainify.dpdns.org` and the tab-scoped affinity key. Protected release `36902363961` passed both exact-candidate and production-domain smoke checks.
 - HCP Terraform remote planning for `atmos-edge-production` is active and successfully refreshes existing Cloudflare resources. `SUPA-IAC-001` is `DONE`: after Realtime health recovered, the owner-approved retry imported and applied the partial Auth URL settings; a read-only check passed and the follow-up HCP plan reports no changes. `VERCEL-IAC-001` is `DONE`: the owner-approved import-only apply adopted the existing domain association, the live site remains HTTP `200`, and the follow-up HCP plan is clean.
 - `GHCR-001`, `CTR-001`, `CTR-002`, and `CTR-003` are `DONE`; the immutable container supply-chain chain is complete.
-- `AZ-001` and `AZ-OIDC-001` are `DONE`. `AZ-TF-OIDC-001`, `AZ-IAC-001`, `AZJOB-001`, `AZJOB-002`, `OBS-005`, and `GAME-007` remain deferred pending a fresh Azure for Students status, remaining-credit, budget-alert, and tooling check. Never upgrade to pay-as-you-go.
+- `AZ-001`, `AZ-OIDC-001`, and `AZ-TF-OIDC-001` are `DONE`. HCP plan/apply Azure OIDC federations and workspace variables were verified with a successful no-change plan. `AZ-IAC-001`, `AZJOB-001`, `AZJOB-002`, `OBS-005`, and `GAME-007` remain deferred pending a fresh Azure for Students status, remaining-credit, budget-alert, and tooling check. Never upgrade to pay-as-you-go.
 - `R2BACK-001`, `BACKUP-001`, and `RESTORE-001` are `DONE`, including one verified encrypted R2 backup and an ephemeral restore drill. Automatic retention/scheduling (`BACKUP-002`) and recurring restore exercises (`GAME-006`) remain deferred by the CV-showcase profile.
 - `OBS-003` Vercel OTel and `OBS-004` Supabase app telemetry completed on 2026-09-30; `OBS-005` remains blocked until Azure is approved.
 - Grafana alerts are visible in Grafana but no approved external notification receiver/contact point exists.
@@ -204,9 +204,9 @@ Use the Section 29 backlog and exact dependency checks rather than treating this
 
 ## Recommended Task Order
 
-1. Re-evaluate Section 29 and ask the owner to select the next item; `SUPA-IAC-001` and `VERCEL-IAC-001` are `DONE`.
+1. Re-evaluate Section 29 and ask the owner to select the next item; `SUPA-IAC-001`, `VERCEL-IAC-001`, and `AZ-TF-OIDC-001` are `DONE`.
 2. Keep recurring restore (`GAME-006`) and backup retention (`BACKUP-002`) deferred under the CV-showcase profile unless the owner explicitly opts into future production operations and the relevant quota/policy preflight passes.
-3. Keep Azure tasks blocked until Azure for Students status, remaining credit, budget alert, and tooling are freshly verified; never upgrade to pay-as-you-go.
+3. Keep remaining Azure provisioning/job tasks blocked until Azure for Students status, remaining credit, budget alert, and tooling are freshly verified; never upgrade to pay-as-you-go.
 4. Keep REL-005 complete; any additional production traffic split requires new owner approval.
 5. At approval gates or task boundaries, ask through the owner question box whether to continue or pause.
 6. At the true permitted end, report completed production capabilities and exact externally blocked items.
