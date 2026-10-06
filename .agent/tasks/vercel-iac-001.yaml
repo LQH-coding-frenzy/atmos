@@ -1,7 +1,7 @@
 task:
   id: VERCEL-IAC-001
   title: Manage the existing Vercel production domain association
-  status: IN_PROGRESS
+  status: DONE
   objective: Import the existing rainify.dpdns.org association for the existing Atmos Vercel project into the atmos-vercel HCP workspace without changing project settings, DNS, deployments, or domain behavior.
   depends_on: [TF-002]
   external_policy_checks:
@@ -116,4 +116,4 @@ task:
     strategy: No apply before review. Do not destroy the existing domain or change production deployment aliases; revert only Terraform code through protected Git.
   human_approval:
     required: true
-    reason: Owner selected VERCEL-IAC-001 and authorized the existing Production variables/token to be staged in HCP and a plan-only remote run on 2026-10-06. The plan is import-only; applying the import to HCP state still requires separate explicit approval.
+    reason: Owner authorized the existing Production variables/token to be staged in HCP, a plan-only review, and one manual import-only apply on 2026-10-06. The imported domain resource is present in HCP state and the follow-up plan is clean; no further project/domain changes are authorized by this approval.
