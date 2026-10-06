@@ -1,7 +1,7 @@
 task:
   id: AZ-IAC-001
   title: Provision the Consumption-only Azure Container Apps environment
-  status: IN_PROGRESS
+  status: DONE
   objective: Define one reusable Azure Container Apps Consumption environment for future finite Atmos jobs without enabling paid log storage or changing existing Azure resources.
 
   depends_on: [AZ-OIDC-001, TF-002]
@@ -10,8 +10,7 @@ task:
     - Azure for Students subscription remains enabled; owner reported USD 100 remaining credit on 2026-10-06 and said expiration is far away (exact date not supplied).
     - Preserve the monthly USD 10 alert-only budget and the existing AZ-001 approved USD 10 maximum initial Azure credit consumption.
     - Never upgrade to pay-as-you-go; stop before exceeding the approved USD 10 consumption limit.
-    - Microsoft.App is already registered and the managed-environment resource type is available in Southeast Asia; do not register providers in this task.
-    - Azure subscription policy `Allowed resource deployment regions` rejects `southeastasia`; the owner selected the allowed region `indonesiacentral` for the revised plan.
+    - Microsoft.App is already registered; subscription policy rejects `southeastasia` but permits owner-selected `indonesiacentral`. Do not register providers in this task.
     - The owner selected AZ-IAC-001 deployment; any remote apply must be limited to the reviewed plan and receive plan-specific approval.
 
   runtime_placement:
@@ -88,8 +87,8 @@ task:
     requires_student_credit: true
     approved_max_initial_credit_consumption_usd: 10
     cost_effect:
-      current: No Container Apps environment or Container Apps workloads exist.
-      proposed: A Consumption-only empty environment; Azure documents Consumption environments as usage-billed with no fixed environment charge. No Container App or Job usage is included in this task.
+      current: One Consumption-only environment exists in Indonesia Central; no Container Apps app or job workloads are deployed.
+      proposed: Keep the environment empty. Azure documents Consumption environments as usage-billed with no fixed environment charge; no Container App or Job usage is included in this task.
       free_tier_impact: Future app/job compute shares the subscription's monthly vCPU-second, GiB-second, and HTTP-request grants. The USD 10 subscription budget only alerts and does not enforce a cap.
 
   telemetry:
@@ -105,4 +104,4 @@ task:
 
   human_approval:
     required: true
-    reason: Azure rejected the initial Southeast Asia create due to subscription policy. The owner selected `indonesiacentral`; the revised plan proposes one create with no changes or destroys. Obtain plan-specific owner approval before retrying apply.
+    reason: The owner approved the revised one-resource plan in `indonesiacentral` after the subscription policy rejected Southeast Asia. HCP applied the plan successfully, Azure reported the environment Succeeded, and the follow-up HCP plan had no changes.
