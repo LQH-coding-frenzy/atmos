@@ -204,9 +204,9 @@ Use the Section 29 backlog and exact dependency checks rather than treating this
 
 ## Recommended Task Order
 
-1. Complete the owner-selected `SUPA-IAC-001` after the HCP provider credential, import, and plan/apply approval gates are resolved.
-2. Re-evaluate `VERCEL-IAC-001` and other dependency-ready Section 29 items before selecting another task.
-3. Keep the CV-showcase profile; future-production tasks require explicit owner opt-in and fresh provider/quota checks.
+1. Re-evaluate Section 29 and ask the owner to select the next item; `SUPA-IAC-001` and `VERCEL-IAC-001` are `DONE`.
+2. Keep recurring restore (`GAME-006`) and backup retention (`BACKUP-002`) deferred under the CV-showcase profile unless the owner explicitly opts into future production operations and the relevant quota/policy preflight passes.
+3. Keep Azure tasks blocked until Azure for Students status, remaining credit, budget alert, and tooling are freshly verified; never upgrade to pay-as-you-go.
 4. Keep REL-005 complete; any additional production traffic split requires new owner approval.
 5. At approval gates or task boundaries, ask through the owner question box whether to continue or pause.
 6. At the true permitted end, report completed production capabilities and exact externally blocked items.
