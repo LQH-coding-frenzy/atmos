@@ -28,6 +28,7 @@ task:
         infra/terraform/vercel-production/main.tf,
         infra/terraform/vercel-production/.terraform.lock.hcl,
         docs/evidence/vercel-iac-001/2026-10-05.md,
+        docs/evidence/vercel-iac-001/2026-10-06.md,
       ]
     exclude:
       [
@@ -66,6 +67,7 @@ task:
         infra/terraform/vercel-production/main.tf,
         infra/terraform/vercel-production/.terraform.lock.hcl,
         docs/evidence/vercel-iac-001/2026-10-05.md,
+        docs/evidence/vercel-iac-001/2026-10-06.md,
       ]
     terraform_resources: [imported vercel_project_domain.production]
     database_changes: [none]
@@ -109,8 +111,9 @@ task:
     traces: [HCP run ID and commit SHA]
   evidence:
     - docs/evidence/vercel-iac-001/2026-10-05.md
+    - docs/evidence/vercel-iac-001/2026-10-06.md
   rollback:
     strategy: No apply before review. Do not destroy the existing domain or change production deployment aliases; revert only Terraform code through protected Git.
   human_approval:
     required: true
-    reason: Owner selected VERCEL-IAC-001. Copying the existing team-scoped Vercel token into HCP and importing/applying the production domain resource require separate explicit approval.
+    reason: Owner selected VERCEL-IAC-001 and authorized the existing Production variables/token to be staged in HCP and a plan-only remote run on 2026-10-06. The plan is import-only; applying the import to HCP state still requires separate explicit approval.
