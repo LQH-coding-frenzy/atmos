@@ -101,7 +101,7 @@ resource "azurerm_container_group" "restore_drill" {
 
 resource "azurerm_container_app_environment" "production" {
   name                = "atmos-aca-prod"
-  location            = "southeastasia"
+  location            = "indonesiacentral"
   resource_group_name = "rg-atmos-prod"
 
   # Consumption avoids dedicated workload-profile charges. Omitting logs_destination
