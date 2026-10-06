@@ -98,3 +98,17 @@ resource "azurerm_container_group" "restore_drill" {
     }
   }
 }
+
+resource "azurerm_container_app_environment" "production" {
+  name                = "atmos-aca-prod"
+  location            = "southeastasia"
+  resource_group_name = "rg-atmos-prod"
+
+  # Consumption avoids dedicated workload-profile charges. Omitting logs_destination
+  # intentionally keeps logs streamed only; do not add paid Azure log persistence here.
+  workload_profile {
+    name                  = "Consumption"
+    workload_profile_type = "Consumption"
+  }
+
+}

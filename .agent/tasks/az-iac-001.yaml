@@ -1,0 +1,107 @@
+task:
+  id: AZ-IAC-001
+  title: Provision the Consumption-only Azure Container Apps environment
+  status: IN_PROGRESS
+  objective: Define one reusable Azure Container Apps Consumption environment for future finite Atmos jobs without enabling paid log storage or changing existing Azure resources.
+
+  depends_on: [AZ-OIDC-001, TF-002]
+
+  external_policy_checks:
+    - Azure for Students subscription remains enabled; owner reported USD 100 remaining credit on 2026-10-06 and said expiration is far away (exact date not supplied).
+    - Preserve the monthly USD 10 alert-only budget and the existing AZ-001 approved USD 10 maximum initial Azure credit consumption.
+    - Never upgrade to pay-as-you-go; stop before exceeding the approved USD 10 consumption limit.
+    - Microsoft.App is already registered and the managed-environment resource type is available in Southeast Asia; do not register providers in this task.
+    - The owner selected AZ-IAC-001 deployment; any remote apply must be limited to the reviewed plan and receive plan-specific approval.
+
+  runtime_placement:
+    allowed: [hcp-terraform, azure-container-apps]
+    selected: hcp-terraform
+    reason: HCP Terraform manages the Azure environment through the existing AzureRM OIDC federation without a stored client secret.
+
+  scope:
+    include:
+      - infra/terraform/azure-production/main.tf
+      - .agent/status.yaml
+      - .agent/tasks/az-iac-001.yaml
+      - docs/evidence/az-iac-001/2026-10-06.md
+      - PRODUCTION-CONTINUATION.md
+      - One azurerm_container_app_environment in southeastasia within the existing rg-atmos-prod resource group
+    exclude:
+      - Changes to the existing Container Instance backup or restore resources
+      - Resource-group creation, deletion, or import
+      - Container Apps Jobs or app workloads
+      - Log Analytics, Azure Monitor persistence, dedicated workload profiles, VNet, private endpoints, or Key Vault
+      - Budget, subscription billing, provider-registration, RBAC, or identity changes
+      - Pay-as-you-go upgrades and Terraform state changes outside the HCP workspace
+
+  inputs:
+    required_config:
+      - Existing atmos-azure-production HCP Terraform workspace
+      - Existing AzureRM plan/apply OIDC federation and workspace variables
+      - Existing rg-atmos-prod resource group
+      - Owner-reported Azure for Students credit and existing USD 10 consumption limit
+    required_secrets:
+      - Existing HCP Terraform token for CLI access, if required
+      - Existing HCP Azure OIDC variables (names only; no values in Git)
+
+  outputs:
+    files:
+      - infra/terraform/azure-production/main.tf
+      - .agent/status.yaml
+      - .agent/tasks/az-iac-001.yaml
+      - docs/evidence/az-iac-001/2026-10-06.md
+      - PRODUCTION-CONTINUATION.md
+    terraform_resources:
+      - azurerm_container_app_environment.production
+    database_changes: [none]
+    deployed_units:
+      - Container Apps managed environment (only after reviewed plan and explicit plan-specific approval)
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: No application workloads depend on the environment yet; deletion is reversible before dependent AZJOB tasks are approved.
+
+  validation:
+    commands:
+      - terraform fmt -check infra/terraform/azure-production/main.tf
+      - terraform init -backend=false in infra/terraform/azure-production
+      - terraform validate in infra/terraform/azure-production
+      - HCP Terraform remote plan for atmos-azure-production
+      - Protected pull request checks
+    expected:
+      - The plan adds only azurerm_container_app_environment.production.
+      - The plan has no changes or destroys for the existing Container Instance resources.
+      - No Log Analytics workspace, Azure Monitor persistence, dedicated profile, network, or app/job is created.
+      - The environment uses Consumption workload profile and Southeast Asia.
+
+  security_checks:
+    - Azure provider authentication remains OIDC-based with no client secret.
+    - Logs remain streamed only; no persisted Azure log destination is configured.
+    - No inbound application workload, broad RBAC, or new credentials are introduced.
+    - Stop if the HCP plan contains any additional, destructive, or out-of-scope action.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: true
+    requires_student_credit: true
+    approved_max_initial_credit_consumption_usd: 10
+    cost_effect:
+      current: No Container Apps environment or Container Apps workloads exist.
+      proposed: A Consumption-only empty environment; Azure documents Consumption environments as usage-billed with no fixed environment charge. No Container App or Job usage is included in this task.
+      free_tier_impact: Future app/job compute shares the subscription's monthly vCPU-second, GiB-second, and HTTP-request grants. The USD 10 subscription budget only alerts and does not enforce a cap.
+
+  telemetry:
+    metrics: [Azure Cost Management actual spend and remaining student credit]
+    logs: [Container Apps logs streamed only; no persisted Azure logging]
+    traces: [HCP run ID and commit SHA]
+
+  evidence:
+    - docs/evidence/az-iac-001/2026-10-06.md
+
+  rollback:
+    strategy: Remove only the managed environment through a reviewed Terraform destroy plan before any AZJOB task depends on it; preserve rg-atmos-prod and existing Container Instance resources.
+
+  human_approval:
+    required: true
+    reason: The owner selected AZ-IAC-001 deployment. A plan-specific review is still required before HCP apply; stop if costs may exceed the existing USD 10 initial-consumption approval or if the plan includes any out-of-scope changes.
