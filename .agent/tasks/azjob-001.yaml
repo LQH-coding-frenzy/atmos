@@ -11,6 +11,8 @@ task:
     - Preserve the monthly USD 10 alert-only budget and existing USD 10 maximum initial credit-consumption approval; never upgrade to pay-as-you-go.
     - Subscription policy permits the existing environment's `indonesiacentral` region.
     - Azure returned `ExpressEnvironmentResourceNotSupported`: the existing environment is an Express environment and cannot host Job resources.
+    - Read-only ARM validation accepts a separate `environmentMode=WorkloadProfiles` environment with a Consumption profile in `indonesiacentral`; no resource was created.
+    - Pinned AzureRM 5.5 does not expose `environment_mode`; owner review is required before adding a provider or alternate ARM management path.
     - Use only the public immutable backup image digest and independently verify its signature and CycloneDX attestation against the protected backup-release workflow identity.
     - Keep the job manual-only, single-replica, no-retry, and bounded to 1800 seconds; configure no schedule or event trigger.
     - Applying Terraform creates Azure-side copies of existing sensitive HCP variables; do not apply until the owner explicitly approves this secret destination and exact plan.
@@ -31,7 +33,7 @@ task:
       - docs/operations/container-supply-chain.md
       - docs/evidence/azjob-001/2026-10-07.md
       - PRODUCTION-CONTINUATION.md
-      - One manual `azurerm_container_app_job.backup` in `atmos-aca-prod`
+      - One manual `azurerm_container_app_job.backup` in an owner-approved job-capable Workload Profiles environment; leave the current Express environment unchanged
     exclude:
       - Scheduled or event-triggered backups
       - Job execution or creation of a new backup object
@@ -43,7 +45,7 @@ task:
     required_config:
       - Existing `atmos-azure-production` HCP Terraform workspace
       - Existing sensitive HCP variables for database URL, encryption key, and R2 credentials
-      - Existing `atmos-aca-prod` environment in `indonesiacentral`
+      - Owner-approved job-capable Workload Profiles environment in `indonesiacentral`; current `atmos-aca-prod` is Express and cannot host Jobs
       - Exact backup image digest `sha256:f285ea80c5e90c95429f5a17f524801e79c0e62f9962b37c89d0542a2aefaac4`
     required_secrets:
       - Existing HCP Terraform token for CLI access, if required
