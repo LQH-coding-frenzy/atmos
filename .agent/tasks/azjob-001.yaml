@@ -1,7 +1,7 @@
 task:
   id: AZJOB-001
   title: Define a manually triggered Azure backup Container Apps Job
-  status: IN_PROGRESS
+  status: BLOCKED
   objective: Add a single on-demand Consumption Container Apps Job for the existing encrypted backup program, without a schedule or automatic job execution.
 
   depends_on: [AZ-IAC-001, CTR-003]
@@ -10,6 +10,7 @@ task:
     - Azure for Students subscription is Enabled; latest owner-reported credit is USD 100 from 2026-10-06 with expiration described as far away (exact date not supplied).
     - Preserve the monthly USD 10 alert-only budget and existing USD 10 maximum initial credit-consumption approval; never upgrade to pay-as-you-go.
     - Subscription policy permits the existing environment's `indonesiacentral` region.
+    - Azure returned `ExpressEnvironmentResourceNotSupported`: the existing environment is an Express environment and cannot host Job resources.
     - Use only the public immutable backup image digest and independently verify its signature and CycloneDX attestation against the protected backup-release workflow identity.
     - Keep the job manual-only, single-replica, no-retry, and bounded to 1800 seconds; configure no schedule or event trigger.
     - Applying Terraform creates Azure-side copies of existing sensitive HCP variables; do not apply until the owner explicitly approves this secret destination and exact plan.
