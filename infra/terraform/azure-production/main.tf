@@ -112,3 +112,74 @@ resource "azurerm_container_app_environment" "production" {
   }
 
 }
+
+resource "azurerm_container_app_job" "backup" {
+  name                         = "atmos-backup-job-prod"
+  location                     = "indonesiacentral"
+  resource_group_name          = "rg-atmos-prod"
+  container_app_environment_id = azurerm_container_app_environment.production.id
+  workload_profile_name        = "Consumption"
+  replica_timeout_in_seconds   = 1800
+  replica_retry_limit          = 0
+
+  # Keep the backup on-demand: no schedule or automatic execution is configured.
+  manual_trigger_config {
+    parallelism              = 1
+    replica_completion_count = 1
+  }
+
+  # These values come from existing HCP sensitive variables. Applying this resource
+  # creates Azure-side secret copies and requires explicit owner approval.
+  secret {
+    name  = "supabase-backup-database-url"
+    value = var.backup_database_url
+  }
+  secret {
+    name  = "backup-encryption-key"
+    value = var.backup_encryption_key
+  }
+  secret {
+    name  = "r2-access-key-id"
+    value = var.r2_access_key_id
+  }
+  secret {
+    name  = "r2-secret-access-key"
+    value = var.r2_secret_access_key
+  }
+
+  template {
+    container {
+      name    = "backup"
+      image   = "ghcr.io/lqh-coding-frenzy/atmos-database-backup@sha256:f285ea80c5e90c95429f5a17f524801e79c0e62f9962b37c89d0542a2aefaac4"
+      cpu     = 0.25
+      memory  = "0.5Gi"
+      command = ["/bin/sh", "-c"]
+      args    = ["exec timeout 1800 /usr/local/bin/backup"]
+
+      env {
+        name        = "SUPABASE_BACKUP_DATABASE_URL"
+        secret_name = "supabase-backup-database-url"
+      }
+      env {
+        name        = "BACKUP_ENCRYPTION_KEY"
+        secret_name = "backup-encryption-key"
+      }
+      env {
+        name        = "R2_ACCESS_KEY_ID"
+        secret_name = "r2-access-key-id"
+      }
+      env {
+        name        = "R2_SECRET_ACCESS_KEY"
+        secret_name = "r2-secret-access-key"
+      }
+      env {
+        name  = "R2_ACCOUNT_ID"
+        value = "50f15456a2d4abf3186c504f406da3fe"
+      }
+      env {
+        name  = "R2_BUCKET"
+        value = "atmos-production-backups"
+      }
+    }
+  }
+}

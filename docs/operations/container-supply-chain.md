@@ -2,6 +2,8 @@
 
 CTR-002 applies the container release controls to `ghcr.io/lqh-coding-frenzy/atmos-jobs`. The protected workflow builds the job image, scans that local image with Trivy, generates and validates a CycloneDX SBOM, then publishes the same local image config under its one full-SHA tag.
 
+The database backup image is published separately as `ghcr.io/lqh-coding-frenzy/atmos-database-backup`. Its `release-backup-container.yml` workflow scans the image, creates a CycloneDX SBOM, and keylessly signs/attests its exact digest. The dedicated `verify-backup-container-supply-chain.yml` gate checks its exact digest, OCI source/revision labels, and the backup-release workflow identity. Do not substitute the `atmos-jobs` runtime-probe package for the backup image.
+
 The runtime base is `node:24.21.0-alpine3.23@sha256:159fe64649038c30f8cc1ec4be3af3a6e93e3648678c31294e2c5058dbeb99f3`. This patched base replaces the prior `24.14.1` pin after the first exact-image policy scan found a critical bundled `tar` dependency finding. A single deterministic remediation layer upgrades only `libcrypto3` and `libssl3` to their fixed Alpine versions and removes unused npm/corepack tooling; it does not add an application package or runtime package-management capability.
 
 ## Policy
@@ -32,6 +34,8 @@ The gate anonymously pulls `ghcr.io/lqh-coding-frenzy/atmos-jobs@<digest>`, requ
 - CycloneDX predicate type for the SBOM attestation.
 
 The verifier has only `contents: read`: it does not authenticate to GHCR, mint OIDC tokens, publish, sign, or deploy. A future Azure workflow must call this reusable workflow and make its deployment job depend on successful verification. A verification failure is a release stop, not a reason to use a mutable tag, an insecure Cosign flag, or a manual dashboard deployment.
+
+For the database backup package, use `Verify backup container supply chain`. It accepts only an exact digest for `ghcr.io/lqh-coding-frenzy/atmos-database-backup` and binds verification to the protected `.github/workflows/release-backup-container.yml` identity. It verifies the OCI source/revision labels, Cosign signature, and CycloneDX attestation with the same read-only, anonymous-pull boundary. Run it successfully for the exact digest before any AZJOB-001 apply or execution.
 
 ## Recovery
 
