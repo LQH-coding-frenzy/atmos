@@ -1,0 +1,122 @@
+task:
+  id: AZJOB-001
+  title: Define a manually triggered Azure backup Container Apps Job
+  status: IN_PROGRESS
+  objective: Add a single on-demand Consumption Container Apps Job for the existing encrypted backup program, without a schedule or automatic job execution.
+
+  depends_on: [AZ-IAC-001, CTR-003]
+
+  external_policy_checks:
+    - Azure for Students subscription is Enabled; latest owner-reported credit is USD 100 from 2026-10-06 with expiration described as far away (exact date not supplied).
+    - Preserve the monthly USD 10 alert-only budget and existing USD 10 maximum initial credit-consumption approval; never upgrade to pay-as-you-go.
+    - Subscription policy permits the existing environment's `indonesiacentral` region.
+    - Use only the public immutable backup image digest and independently verify its signature and CycloneDX attestation against the protected backup-release workflow identity.
+    - Keep the job manual-only, single-replica, no-retry, and bounded to 1800 seconds; configure no schedule or event trigger.
+    - Applying Terraform creates Azure-side copies of existing sensitive HCP variables; do not apply until the owner explicitly approves this secret destination and exact plan.
+    - Starting the job writes a new encrypted backup and HMAC sidecar to private R2 and consumes Azure execution resources; do not execute until the owner approves the run.
+
+  runtime_placement:
+    allowed: [hcp-terraform, azure-container-app-job]
+    selected: hcp-terraform
+    reason: HCP Terraform manages the manual Azure job through the existing OIDC-authenticated workspace; job execution is a separate manual action.
+
+  scope:
+    include:
+      - infra/terraform/azure-production/main.tf
+      - .agent/status.yaml
+      - .agent/tasks/azjob-001.yaml
+      - .github/workflows/verify-backup-container-supply-chain.yml
+      - scripts/backup-container-verification.test.mjs
+      - docs/operations/container-supply-chain.md
+      - docs/evidence/azjob-001/2026-10-07.md
+      - PRODUCTION-CONTINUATION.md
+      - One manual `azurerm_container_app_job.backup` in `atmos-aca-prod`
+    exclude:
+      - Scheduled or event-triggered backups
+      - Job execution or creation of a new backup object
+      - Changes to the existing Container Instance backup or restore resources
+      - Restore jobs, Azure networking, Log Analytics, Azure Monitor persistence, RBAC, Key Vault, or new HCP variables
+      - R2 retention/deletion policies and pay-as-you-go billing
+
+  inputs:
+    required_config:
+      - Existing `atmos-azure-production` HCP Terraform workspace
+      - Existing sensitive HCP variables for database URL, encryption key, and R2 credentials
+      - Existing `atmos-aca-prod` environment in `indonesiacentral`
+      - Exact backup image digest `sha256:f285ea80c5e90c95429f5a17f524801e79c0e62f9962b37c89d0542a2aefaac4`
+    required_secrets:
+      - Existing HCP Terraform token for CLI access, if required
+      - Existing HCP sensitive variable values (values must never enter Git or logs)
+
+  outputs:
+    files:
+      - infra/terraform/azure-production/main.tf
+      - .agent/status.yaml
+      - .agent/tasks/azjob-001.yaml
+      - .github/workflows/verify-backup-container-supply-chain.yml
+      - scripts/backup-container-verification.test.mjs
+      - docs/operations/container-supply-chain.md
+      - docs/evidence/azjob-001/2026-10-07.md
+      - PRODUCTION-CONTINUATION.md
+    terraform_resources:
+      - azurerm_container_app_job.backup
+    database_changes: [none]
+    deployed_units:
+      - One manual Container Apps Job definition; apply and job start remain separate approval gates.
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Remove only the job definition through a reviewed Terraform plan; preserve all backup objects and the existing Container Instance.
+
+  validation:
+    commands:
+      - terraform fmt -check infra/terraform/azure-production/main.tf
+      - terraform validate in infra/terraform/azure-production
+      - node --test scripts/backup-container-verification.test.mjs
+      - Protected pull request checks
+      - Exact-digest backup image verification workflow on protected main
+      - HCP Terraform plan for `atmos-azure-production`
+    expected:
+      - HCP plan adds only `azurerm_container_app_job.backup`; no changes or destroys.
+      - Job trigger is manual, parallelism is 1, retry limit is 0, and timeout is 1800 seconds.
+      - Backup image is pinned to the verified immutable digest.
+      - Secret values are redacted in plan output and never appear in Git or logs.
+      - No job execution, schedule, or R2 write occurs as part of this task's plan or apply.
+
+  security_checks:
+    - Verify the exact backup image digest, source revision, signer workflow identity, and CycloneDX attestation before any apply.
+    - Reuse existing HCP-sensitive values; do not create, rotate, or print secret material.
+    - Keep public GHCR anonymous and do not add registry credentials.
+    - Do not add automatic retries or schedules that could multiply credit use or backup writes.
+    - Stop if the plan contains any changes or destroys beyond the single job resource.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: true
+    requires_student_credit: true
+    approved_max_initial_credit_consumption_usd: 10
+    bounded_single_execution:
+      max_vcpu_seconds: 450
+      max_gib_seconds: 900
+      max_replicas: 1
+      max_runtime_seconds: 1800
+    cost_effect:
+      current: The Consumption environment exists with no Container Apps Jobs or apps.
+      proposed: A manual-only job consumes no compute until explicitly started. One maximum-duration execution uses 0.25 vCPU and 0.5 GiB for at most 1800 seconds; no schedule or retries are configured.
+      free_tier_impact: The bounded run represents 450 vCPU-seconds and 900 GiB-seconds of the subscription's shared monthly Consumption grants. Usage beyond grants can consume student credit; the USD 10 budget alerts but does not cap spend.
+
+  telemetry:
+    metrics: [Azure Cost Management actual spend, remaining student credit, HCP run state]
+    logs: [sanitized job ID, image digest, exit status; never log secrets or database URLs]
+    traces: [HCP run ID, Git SHA, Azure job execution ID if owner-approved run occurs]
+
+  evidence:
+    - docs/evidence/azjob-001/2026-10-07.md
+
+  rollback:
+    strategy: Destroy only the job definition via reviewed Terraform plan; do not delete the environment, existing Container Instance, or any R2 backup object.
+
+  human_approval:
+    required: true
+    reason: Owner asked to continue with further tasks. This authorizes implementation and non-mutating planning; HCP apply would copy sensitive values into Azure and job start would create a backup object and consume execution resources, so each requires explicit approval.
