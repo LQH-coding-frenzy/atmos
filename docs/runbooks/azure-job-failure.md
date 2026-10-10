@@ -4,7 +4,7 @@
 
 Use this runbook after an Atmos Azure Container Apps Job is deployed. The backup Job is manual-only and is not part of the core application request path.
 
-## GAME-007 controlled failure test
+### GAME-007 controlled failure test
 
 The proposed GAME-007 test uses a separate temporary Terraform-managed Job named `atmos-backup-failure-test`. It reuses the already verified immutable backup image but overrides the entrypoint with a bounded shell command that prints one non-sensitive marker, waits 10 seconds, and exits with status 42. The test Job has no database/R2 secret blocks, is manual-only, has one replica, zero retries, and a 60-second timeout. It does not invoke `/usr/local/bin/backup` and must not contact Supabase or R2.
 
