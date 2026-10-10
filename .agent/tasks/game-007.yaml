@@ -1,0 +1,113 @@
+task:
+  id: GAME-007
+  title: Verify bounded Azure Container Apps Job failure handling
+  status: IN_PROGRESS
+  objective: Prove an Azure Container Apps Job reports a deliberate bounded failure without retries, production secrets, database access, or R2 writes.
+
+  depends_on: [AZJOB-001]
+
+  external_policy_checks:
+    - AZJOB-001 is DONE; the existing Workload Profiles environment and manual backup Job are healthy.
+    - GAME-007 is deferred by the CV_SHOWCASE boundary; the owner selected this task, but has authorized planning/code and speculative planning only so far.
+    - The latest owner-reported remaining Azure for Students credit was USD 100 before the prior backup run; obtain a fresh balance before any apply or execution.
+    - Keep the USD 10/month alert-only budget and never upgrade to pay-as-you-go.
+    - Apply and the intentional failure execution each require separate explicit approval of the exact plan, credit scope, and rollback.
+
+  runtime_placement:
+    allowed: [hcp-terraform, azure-container-app-job]
+    selected: hcp-terraform
+    reason: HCP Terraform manages a temporary no-secret test Job; Azure Container Apps executes its one bounded manual failure test.
+
+  scope:
+    include:
+      - infra/terraform/azure-production/main.tf
+      - infra/terraform/azure-production/variables.tf
+      - .agent/status.yaml
+      - .agent/tasks/game-007.yaml
+      - docs/runbooks/azure-job-failure.md
+      - docs/evidence/game-007/2026-10-10.md
+      - PRODUCTION-CONTINUATION.md
+      - One optional azurerm_container_app_job.game_007_failure_test resource, disabled by default
+    exclude:
+      - Changes to azurerm_container_app_job.backup or the existing Workload Profiles/Express environments
+      - Database or R2 secret references, database connections, and R2 writes
+      - Backup execution, schedules, retries, retention, Log Analytics, or persistent Azure logging
+      - Apply, failure execution, and cleanup until separately approved
+
+  inputs:
+    required_config:
+      - Existing atmos-azure-production HCP Terraform workspace
+      - Existing atmos-aca-jobs-prod Consumption Workload Profiles environment
+      - Exact verified image digest sha256:f285ea80c5e90c95429f5a17f524801e79c0e62f9962b37c89d0542a2aefaac4
+    required_secrets: []
+
+  outputs:
+    files:
+      - infra/terraform/azure-production/main.tf
+      - infra/terraform/azure-production/variables.tf
+      - .agent/status.yaml
+      - .agent/tasks/game-007.yaml
+      - docs/runbooks/azure-job-failure.md
+      - docs/evidence/game-007/2026-10-10.md
+      - PRODUCTION-CONTINUATION.md
+    terraform_resources:
+      - azurerm_container_app_job.game_007_failure_test[0]
+    database_changes: [none]
+    deployed_units:
+      - Optional manual-only no-secret failure-test Job, present only when enable_game_007_failure_test is true.
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Remove only the temporary failure-test Job through a reviewed plan; preserve the production backup Job, environments, ACI, and all R2 objects.
+
+  validation:
+    commands:
+      - terraform fmt -check -recursive infra/terraform
+      - terraform validate in infra/terraform/azure-production
+      - HCP speculative plan with enable_game_007_failure_test=true
+      - HCP baseline speculative plan with the default false value
+      - Protected pull request checks
+    expected:
+      - With the opt-in variable true, the HCP plan adds only the test Job; no changes or destroys.
+      - With the default false value, normal workspace plans do not create the test Job.
+      - The test Job has no secrets, is manual-only, uses one replica, retries zero times, and times out after 60 seconds.
+      - The single separately approved execution reports Failed after the non-secret marker; no database or R2 request occurs.
+      - Cleanup plan removes only the temporary test Job.
+      - Plan-only evidence: opt-in run run-na9nN6RvNaJMmHL6 planned one add; baseline run run-m8HLB4VGp7mP2Mrm planned no changes.
+
+  security_checks:
+    - Reuse the previously verified immutable digest; do not rebuild or use a mutable tag.
+    - Do not configure or reference database, encryption, or R2 secrets on the failure-test Job.
+    - Use an explicit command override that does not invoke the backup entrypoint.
+    - Capture only the non-sensitive test marker; never log credentials or database URLs.
+    - Do not add persistent logging or a new vendor for this test.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: true
+    requires_student_credit: true
+    proposed_max_execution:
+      max_vcpu_seconds: 15
+      max_gib_seconds: 30
+      max_replicas: 1
+      max_runtime_seconds: 60
+    cost_effect:
+      current: Production backup Job has one successful approved run; GAME-007 test Job is not applied and has no executions.
+      proposed: One temporary Consumption Job and one bounded 10-second deliberate failure; usage may consume shared grants or student credit.
+      approval: Fresh balance and separate owner approval are required before apply and execution.
+
+  telemetry:
+    metrics: [Azure execution status, elapsed time, retry count, current student credit]
+    logs: [one deliberate failure marker captured during live stream; no secrets]
+    traces: [Terraform plan/apply run IDs and Azure execution ID]
+
+  evidence:
+    - docs/evidence/game-007/2026-10-10.md
+
+  rollback:
+    strategy: Disable enable_game_007_failure_test and apply only after an approved plan confirms destruction of the temporary test Job alone.
+
+  human_approval:
+    required: true
+    reason: Owner selected GAME-007 and authorized planning/code plus a speculative plan. Creating the temporary Job, starting the intentional failure execution, and cleanup are not yet approved.

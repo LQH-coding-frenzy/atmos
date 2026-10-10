@@ -49,6 +49,12 @@ variable "run_restore_drill" {
   default = false
 }
 
+variable "enable_game_007_failure_test" {
+  description = "Create the no-secret, manual-only GAME-007 failure-test Job when explicitly enabled"
+  type        = bool
+  default     = false
+}
+
 variable "restore_database_url" {
   type      = string
   sensitive = true

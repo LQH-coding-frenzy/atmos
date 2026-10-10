@@ -228,3 +228,32 @@ resource "azurerm_container_app_job" "backup" {
     }
   }
 }
+
+resource "azurerm_container_app_job" "game_007_failure_test" {
+  count                        = var.enable_game_007_failure_test ? 1 : 0
+  name                         = "atmos-backup-failure-test"
+  location                     = "indonesiacentral"
+  resource_group_name          = "rg-atmos-prod"
+  container_app_environment_id = azapi_resource.jobs_environment.id
+  workload_profile_name        = "Consumption"
+  replica_timeout_in_seconds   = 60
+  replica_retry_limit          = 0
+
+  # Isolate GAME-007 from the backup flow: no database/R2 secret blocks,
+  # no schedule, and a deterministic nonzero exit after a short bounded delay.
+  manual_trigger_config {
+    parallelism              = 1
+    replica_completion_count = 1
+  }
+
+  template {
+    container {
+      name    = "failure-test"
+      image   = "ghcr.io/lqh-coding-frenzy/atmos-database-backup@sha256:f285ea80c5e90c95429f5a17f524801e79c0e62f9962b37c89d0542a2aefaac4"
+      cpu     = 0.25
+      memory  = "0.5Gi"
+      command = ["/bin/sh", "-c"]
+      args    = ["sleep 10; printf '%s\\n' 'GAME-007 deliberate failure marker'; exit 42"]
+    }
+  }
+}
