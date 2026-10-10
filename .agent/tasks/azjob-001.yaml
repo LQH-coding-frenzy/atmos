@@ -16,7 +16,7 @@ task:
     - Use only the public immutable backup image digest and independently verify its signature and CycloneDX attestation against the protected backup-release workflow identity.
     - Keep the job manual-only, single-replica, no-retry, and bounded to 1800 seconds; configure no schedule or event trigger.
     - Owner explicitly approved the exact two-add apply and Azure secret destination on 2026-10-10; HCP run `run-6SFRZRJEtqUTy8HN` succeeded and created the approved secret copies.
-    - Starting the job writes a new encrypted backup and HMAC sidecar to private R2 and consumes Azure execution resources; no execution occurred, and any run requires separate owner approval.
+    - On 2026-10-10 the owner confirmed USD 100 current credit and approved exactly one manual execution; execution `atmos-backup-job-prod-f3kkka1` succeeded. Any additional run requires separate approval.
 
   runtime_placement:
     allowed: [hcp-terraform, azure-container-app-job]
@@ -72,7 +72,7 @@ task:
       - azurerm_container_app_job.backup
     database_changes: [none]
     deployed_units:
-      - One Consumption-only Workload Profiles environment and one manual Container Apps Job; apply succeeded with owner approval, while job start remains a separate approval gate.
+      - One Consumption-only Workload Profiles environment and one manual Container Apps Job; owner-approved apply and one manual backup execution succeeded. Additional executions remain separately gated.
 
   compatibility:
     requires_expand_contract: false
@@ -114,14 +114,14 @@ task:
       max_replicas: 1
       max_runtime_seconds: 1800
     cost_effect:
-      current: The Express environment remains unchanged; the separate Consumption-only Workload Profiles environment and manual-only Job are provisioned with zero executions.
-      proposed: Keep the Job manual-only. No dedicated profile, persisted logs, schedule, or retries are configured; each execution remains separately approved.
+      current: The Express environment remains unchanged; the separate Consumption-only Workload Profiles environment and manual-only Job are provisioned, with one successful execution.
+      proposed: Keep the Job manual-only. No dedicated profile, persisted logs, schedule, or retries are configured; further executions remain separately approved.
       free_tier_impact: The bounded run represents 450 vCPU-seconds and 900 GiB-seconds of the subscription's shared monthly Consumption grants. Usage beyond grants can consume student credit; the USD 10 budget alerts but does not cap spend.
 
   telemetry:
     metrics: [Azure Cost Management actual spend, remaining student credit, HCP run state]
     logs: [sanitized job ID, image digest, exit status; never log secrets or database URLs]
-    traces: [HCP run ID, Git SHA, Azure job execution ID if owner-approved run occurs]
+    traces: [HCP apply run run-6SFRZRJEtqUTy8HN, Azure execution atmos-backup-job-prod-f3kkka1]
 
   evidence:
     - docs/evidence/azjob-001/2026-10-07.md
@@ -131,4 +131,4 @@ task:
 
   human_approval:
     required: true
-    reason: On 2026-10-10 the owner reported USD 100 total Azure for Students credit with 12-month validity and explicitly approved applying the reviewed two-add plan, copying the four existing sensitive HCP values into Azure, and limiting initial consumption to USD 10. HCP run `run-6SFRZRJEtqUTy8HN` applied successfully. The owner did not approve job execution; starting the Job remains a separate approval gate.
+    reason: On 2026-10-10 the owner reported USD 100 total Azure for Students credit with 12-month validity and explicitly approved applying the reviewed two-add plan, copying the four existing sensitive HCP values into Azure, and limiting initial consumption to USD 10. HCP run `run-6SFRZRJEtqUTy8HN` applied successfully. The owner later confirmed USD 100 current credit and approved exactly one manual execution and its private R2 write; execution `atmos-backup-job-prod-f3kkka1` succeeded. Further executions remain separately gated.
