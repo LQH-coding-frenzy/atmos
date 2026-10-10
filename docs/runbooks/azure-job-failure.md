@@ -2,7 +2,15 @@
 
 ## Summary
 
-Use this runbook only after an Atmos Azure Container Apps Job is deployed. The Azure lane is currently inactive and must not be treated as a production dependency.
+Use this runbook after an Atmos Azure Container Apps Job is deployed. The backup Job is manual-only and is not part of the core application request path.
+
+## GAME-007 controlled failure test
+
+The proposed GAME-007 test uses a separate temporary Terraform-managed Job named `atmos-backup-failure-test`. It reuses the already verified immutable backup image but overrides the entrypoint with a bounded shell command that prints one non-sensitive marker, waits 10 seconds, and exits with status 42. The test Job has no database/R2 secret blocks, is manual-only, has one replica, zero retries, and a 60-second timeout. It does not invoke `/usr/local/bin/backup` and must not contact Supabase or R2.
+
+Keep `enable_game_007_failure_test` false by default. Enabling it for a speculative plan is not apply/run approval. Before any apply or execution, obtain a fresh student-credit balance and separate owner approval for the exact plan and the intentional failure run. Capture the console marker while the execution is active because this environment does not persist logs. After evidence capture, remove only the temporary test Job through a reviewed Terraform plan; preserve `atmos-backup-job-prod`, both environments, the ACI, and all R2 objects.
+
+This test validates Container Apps failure reporting and no-retry behavior. It does not test a failure inside the backup pipeline or justify using production database/R2 credentials for fault injection.
 
 ## User impact
 
@@ -14,7 +22,7 @@ After activation, detect nonzero job execution state, timeout, retry exhaustion,
 
 ## Relevant dashboards/logs
 
-Use the exact Container Apps Job execution, Azure Log Analytics/native logs, immutable GHCR digest, and future OBS-005 evidence. No production Azure dashboard currently exists.
+Use the exact Container Apps Job execution, streamed console output before replica cleanup, immutable GHCR digest, and future OBS-005 evidence. No production Azure dashboard currently exists.
 
 ## Immediate mitigation
 
@@ -30,7 +38,7 @@ Recovery requires completion of `AZ-001`, `AZ-IAC-001`, `CTR-003`, and the ownin
 
 ## Rollback
 
-Restore the prior immutable signed digest/job revision through Terraform or the Git-owned deployment path; never deploy `latest` or rebuild between environments.
+For GAME-007, remove only the temporary failure-test Job through Terraform. For a real backup Job regression, restore the prior immutable signed digest/job revision through Terraform or the Git-owned deployment path; never deploy `latest` or rebuild between environments.
 
 ## Security considerations
 
@@ -46,4 +54,4 @@ Preserve execution ID/time/state, source SHA, exact digest and signature verific
 
 ## Post-incident follow-up
 
-Run GAME-007 after activation, add a regression/timeout control, and update this runbook with deployed resource identifiers from Git-owned evidence.
+Run GAME-007 only after the owner approves the exact temporary test Job and one failure execution. Record the execution and cleanup in Git-owned evidence. Any real production backup rerun remains separately approval-gated.
