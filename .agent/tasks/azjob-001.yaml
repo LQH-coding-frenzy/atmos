@@ -1,27 +1,27 @@
 task:
   id: AZJOB-001
   title: Define a manually triggered Azure backup Container Apps Job
-  status: IN_PROGRESS
+  status: DONE
   objective: Add a separate Consumption Workload Profiles environment and one on-demand backup Container Apps Job, without replacing the existing Express environment or enabling a schedule.
 
   depends_on: [AZ-IAC-001, CTR-003]
 
   external_policy_checks:
-    - Azure for Students subscription is Enabled; latest owner-reported credit is USD 100 from 2026-10-06 with expiration described as far away (exact date not supplied).
+    - Azure for Students subscription is Enabled; on 2026-10-10 the owner reported USD 100 total in credit with 12-month validity and approved a maximum USD 10 initial consumption for the exact two-resource apply.
     - Preserve the monthly USD 10 alert-only budget and existing USD 10 maximum initial credit-consumption approval; never upgrade to pay-as-you-go.
     - Subscription policy permits the existing environment's `indonesiacentral` region.
     - Azure returned `ExpressEnvironmentResourceNotSupported` for Jobs in the existing Express environment.
-    - Read-only ARM validation accepts `environmentMode=WorkloadProfiles` with a Consumption profile in `indonesiacentral`; no resource was created.
+    - Read-only ARM validation accepted `environmentMode=WorkloadProfiles` with a Consumption profile in `indonesiacentral`; it created no resource at preflight. The later approved apply created the environment and job.
     - Owner selected AzAPI because pinned AzureRM 5.5 does not expose `environment_mode`; HCP OIDC was validated by a successful read-only AzAPI GET in plan run `run-U99kZLTcPLPexPtL`.
     - Use only the public immutable backup image digest and independently verify its signature and CycloneDX attestation against the protected backup-release workflow identity.
     - Keep the job manual-only, single-replica, no-retry, and bounded to 1800 seconds; configure no schedule or event trigger.
-    - Applying Terraform creates Azure-side copies of existing sensitive HCP variables; do not apply until the owner explicitly approves this secret destination and exact plan.
-    - Starting the job writes a new encrypted backup and HMAC sidecar to private R2 and consumes Azure execution resources; do not execute until the owner approves the run.
+    - Owner explicitly approved the exact two-add apply and Azure secret destination on 2026-10-10; HCP run `run-6SFRZRJEtqUTy8HN` succeeded and created the approved secret copies.
+    - Starting the job writes a new encrypted backup and HMAC sidecar to private R2 and consumes Azure execution resources; no execution occurred, and any run requires separate owner approval.
 
   runtime_placement:
     allowed: [hcp-terraform, azure-container-app-job]
     selected: hcp-terraform
-    reason: HCP Terraform manages the manual Azure job through the existing OIDC-authenticated workspace; job execution is a separate manual action.
+    reason: HCP Terraform manages the Azure environment and manual Job through the existing OIDC-authenticated workspace; job execution is a separate manual action.
 
   scope:
     include:
@@ -58,6 +58,7 @@ task:
   outputs:
     files:
       - infra/terraform/azure-production/main.tf
+      - infra/terraform/azure-production/variables.tf
       - infra/terraform/azure-production/.terraform.lock.hcl
       - .agent/status.yaml
       - .agent/tasks/azjob-001.yaml
@@ -71,7 +72,7 @@ task:
       - azurerm_container_app_job.backup
     database_changes: [none]
     deployed_units:
-      - One Consumption-only Workload Profiles environment and one manual Container Apps Job definition; apply and job start remain separate approval gates.
+      - One Consumption-only Workload Profiles environment and one manual Container Apps Job; apply succeeded with owner approval, while job start remains a separate approval gate.
 
   compatibility:
     requires_expand_contract: false
@@ -100,7 +101,7 @@ task:
     - Reuse existing HCP-sensitive values; do not create, rotate, or print secret material.
     - Keep public GHCR anonymous and do not add registry credentials.
     - Do not add automatic retries or schedules that could multiply credit use or backup writes.
-    - Stop if the plan contains any changes or destroys beyond the single job resource.
+    - Stop if the plan contains changes or destroys beyond the two approved resources.
 
   budget_checks:
     worker_cpu_budget_ms: 7
@@ -113,8 +114,8 @@ task:
       max_replicas: 1
       max_runtime_seconds: 1800
     cost_effect:
-      current: The Express environment exists with no Container Apps Jobs or apps.
-      proposed: Add a separate Workload Profiles environment with only a Consumption profile and a manual-only job. No dedicated profile, persisted logs, schedule, or retries are configured; job execution is separate.
+      current: The Express environment remains unchanged; the separate Consumption-only Workload Profiles environment and manual-only Job are provisioned with zero executions.
+      proposed: Keep the Job manual-only. No dedicated profile, persisted logs, schedule, or retries are configured; each execution remains separately approved.
       free_tier_impact: The bounded run represents 450 vCPU-seconds and 900 GiB-seconds of the subscription's shared monthly Consumption grants. Usage beyond grants can consume student credit; the USD 10 budget alerts but does not cap spend.
 
   telemetry:
@@ -130,4 +131,4 @@ task:
 
   human_approval:
     required: true
-    reason: Owner asked to continue with further tasks. This authorizes implementation and non-mutating planning; HCP apply would copy sensitive values into Azure and job start would create a backup object and consume execution resources, so each requires explicit approval.
+    reason: On 2026-10-10 the owner reported USD 100 total Azure for Students credit with 12-month validity and explicitly approved applying the reviewed two-add plan, copying the four existing sensitive HCP values into Azure, and limiting initial consumption to USD 10. HCP run `run-6SFRZRJEtqUTy8HN` applied successfully. The owner did not approve job execution; starting the Job remains a separate approval gate.
