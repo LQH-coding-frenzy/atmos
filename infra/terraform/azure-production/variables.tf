@@ -10,6 +10,20 @@ variable "client_id" {
   type = string
 }
 
+variable "tfc_azure_dynamic_credentials" {
+  description = "Azure dynamic credential paths supplied by HCP Terraform"
+  type = object({
+    default = object({
+      client_id_file_path  = string
+      oidc_token_file_path = string
+    })
+    aliases = map(object({
+      client_id_file_path  = string
+      oidc_token_file_path = string
+    }))
+  })
+}
+
 variable "backup_database_url" {
   type      = string
   sensitive = true

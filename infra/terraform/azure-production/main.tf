@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "= 5.5.0"
     }
+    azapi = {
+      source  = "Azure/azapi"
+      version = "= 2.13.0"
+    }
   }
 
   cloud {
@@ -24,6 +28,15 @@ provider "azurerm" {
   use_oidc        = true
   use_cli         = false
   features {}
+}
+
+provider "azapi" {
+  subscription_id            = var.subscription_id
+  tenant_id                  = var.tenant_id
+  client_id                  = var.client_id
+  use_oidc                   = true
+  oidc_token_file_path       = var.tfc_azure_dynamic_credentials.default.oidc_token_file_path
+  skip_provider_registration = true
 }
 
 resource "azurerm_container_group" "backup" {
@@ -113,11 +126,43 @@ resource "azurerm_container_app_environment" "production" {
 
 }
 
+resource "azapi_resource" "jobs_environment" {
+  type      = "Microsoft.App/managedEnvironments@2026-07-01"
+  name      = "atmos-aca-jobs-prod"
+  parent_id = "/subscriptions/${var.subscription_id}/resourceGroups/rg-atmos-prod"
+  location  = "indonesiacentral"
+
+  # AzAPI 2.13.0 does not embed this API version's schema. The exact ARM
+  # request body passed read-only template validation before this bypass.
+  schema_validation_enabled = false
+
+  body = {
+    properties = {
+      environmentMode = "WorkloadProfiles"
+      workloadProfiles = [
+        {
+          name                = "Consumption"
+          workloadProfileType = "Consumption"
+        }
+      ]
+      appLogsConfiguration = {
+        destination = ""
+      }
+    }
+  }
+
+  response_export_values = [
+    "properties.environmentMode",
+    "properties.workloadProfiles",
+    "properties.provisioningState",
+  ]
+}
+
 resource "azurerm_container_app_job" "backup" {
   name                         = "atmos-backup-job-prod"
   location                     = "indonesiacentral"
   resource_group_name          = "rg-atmos-prod"
-  container_app_environment_id = azurerm_container_app_environment.production.id
+  container_app_environment_id = azapi_resource.jobs_environment.id
   workload_profile_name        = "Consumption"
   replica_timeout_in_seconds   = 1800
   replica_retry_limit          = 0

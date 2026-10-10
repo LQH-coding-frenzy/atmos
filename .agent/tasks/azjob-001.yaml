@@ -1,8 +1,8 @@
 task:
   id: AZJOB-001
   title: Define a manually triggered Azure backup Container Apps Job
-  status: BLOCKED
-  objective: Add a single on-demand Consumption Container Apps Job for the existing encrypted backup program, without a schedule or automatic job execution.
+  status: IN_PROGRESS
+  objective: Add a separate Consumption Workload Profiles environment and one on-demand backup Container Apps Job, without replacing the existing Express environment or enabling a schedule.
 
   depends_on: [AZ-IAC-001, CTR-003]
 
@@ -10,9 +10,9 @@ task:
     - Azure for Students subscription is Enabled; latest owner-reported credit is USD 100 from 2026-10-06 with expiration described as far away (exact date not supplied).
     - Preserve the monthly USD 10 alert-only budget and existing USD 10 maximum initial credit-consumption approval; never upgrade to pay-as-you-go.
     - Subscription policy permits the existing environment's `indonesiacentral` region.
-    - Azure returned `ExpressEnvironmentResourceNotSupported`: the existing environment is an Express environment and cannot host Job resources.
-    - Read-only ARM validation accepts a separate `environmentMode=WorkloadProfiles` environment with a Consumption profile in `indonesiacentral`; no resource was created.
-    - Pinned AzureRM 5.5 does not expose `environment_mode`; owner review is required before adding a provider or alternate ARM management path.
+    - Azure returned `ExpressEnvironmentResourceNotSupported` for Jobs in the existing Express environment.
+    - Read-only ARM validation accepts `environmentMode=WorkloadProfiles` with a Consumption profile in `indonesiacentral`; no resource was created.
+    - Owner selected AzAPI because pinned AzureRM 5.5 does not expose `environment_mode`; HCP OIDC was validated by a successful read-only AzAPI GET in plan run `run-U99kZLTcPLPexPtL`.
     - Use only the public immutable backup image digest and independently verify its signature and CycloneDX attestation against the protected backup-release workflow identity.
     - Keep the job manual-only, single-replica, no-retry, and bounded to 1800 seconds; configure no schedule or event trigger.
     - Applying Terraform creates Azure-side copies of existing sensitive HCP variables; do not apply until the owner explicitly approves this secret destination and exact plan.
@@ -26,6 +26,8 @@ task:
   scope:
     include:
       - infra/terraform/azure-production/main.tf
+      - infra/terraform/azure-production/variables.tf
+      - infra/terraform/azure-production/.terraform.lock.hcl
       - .agent/status.yaml
       - .agent/tasks/azjob-001.yaml
       - .github/workflows/verify-backup-container-supply-chain.yml
@@ -33,7 +35,8 @@ task:
       - docs/operations/container-supply-chain.md
       - docs/evidence/azjob-001/2026-10-07.md
       - PRODUCTION-CONTINUATION.md
-      - One manual `azurerm_container_app_job.backup` in an owner-approved job-capable Workload Profiles environment; leave the current Express environment unchanged
+      - One `azapi_resource.jobs_environment` configured for Workload Profiles with only a Consumption profile
+      - One manual `azurerm_container_app_job.backup` in the separate Jobs environment; keep the current Express environment unchanged
     exclude:
       - Scheduled or event-triggered backups
       - Job execution or creation of a new backup object
@@ -45,7 +48,8 @@ task:
     required_config:
       - Existing `atmos-azure-production` HCP Terraform workspace
       - Existing sensitive HCP variables for database URL, encryption key, and R2 credentials
-      - Owner-approved job-capable Workload Profiles environment in `indonesiacentral`; current `atmos-aca-prod` is Express and cannot host Jobs
+      - Existing `atmos-aca-prod` Express environment remains unchanged
+      - Existing HCP Azure OIDC identity variables for the AzAPI provider
       - Exact backup image digest `sha256:f285ea80c5e90c95429f5a17f524801e79c0e62f9962b37c89d0542a2aefaac4`
     required_secrets:
       - Existing HCP Terraform token for CLI access, if required
@@ -54,6 +58,7 @@ task:
   outputs:
     files:
       - infra/terraform/azure-production/main.tf
+      - infra/terraform/azure-production/.terraform.lock.hcl
       - .agent/status.yaml
       - .agent/tasks/azjob-001.yaml
       - .github/workflows/verify-backup-container-supply-chain.yml
@@ -62,26 +67,28 @@ task:
       - docs/evidence/azjob-001/2026-10-07.md
       - PRODUCTION-CONTINUATION.md
     terraform_resources:
+      - azapi_resource.jobs_environment
       - azurerm_container_app_job.backup
     database_changes: [none]
     deployed_units:
-      - One manual Container Apps Job definition; apply and job start remain separate approval gates.
+      - One Consumption-only Workload Profiles environment and one manual Container Apps Job definition; apply and job start remain separate approval gates.
 
   compatibility:
     requires_expand_contract: false
     stable_version_compatible: true
-    rollback_window: Remove only the job definition through a reviewed Terraform plan; preserve all backup objects and the existing Container Instance.
+    rollback_window: Remove only the new Workload Profiles environment and Job through a reviewed Terraform plan; preserve the Express environment, existing Container Instance, and all backup objects.
 
   validation:
     commands:
-      - terraform fmt -check infra/terraform/azure-production/main.tf
+      - terraform providers lock for linux_amd64 and windows_amd64
+      - terraform fmt -check -recursive infra/terraform
       - terraform validate in infra/terraform/azure-production
       - node --test scripts/backup-container-verification.test.mjs
       - Protected pull request checks
       - Exact-digest backup image verification workflow on protected main
       - HCP Terraform plan for `atmos-azure-production`
     expected:
-      - HCP plan adds only `azurerm_container_app_job.backup`; no changes or destroys.
+      - HCP plan adds only `azapi_resource.jobs_environment` and `azurerm_container_app_job.backup`; no changes or destroys.
       - Job trigger is manual, parallelism is 1, retry limit is 0, and timeout is 1800 seconds.
       - Backup image is pinned to the verified immutable digest.
       - Secret values are redacted in plan output and never appear in Git or logs.
@@ -89,6 +96,7 @@ task:
 
   security_checks:
     - Verify the exact backup image digest, source revision, signer workflow identity, and CycloneDX attestation before any apply.
+    - Pin AzAPI and validate its HCP Azure OIDC authentication without adding an Azure client secret.
     - Reuse existing HCP-sensitive values; do not create, rotate, or print secret material.
     - Keep public GHCR anonymous and do not add registry credentials.
     - Do not add automatic retries or schedules that could multiply credit use or backup writes.
@@ -105,8 +113,8 @@ task:
       max_replicas: 1
       max_runtime_seconds: 1800
     cost_effect:
-      current: The Consumption environment exists with no Container Apps Jobs or apps.
-      proposed: A manual-only job consumes no compute until explicitly started. One maximum-duration execution uses 0.25 vCPU and 0.5 GiB for at most 1800 seconds; no schedule or retries are configured.
+      current: The Express environment exists with no Container Apps Jobs or apps.
+      proposed: Add a separate Workload Profiles environment with only a Consumption profile and a manual-only job. No dedicated profile, persisted logs, schedule, or retries are configured; job execution is separate.
       free_tier_impact: The bounded run represents 450 vCPU-seconds and 900 GiB-seconds of the subscription's shared monthly Consumption grants. Usage beyond grants can consume student credit; the USD 10 budget alerts but does not cap spend.
 
   telemetry:
@@ -118,7 +126,7 @@ task:
     - docs/evidence/azjob-001/2026-10-07.md
 
   rollback:
-    strategy: Destroy only the job definition via reviewed Terraform plan; do not delete the environment, existing Container Instance, or any R2 backup object.
+    strategy: Remove only the new AzAPI Workload Profiles environment and backup Job through a reviewed Terraform plan; preserve the existing Express environment, Container Instance, and all R2 backup objects.
 
   human_approval:
     required: true
