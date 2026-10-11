@@ -1,7 +1,7 @@
 task:
   id: GAME-007
   title: Verify bounded Azure Container Apps Job failure handling
-  status: IN_PROGRESS
+  status: DONE
   objective: Prove an Azure Container Apps Job reports a deliberate bounded failure without retries, production secrets, database access, or R2 writes.
 
   depends_on: [AZJOB-001]
@@ -9,9 +9,9 @@ task:
   external_policy_checks:
     - AZJOB-001 is DONE; the existing Workload Profiles environment and manual backup Job are healthy.
     - GAME-007 is deferred by the CV_SHOWCASE boundary; the owner selected this task as a task-specific exception.
-    - The owner reported USD 100 current credit before the GAME-007 apply/execution. Obtain a fresh balance before cleanup or any repeat run.
+    - On 2026-10-11 the owner reported USD 100 current credit and approved the exact test Job apply, one intentional failure execution, and test-Job cleanup.
     - Keep the USD 10/month alert-only budget and never upgrade to pay-as-you-go.
-    - The owner approved the exact one-add test Job apply and one intentional failure execution. Cleanup and any repeat execution require separate approval.
+    - The owner approved the exact one-add test Job apply, one intentional failure execution, and cleanup of only the temporary test Job; any repeat execution requires separate approval.
 
   runtime_placement:
     allowed: [hcp-terraform, azure-container-app-job]
@@ -26,13 +26,14 @@ task:
       - .agent/tasks/game-007.yaml
       - docs/runbooks/azure-job-failure.md
       - docs/evidence/game-007/2026-10-10.md
+      - docs/evidence/game-007/2026-10-11.md
       - PRODUCTION-CONTINUATION.md
       - One optional azurerm_container_app_job.game_007_failure_test resource, disabled by default
     exclude:
       - Changes to azurerm_container_app_job.backup or the existing Workload Profiles/Express environments
       - Database or R2 secret references, database connections, and R2 writes
       - Backup execution, schedules, retries, retention, Log Analytics, or persistent Azure logging
-      - Further failure executions and cleanup until separately approved
+      - Further failure executions or recurring tests
 
   inputs:
     required_config:
@@ -49,17 +50,18 @@ task:
       - .agent/tasks/game-007.yaml
       - docs/runbooks/azure-job-failure.md
       - docs/evidence/game-007/2026-10-10.md
+      - docs/evidence/game-007/2026-10-11.md
       - PRODUCTION-CONTINUATION.md
     terraform_resources:
       - azurerm_container_app_job.game_007_failure_test[0]
     database_changes: [none]
     deployed_units:
-      - Temporary manual-only no-secret failure-test Job, enabled explicitly with enable_game_007_failure_test=true; one intentional failure execution completed.
+      - One temporary manual-only no-secret failure-test Job was applied, executed once with the expected Failed result, then removed; no test Job remains.
 
   compatibility:
     requires_expand_contract: false
     stable_version_compatible: true
-    rollback_window: Remove only the temporary failure-test Job through a reviewed plan; preserve the production backup Job, environments, ACI, and all R2 objects.
+    rollback_window: The approved cleanup removed only the temporary failure-test Job; preserve the production backup Job, environments, ACI, and all R2 objects.
 
   validation:
     commands:
@@ -75,6 +77,7 @@ task:
       - The single separately approved execution reports Failed after the non-secret marker; no database or R2 request occurs.
       - Cleanup plan removes only the temporary test Job.
       - Plan-only evidence: opt-in run run-na9nN6RvNaJMmHL6 planned one add; baseline run run-m8HLB4VGp7mP2Mrm planned no changes.
+      - Cleanup and refresh-only reconciliation runs run-9QcdwysvnRrbKF2y and run-8Jokt9pgYhRFoeK9 completed; final HCP plan run-wJGFHHJNro4eEdnN reports no changes.
 
   security_checks:
     - Reuse the previously verified immutable digest; do not rebuild or use a mutable tag.
@@ -93,9 +96,9 @@ task:
       max_replicas: 1
       max_runtime_seconds: 60
     cost_effect:
-      current: Production backup Job has one approved successful run; the temporary GAME-007 Job has one approved failed execution and remains deployed pending cleanup.
-      proposed: Remove only the temporary Consumption Job after evidence approval; any repeat failure test remains separately gated.
-      approval: Owner approved apply and one execution with USD 100 reported credit; cleanup and repeat runs require separate approval. The one-off true variable is not persisted in HCP workspace settings, so do not run a default-false plan before cleanup approval.
+      current: Production backup Job has one approved successful run; GAME-007 had one approved failed execution and its temporary test Job has been removed.
+      proposed: Any repeat failure test remains separately gated and must use a fresh balance and approval.
+      approval: Owner approved apply, one execution, and cleanup with USD 100 reported credit. The one-off true variable was not persisted in HCP workspace settings; cleanup reconciled remote state.
 
   telemetry:
     metrics: [Azure execution status, elapsed time, retry count, current student credit]
@@ -106,8 +109,8 @@ task:
     - docs/evidence/game-007/2026-10-10.md
 
   rollback:
-    strategy: Disable enable_game_007_failure_test and apply only after an approved plan confirms destruction of the temporary test Job alone.
+    strategy: The approved cleanup removed only the temporary test Job and reconciled remote state; future tests require a new opt-in plan and separate approvals.
 
   human_approval:
     required: true
-    reason: Owner reported USD 100 current Azure for Students credit and approved applying the exact one-add GAME-007 plan plus one intentional failure execution. HCP apply run `run-Dc99qvJFFvfHWffh` succeeded and execution `atmos-backup-failure-test-sifrg5f` reported Failed as expected. Cleanup remains separately gated.
+    reason: Owner reported USD 100 current Azure for Students credit and approved applying the exact one-add GAME-007 plan, one intentional failure execution, and cleanup of only the temporary test Job. HCP apply `run-Dc99qvJFFvfHWffh` created the Job; execution `atmos-backup-failure-test-sifrg5f` reported Failed as expected; cleanup removed it and the remote state was reconciled.
