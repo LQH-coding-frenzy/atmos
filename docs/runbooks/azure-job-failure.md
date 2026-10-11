@@ -6,9 +6,9 @@ Use this runbook after an Atmos Azure Container Apps Job is deployed. The backup
 
 ### GAME-007 controlled failure test
 
-The proposed GAME-007 test uses a separate temporary Terraform-managed Job named `atmos-backup-failure-test`. It reuses the already verified immutable backup image but overrides the entrypoint with a bounded shell command that prints one non-sensitive marker, waits 10 seconds, and exits with status 42. The test Job has no database/R2 secret blocks, is manual-only, has one replica, zero retries, and a 60-second timeout. It does not invoke `/usr/local/bin/backup` and must not contact Supabase or R2.
+The GAME-007 test uses a separate temporary Terraform-managed Job named `atmos-backup-failure-test`. It reuses the already verified immutable backup image but overrides the entrypoint with a bounded shell command that prints one non-sensitive marker, waits 10 seconds, and exits with status 42. The test Job has no database/R2 secret blocks, is manual-only, has one replica, zero retries, and a 60-second timeout. It does not invoke `/usr/local/bin/backup` and must not contact Supabase or R2. One owner-approved execution has completed with the expected `Failed` state and marker.
 
-Keep `enable_game_007_failure_test` false by default. Enabling it for a speculative plan is not apply/run approval. Before any apply or execution, obtain a fresh student-credit balance and separate owner approval for the exact plan and the intentional failure run. Capture the console marker while the execution is active because this environment does not persist logs. After evidence capture, remove only the temporary test Job through a reviewed Terraform plan; preserve `atmos-backup-job-prod`, both environments, the ACI, and all R2 objects.
+Keep `enable_game_007_failure_test` false by default. The owner approved one apply and one intentional failure run after reporting USD 100 current credit. Capture the console marker while the execution is active because this environment does not persist logs. Cleanup remains pending separate approval: remove only the temporary test Job through a reviewed Terraform plan; preserve `atmos-backup-job-prod`, both environments, the ACI, and all R2 objects. Require a fresh balance and separate approval for any repeat execution.
 
 This test validates Container Apps failure reporting and no-retry behavior. It does not test a failure inside the backup pipeline or justify using production database/R2 credentials for fault injection.
 
@@ -54,4 +54,4 @@ Preserve execution ID/time/state, source SHA, exact digest and signature verific
 
 ## Post-incident follow-up
 
-Run GAME-007 only after the owner approves the exact temporary test Job and one failure execution. Record the execution and cleanup in Git-owned evidence. Any real production backup rerun remains separately approval-gated.
+The owner-approved GAME-007 run is recorded in Git-owned evidence. Remove the temporary test Job only after a reviewed, separately approved cleanup plan. Any real production backup rerun remains separately approval-gated.

@@ -8,10 +8,10 @@ task:
 
   external_policy_checks:
     - AZJOB-001 is DONE; the existing Workload Profiles environment and manual backup Job are healthy.
-    - GAME-007 is deferred by the CV_SHOWCASE boundary; the owner selected this task, but has authorized planning/code and speculative planning only so far.
-    - The latest owner-reported remaining Azure for Students credit was USD 100 before the prior backup run; obtain a fresh balance before any apply or execution.
+    - GAME-007 is deferred by the CV_SHOWCASE boundary; the owner selected this task as a task-specific exception.
+    - The owner reported USD 100 current credit before the GAME-007 apply/execution. Obtain a fresh balance before cleanup or any repeat run.
     - Keep the USD 10/month alert-only budget and never upgrade to pay-as-you-go.
-    - Apply and the intentional failure execution each require separate explicit approval of the exact plan, credit scope, and rollback.
+    - The owner approved the exact one-add test Job apply and one intentional failure execution. Cleanup and any repeat execution require separate approval.
 
   runtime_placement:
     allowed: [hcp-terraform, azure-container-app-job]
@@ -32,7 +32,7 @@ task:
       - Changes to azurerm_container_app_job.backup or the existing Workload Profiles/Express environments
       - Database or R2 secret references, database connections, and R2 writes
       - Backup execution, schedules, retries, retention, Log Analytics, or persistent Azure logging
-      - Apply, failure execution, and cleanup until separately approved
+      - Further failure executions and cleanup until separately approved
 
   inputs:
     required_config:
@@ -54,7 +54,7 @@ task:
       - azurerm_container_app_job.game_007_failure_test[0]
     database_changes: [none]
     deployed_units:
-      - Optional manual-only no-secret failure-test Job, present only when enable_game_007_failure_test is true.
+      - Temporary manual-only no-secret failure-test Job, enabled explicitly with enable_game_007_failure_test=true; one intentional failure execution completed.
 
   compatibility:
     requires_expand_contract: false
@@ -93,9 +93,9 @@ task:
       max_replicas: 1
       max_runtime_seconds: 60
     cost_effect:
-      current: Production backup Job has one successful approved run; GAME-007 test Job is not applied and has no executions.
-      proposed: One temporary Consumption Job and one bounded 10-second deliberate failure; usage may consume shared grants or student credit.
-      approval: Fresh balance and separate owner approval are required before apply and execution.
+      current: Production backup Job has one approved successful run; the temporary GAME-007 Job has one approved failed execution and remains deployed pending cleanup.
+      proposed: Remove only the temporary Consumption Job after evidence approval; any repeat failure test remains separately gated.
+      approval: Owner approved apply and one execution with USD 100 reported credit; cleanup and repeat runs require separate approval. The one-off true variable is not persisted in HCP workspace settings, so do not run a default-false plan before cleanup approval.
 
   telemetry:
     metrics: [Azure execution status, elapsed time, retry count, current student credit]
@@ -110,4 +110,4 @@ task:
 
   human_approval:
     required: true
-    reason: Owner selected GAME-007 and authorized planning/code plus a speculative plan. Creating the temporary Job, starting the intentional failure execution, and cleanup are not yet approved.
+    reason: Owner reported USD 100 current Azure for Students credit and approved applying the exact one-add GAME-007 plan plus one intentional failure execution. HCP apply run `run-Dc99qvJFFvfHWffh` succeeded and execution `atmos-backup-failure-test-sifrg5f` reported Failed as expected. Cleanup remains separately gated.
