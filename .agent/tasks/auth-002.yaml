@@ -1,0 +1,104 @@
+task:
+  id: AUTH-002
+  title: Add Google OAuth and safe self-service account deletion
+  status: REVIEW
+  objective: Expose the owner-configured Google OAuth provider and allow an authenticated user to delete only their own account after recent sign-in and explicit email/phrase confirmation.
+
+  depends_on: [AUTH-001, WEB-004, RLS-002, ROUTE-001]
+
+  external_policy_checks:
+    - The owner confirmed Google OAuth is configured in Supabase Auth.
+    - The owner configured the server-only Edge Function secret name PROJECT_SECRET_KEY with a current Supabase Secret Key; never read, print, or expose its value.
+    - Google callback/redirect configuration is same-origin and already set by the owner; no provider-console mutation is part of this task.
+
+  runtime_placement:
+    allowed: [vercel-nextjs, supabase-edge-function]
+    selected: supabase-edge-function
+    reason: Google OAuth starts with the existing Supabase browser client; account deletion uses a narrowly scoped server-side Admin Auth client, while user identity comes from the bearer JWT.
+
+  scope:
+    include:
+      - apps/web/components/saved-locations-panel.tsx
+      - apps/web/app/globals.css
+      - scripts/account-deletion.test.mjs
+      - supabase/functions/api-v1/index.ts
+      - supabase/functions/_shared/account-deletion.mjs
+      - tests/e2e/dashboard.spec.ts
+      - .agent/status.yaml
+      - .agent/tasks/auth-002.yaml
+      - docs/auth.md
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/evidence/auth-002/2026-10-12.md
+    exclude:
+      - Secret creation/rotation or provider-console configuration
+      - Database schema, RLS policy, GRANT, or migration changes
+      - Deleting accounts during development/test/validation
+      - Account export or third-party OAuth providers beyond configured Google
+
+  inputs:
+    required_config:
+      - Supabase Google OAuth provider enabled with the deployed callback/redirect URLs
+      - Supabase Edge Function secret PROJECT_SECRET_KEY containing the current sb_secret key
+      - Existing authenticated api-v1 function
+    required_secrets: [PROJECT_SECRET_KEY (already owner-configured; value remains server-only)]
+
+  outputs:
+    files:
+      - apps/web/components/saved-locations-panel.tsx
+      - scripts/account-deletion.test.mjs
+      - supabase/functions/api-v1/index.ts
+      - supabase/functions/_shared/account-deletion.mjs
+      - tests/e2e/dashboard.spec.ts
+      - docs/auth.md
+      - docs/evidence/auth-002/2026-10-12.md
+    terraform_resources: []
+    database_changes: [none; existing profile/user-owned rows cascade from auth.users]
+    deployed_units: [web, supabase-api-v1]
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert the auth UI and account DELETE route; no schema or policy changes are needed.
+
+  validation:
+    commands:
+      - corepack pnpm typecheck
+      - corepack pnpm lint
+      - corepack pnpm test
+      - corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts --workers=1
+      - corepack pnpm --filter @atmos/web build
+    expected:
+      - Google sign-in invokes the configured Supabase provider with the existing same-origin redirect.
+      - Account deletion requires an authenticated user, exact case-insensitive account email confirmation, the word DELETE, and last_sign_in_at no older than five minutes.
+      - The account DELETE route derives the target only from the verified JWT user; it never accepts a target user ID from the client.
+      - The Admin Auth client uses PROJECT_SECRET_KEY server-side only and returns generic failures without exposing keys or user IDs.
+      - Successful deletion signs out the local browser session and clears that user's saved-place preference key.
+      - E2E mocks the destructive endpoint; no account is actually deleted during validation.
+
+  security_checks:
+    - Never use a legacy service_role key; use only the owner-configured current Supabase Secret Key from PROJECT_SECRET_KEY.
+    - Never use the Admin Auth client for user lookup or ordinary user CRUD; verify the caller with the existing anon/publishable client first.
+    - Require recent auth based on the verified user's last_sign_in_at; require matching email and typed DELETE confirmation.
+    - Derive deleteUser(user.id) from authenticatedClient only; do not accept an account ID in request body/path.
+    - Do not log password, access token, email, confirmation text, secret key, or user ID.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+
+  telemetry:
+    metrics: [existing api-v1 request metrics only]
+    logs: [none added; deletion logs contain no identity or credential values]
+    traces: [existing api-v1 trace metadata only]
+
+  evidence:
+    - docs/evidence/auth-002/2026-10-12.md
+    - pull request checks
+
+  rollback:
+    strategy: Revert OAuth/account controls and the account DELETE route; no user data is deleted by deployment itself.
+
+  human_approval:
+    required: true
+    reason: The owner explicitly approved OAuth/account-deletion scope and configured Google OAuth plus the server-only PROJECT_SECRET_KEY.

@@ -3,6 +3,7 @@ import { cors } from 'npm:hono@4.13.5/cors';
 import { secureHeaders } from 'npm:hono@4.13.5/secure-headers';
 import { createClient } from 'npm:@supabase/supabase-js@2.114.0';
 import { createCorrelation } from '../_shared/correlation.ts';
+import { validateAccountDeletionRequest } from '../_shared/account-deletion.mjs';
 import { databaseDependencyIsHealthy } from '../_shared/dependency-health.ts';
 import { exportOtlpTrace } from '../_shared/otel.ts';
 import {
@@ -160,6 +161,53 @@ app.get('/api/v1/me', async (context) => {
   }
 
   return context.json({ profile, preferences });
+});
+
+app.delete('/api/v1/account', async (context) => {
+  const authenticated = await authenticatedClient(context);
+  if (!authenticated) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+  const body = (await context.req.json().catch(() => undefined)) as
+    { confirmationEmail?: unknown; confirmationPhrase?: unknown } | undefined;
+  const confirmationStatus = validateAccountDeletionRequest({
+    accountEmail: authenticated.user.email,
+    confirmationEmail: body?.confirmationEmail,
+    confirmationPhrase: body?.confirmationPhrase,
+    lastSignInAt: authenticated.user.last_sign_in_at,
+  });
+  if (confirmationStatus === 'confirmation-required') {
+    return error(
+      context,
+      'ACCOUNT_CONFIRMATION_REQUIRED',
+      'Confirm the account email and type DELETE to continue.',
+      400,
+    );
+  }
+  if (confirmationStatus === 'reauthentication-required') {
+    return error(
+      context,
+      'ACCOUNT_REAUTH_REQUIRED',
+      'Sign in again before deleting your account.',
+      401,
+    );
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const projectSecretKey = Deno.env.get('PROJECT_SECRET_KEY');
+  if (!supabaseUrl || !projectSecretKey) {
+    return error(context, 'ACCOUNT_DELETION_UNAVAILABLE', 'Account deletion is unavailable.', 503);
+  }
+  const adminClient = createClient(supabaseUrl, projectSecretKey, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false,
+    },
+  });
+  const { error: deletionError } = await adminClient.auth.admin.deleteUser(authenticated.user.id);
+  if (deletionError) {
+    return error(context, 'ACCOUNT_DELETION_UNAVAILABLE', 'Account deletion is unavailable.', 503);
+  }
+  return context.body(null, 204);
 });
 
 async function authenticatedClient(context: Context) {
