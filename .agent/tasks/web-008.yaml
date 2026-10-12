@@ -1,0 +1,84 @@
+task:
+  id: WEB-008
+  title: Restore selected city on browser Back/Forward
+  status: DONE
+  objective: Keep the displayed city synchronized with validated share-URL state when users navigate browser history.
+
+  depends_on: [WEB-003, WEB-007, FEAT-GEO-001]
+
+  external_policy_checks:
+    [reuse the existing public weather dashboard gateway; no provider/API change]
+
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Browser history parsing and navigation restoration are client-side UI state using the existing weather gateway.
+
+  scope:
+    include:
+      - apps/web/components/dashboard.tsx
+      - tests/e2e/dashboard.spec.ts
+      - .agent/status.yaml
+      - .agent/tasks/web-008.yaml
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/evidence/web-008/2026-10-11.md
+    exclude:
+      - Browser geolocation coordinates in the URL
+      - Changes to the public gateway contract or caching
+      - Automatic polling or persisted browsing history
+
+  inputs:
+    required_config: [existing share-link query parameters, existing dashboard gateway endpoint]
+    required_secrets: []
+
+  outputs:
+    files:
+      - apps/web/components/dashboard.tsx
+      - tests/e2e/dashboard.spec.ts
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web]
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert the popstate handler; manual search/geolocation and generated share links remain unchanged.
+
+  validation:
+    commands:
+      - corepack pnpm typecheck
+      - corepack pnpm lint
+      - corepack pnpm --filter @atmos/web build
+      - corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts --workers=1
+    expected:
+      - Selecting searched/map cities continues to create shareable history entries only after weather loads.
+      - Browser Back/Forward restores the corresponding city's forecast and name without creating another history entry.
+      - Returning to the root URL restores the dashboard's initial city.
+      - Malformed share parameters do not issue a weather request or replace the current dashboard.
+      - Browser geolocation remains absent from the URL.
+
+  security_checks:
+    - Validate city coordinates, timezone, name, and country through the existing location contract before requesting weather.
+    - Do not place device geolocation in share state or browser history.
+    - Do not include credentials or auth state in URL parameters.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+
+  telemetry:
+    metrics: [existing gateway metrics only]
+    logs: [none added]
+    traces: [existing gateway weather request traces]
+
+  evidence:
+    - docs/evidence/web-008/2026-10-11.md
+    - pull request checks
+
+  rollback:
+    strategy: Revert the dashboard popstate listener; existing push/replace URL behavior remains.
+
+  human_approval:
+    required: false
+    reason: This is a client navigation fix using the existing public weather API.

@@ -1,0 +1,86 @@
+task:
+  id: WEB-009
+  title: Add bounded city-search autocomplete
+  status: DONE
+  objective: Show useful city suggestions while typing, with keyboard selection, failure feedback, short-lived in-memory caching, and a strict automatic request budget.
+
+  depends_on: [WEB-003, WEB-008, FEAT-LOC-UI-001]
+
+  external_policy_checks:
+    [reuse the existing location-search endpoint and provider attribution; no new provider]
+
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Debouncing, suggestion display, request cancellation, and keyboard selection are client-side behavior using the existing gateway.
+
+  scope:
+    include:
+      - apps/web/components/location-search.tsx
+      - apps/web/app/globals.css
+      - tests/e2e/dashboard.spec.ts
+      - .agent/status.yaml
+      - .agent/tasks/web-009.yaml
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/evidence/web-009/2026-10-11.md
+    exclude:
+      - Location search API/schema changes
+      - Direct client calls to the geocoding provider
+      - Persisted query history, analytics, or new account data
+
+  inputs:
+    required_config: [existing /api/v1/locations/search gateway route]
+    required_secrets: []
+
+  outputs:
+    files:
+      - apps/web/components/location-search.tsx
+      - apps/web/app/globals.css
+      - tests/e2e/dashboard.spec.ts
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web]
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert client suggestion state and styling; explicit form submission remains unchanged.
+
+  validation:
+    commands:
+      - corepack pnpm typecheck
+      - corepack pnpm lint
+      - corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts --workers=1
+      - corepack pnpm --filter @atmos/web build
+    expected:
+      - Suggestions begin after three trimmed characters and a 350 ms debounce.
+      - At most eight automatic uncached searches occur per rolling minute; cached results are reused for 30 seconds.
+      - Escape closes suggestions; ArrowUp/ArrowDown moves the active option; Enter selects it; mouse/touch selection remains available.
+      - Submitting explicitly still works when suggestions are disabled, empty, or fail.
+      - New queries and unmounts cancel timers and ignore stale responses; no additional dashboard weather request occurs until a suggestion is selected.
+
+  security_checks:
+    - Use the existing version-affinity header and validated LocationSearchResult schema.
+    - Render names/countries as text only; never inject provider output as HTML.
+    - Do not retain search terms beyond an in-memory 30-second result cache or log queries.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+
+  telemetry:
+    metrics: [existing gateway location-search metrics only]
+    logs: [none added]
+    traces: [existing gateway search traces]
+
+  evidence:
+    - docs/evidence/web-009/2026-10-11.md
+    - pull request checks
+
+  rollback:
+    strategy: Revert suggestions and client request bookkeeping; explicit search remains operational.
+
+  human_approval:
+    required: false
+    reason: This adds a bounded UI flow over the existing approved search contract.

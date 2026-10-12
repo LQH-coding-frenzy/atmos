@@ -1,0 +1,152 @@
+task:
+  id: WEB-003
+  title: Complete and modernize the weather dashboard experience
+  status: DONE
+  objective: Close the current dashboard's interaction gaps, persist local preferences, and deliver a usable Weather Watch map with accessible city-weather previews.
+
+  depends_on:
+    [
+      WEB-002,
+      FEAT-LOC-UI-001,
+      FEAT-MAP-001,
+      FEAT-AQI-LIVE-001,
+      FEAT-PLAN-001,
+      HIST-CAP-001,
+      HIST-MGMT-001,
+      WX-004,
+    ]
+
+  external_policy_checks:
+    - OpenFreeMap's public tile service is free to use without registration or API keys; use the Liberty style and retain its automatic attribution for OpenFreeMap, OpenMapTiles, and OpenStreetMap.
+    - OpenFreeMap is provided as-is without an availability SLA; keep city search and live forecasts usable when map tiles fail.
+    - The owner explicitly approved using OpenFreeMap for the dashboard map.
+
+  runtime_placement:
+    allowed: [vercel-nextjs, supabase-edge-function]
+    selected: vercel-nextjs
+    reason: Map interactions and city-preview presentation run in the browser; public weather remains behind the existing cached gateway, and saved-place deletion uses the authenticated Supabase Edge Function with the user's JWT and existing RLS.
+
+  scope:
+    include:
+      - .gitignore
+      - .prettierignore
+      - eslint.config.mjs
+      - .prettierignore
+      - eslint.config.mjs
+      - apps/web/app/globals.css
+      - apps/web/app/page.tsx
+      - apps/web/components/dashboard.tsx
+      - apps/web/components/dashboard-map.tsx
+      - apps/web/components/location-search.tsx
+      - apps/web/components/preferences-panel.tsx
+      - apps/web/components/retry-weather-button.tsx
+      - apps/web/components/saved-locations-panel.tsx
+      - apps/web/components/weather-history-panel.tsx
+      - apps/web/lib/location-map.ts
+      - apps/web/lib/location-map.test.ts
+      - apps/web/lib/map-city.ts
+      - apps/web/lib/map-city.test.ts
+      - apps/web/lib/weather-history-export.ts
+      - apps/web/lib/weather-history-export.test.ts
+      - apps/web/next.config.ts
+      - apps/web/next-config.test.ts
+      - apps/web/package.json
+      - apps/web/scripts/copy-maplibre-worker.mjs
+      - supabase/functions/api-v1/index.ts
+      - supabase/tests/006_saved_locations_rls.sql
+      - tests/e2e/dashboard.spec.ts
+      - docs/design/provenance.md
+      - docs/evidence/web-003/2026-10-11.md
+      - .agent/status.yaml
+      - .agent/tasks/web-003.yaml
+      - docs/architecture/atmos-devsecops-master-plan.md
+    exclude:
+      - Changes to database schema, saved-location grants, or RLS policies
+      - Scheduled/background/email/push alert delivery
+      - Radar, animated overlays, or other weather data providers
+      - Paid map services, credentials, or persistent map telemetry
+
+  inputs:
+    required_config:
+      - Existing Open-Meteo dashboard endpoint through the Atmos gateway
+      - OpenFreeMap Liberty public style at https://tiles.openfreemap.org/styles/liberty
+    required_secrets: []
+
+  outputs:
+    files:
+      - .gitignore
+      - .prettierignore
+      - eslint.config.mjs
+      - .prettierignore
+      - eslint.config.mjs
+      - apps/web/app/globals.css
+      - apps/web/app/page.tsx
+      - apps/web/components/dashboard.tsx
+      - apps/web/components/dashboard-map.tsx
+      - apps/web/components/location-search.tsx
+      - apps/web/components/preferences-panel.tsx
+      - apps/web/components/retry-weather-button.tsx
+      - apps/web/components/saved-locations-panel.tsx
+      - apps/web/components/weather-history-panel.tsx
+      - apps/web/lib/location-map.ts
+      - apps/web/lib/map-city.ts
+      - apps/web/lib/weather-history-export.ts
+      - apps/web/next.config.ts
+      - apps/web/package.json
+      - apps/web/scripts/copy-maplibre-worker.mjs
+      - supabase/functions/api-v1/index.ts
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web, supabase-api-v1]
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert the web/API change; saved-place deletion uses an existing owner-only RLS policy and requires no schema change.
+
+  validation:
+    commands:
+      - corepack pnpm exec vitest run apps/web/lib/map-city.test.ts apps/web/lib/location-map.test.ts apps/web/lib/weather-history-export.test.ts apps/web/next-config.test.ts
+      - corepack pnpm exec supabase test db --local supabase/tests/006_saved_locations_rls.sql
+      - corepack pnpm typecheck
+      - corepack pnpm lint
+      - corepack pnpm --filter @atmos/web build
+      - corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts --workers=1
+    expected:
+      - Search announces empty/failure states and reports a failed location switch without replacing the displayed city.
+      - Refresh retries the selected city without changing its share URL; system/light/dark and C/F preferences survive reload.
+      - Authenticated users can remove their own saved locations; RLS continues to hide or preserve other users' rows.
+      - Authenticated users can export recorded metric observations as correctly escaped chronological CSV.
+      - CSP permits the OpenFreeMap tile host only; MapLibre attribution remains enabled, and a mocked-style browser test verifies the map's current-city weather preview.
+      - The MapLibre worker and shared module are served from the same-origin public path for Next's Turbopack/web security policy.
+      - Visible OpenMapTiles place-layer discovery and city-point metadata parsing are unit-tested; the keyboard-operable city selector uses available rendered map cities, with the current city as fallback.
+      - City hover previews use a 280 ms intent delay, a five-minute in-memory cache, and no more than 12 automatic uncached requests per minute; stale requests are aborted/ignored.
+      - Map failure leaves city search and weather usable; desktop/mobile layouts, focus indication, and reduced-motion preferences remain supported.
+
+  security_checks:
+    - Saved-place DELETE authenticates the user, filters by both row ID and authenticated user ID, and uses the existing RLS-protected user JWT client; never use a service-role key.
+    - External Content Security Policy additions are restricted to tiles.openfreemap.org.
+    - MapLibre workers load from the same-origin public directory and require no blob-worker policy.
+    - Do not send pointer coordinates to weather endpoints; request only named city-point coordinates after hover intent.
+    - Do not persist hover locations, log user location, or add map-provider credentials.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+
+  telemetry:
+    metrics: [existing gateway cache/provider metrics only]
+    logs: [none added; city previews do not log coordinates]
+    traces: [existing gateway weather request traces]
+
+  evidence:
+    - docs/evidence/web-003/2026-10-11.md
+    - pull request checks
+
+  rollback:
+    strategy: Revert WEB-003 to restore the previous dashboard, local map surface, and API routes; the additive DELETE route has no schema or policy side effects.
+
+  human_approval:
+    required: true
+    reason: The owner approved the OpenFreeMap public Liberty basemap and requested the dashboard interaction, preference, history-export, and visual improvements.

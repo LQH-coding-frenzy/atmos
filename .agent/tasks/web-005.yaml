@@ -1,0 +1,91 @@
+task:
+  id: WEB-005
+  title: Set and reorder saved places
+  status: DONE
+  objective: Let each signed-in user mark a saved place as their device-local default, reorder the saved-place list, and apply that default on the next dashboard visit unless a share URL names another city.
+
+  depends_on: [WEB-004, FEAT-LOC-UI-001]
+
+  external_policy_checks:
+    [none; preferences remain on the current device and use existing local storage]
+
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Default and order preferences are small browser-local UI state; no backend writes, worker logic, or database changes are required.
+
+  scope:
+    include:
+      - apps/web/app/page.tsx
+      - apps/web/components/dashboard.tsx
+      - apps/web/components/saved-locations-panel.tsx
+      - apps/web/lib/saved-place-preferences.ts
+      - apps/web/lib/saved-place-preferences.test.ts
+      - apps/web/app/globals.css
+      - tests/e2e/dashboard.spec.ts
+      - .agent/status.yaml
+      - .agent/tasks/web-005.yaml
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/evidence/web-005/2026-10-11.md
+    exclude:
+      - Database schema or remote user_preferences API changes
+      - Server-side cookies, analytics, or tracking
+      - Automatically overriding a share URL containing explicit city coordinates
+
+  inputs:
+    required_config: [existing authenticated saved-location list]
+    required_secrets: []
+
+  outputs:
+    files:
+      - apps/web/components/saved-locations-panel.tsx
+      - apps/web/lib/saved-place-preferences.ts
+      - apps/web/lib/saved-place-preferences.test.ts
+      - tests/e2e/dashboard.spec.ts
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web]
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert the device-local ordering/default controls; no server data or schema is changed.
+
+  validation:
+    commands:
+      - corepack pnpm exec vitest run apps/web/components/saved-place-preferences.test.ts
+      - corepack pnpm typecheck
+      - corepack pnpm lint
+      - corepack pnpm --filter @atmos/web build
+      - corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts --workers=1
+    expected:
+      - Reordering is stable across reloads and applies only to the signed-in user's preference key.
+      - Selecting a default applies it on the next visit when no explicit city is encoded in the URL.
+      - A shared URL with explicit city coordinates is never overridden by the device-local default.
+      - Signing out or switching users does not expose another user's local default/order.
+
+  security_checks:
+    - Store only the non-secret saved-location IDs in origin-local storage; never store JWTs or credentials.
+    - Key preference records by the authenticated Supabase user ID and ignore IDs absent from that user's RLS-filtered list.
+    - Never log selected city names, coordinates, account ID, or ordering preferences.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+
+  telemetry:
+    metrics: [none added]
+    logs: [none added]
+    traces: [none added]
+
+  evidence:
+    - docs/evidence/web-005/2026-10-11.md
+    - pull request checks
+
+  rollback:
+    strategy: Revert client-local sorting and default selection; ignored or stale IDs naturally fall back to the API list order.
+
+  human_approval:
+    required: false
+    reason: This is a local UI preference with no service, cost, schema, or authorization change.

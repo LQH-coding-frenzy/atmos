@@ -4,7 +4,12 @@ export type LocationMapData = {
   center: [number, number];
   point: {
     type: 'Feature';
-    properties: { condition: CurrentWeather['condition'] };
+    properties: {
+      condition: CurrentWeather['condition'];
+      class: 'city';
+      name: string;
+      country: string;
+    };
     geometry: { type: 'Point'; coordinates: [number, number] };
   };
   markerColor: string;
@@ -28,7 +33,12 @@ export function createLocationMapData(
     center,
     point: {
       type: 'Feature',
-      properties: { condition: current.condition },
+      properties: {
+        condition: current.condition,
+        class: 'city',
+        name: location.name,
+        country: location.country,
+      },
       geometry: { type: 'Point', coordinates: center },
     },
     markerColor: markerColors[current.condition],

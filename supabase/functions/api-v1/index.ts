@@ -218,6 +218,56 @@ app.post('/api/v1/locations', async (context) => {
   return context.json({ location: data }, 201);
 });
 
+app.patch('/api/v1/locations/:id', async (context) => {
+  const authenticated = await authenticatedClient(context);
+  if (!authenticated) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+  const id = context.req.param('id');
+  if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(id)) {
+    return error(context, 'INVALID_LOCATION_ID', 'A valid saved location ID is required.', 400);
+  }
+  const body = (await context.req.json().catch(() => undefined)) as { name?: string } | undefined;
+  const name = typeof body?.name === 'string' ? body.name.trim() : '';
+  if (name.length < 1 || name.length > 120) {
+    return error(
+      context,
+      'INVALID_LOCATION',
+      'A saved location name between 1 and 120 characters is required.',
+      400,
+    );
+  }
+  const { data, error: updateError } = await authenticated.client
+    .from('saved_locations')
+    .update({ name })
+    .eq('id', id)
+    .eq('user_id', authenticated.user.id)
+    .select('id, name, latitude, longitude, created_at, updated_at')
+    .maybeSingle();
+  if (updateError) {
+    return error(context, 'LOCATIONS_UNAVAILABLE', 'Saved locations are unavailable.', 503);
+  }
+  if (!data) return error(context, 'LOCATION_NOT_FOUND', 'Saved location was not found.', 404);
+  return context.json({ location: data });
+});
+
+app.delete('/api/v1/locations/:id', async (context) => {
+  const authenticated = await authenticatedClient(context);
+  if (!authenticated) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+  const id = context.req.param('id');
+  if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(id)) {
+    return error(context, 'INVALID_LOCATION_ID', 'A valid saved location ID is required.', 400);
+  }
+  const { error: deleteError } = await authenticated.client
+    .from('saved_locations')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', authenticated.user.id);
+  if (deleteError) {
+    return error(context, 'LOCATIONS_UNAVAILABLE', 'Saved locations are unavailable.', 503);
+  }
+  // RLS and the explicit owner filter make absent and other-user IDs indistinguishable.
+  return context.body(null, 204);
+});
+
 app.get('/api/v1/weather/history', async (context) => {
   context.header('cache-control', 'private, no-store');
   const range = parseWeatherHistoryQuery(

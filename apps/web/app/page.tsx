@@ -1,5 +1,6 @@
 import { dashboardSchema, type Dashboard as DashboardData } from '@atmos/contracts';
 import { Dashboard } from '../components/dashboard';
+import { RetryWeatherButton } from '../components/retry-weather-button';
 import { browserGatewayOrigin, serverGatewayOrigin } from '../lib/gateway-origin';
 
 // A failed build-time weather request must never be cached as the public page.
@@ -101,9 +102,8 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
         <section className="weather-unavailable panel" aria-labelledby="weather-unavailable-title">
           <p className="eyebrow">Live weather</p>
           <h1 id="weather-unavailable-title">Weather data is temporarily unavailable.</h1>
-          <p>
-            Please refresh shortly. The dashboard never substitutes mock data for a live response.
-          </p>
+          <p>The dashboard keeps real weather honest and will not substitute mock data.</p>
+          <RetryWeatherButton />
         </section>
       </main>
     );

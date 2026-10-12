@@ -1,0 +1,93 @@
+task:
+  id: WEB-012
+  title: Make dashboard tool panels exclusive and dismissible
+  status: DONE
+  objective: Prevent toolbar panels from stacking, and provide consistent Escape/outside-click dismissal with keyboard focus restoration.
+
+  depends_on: [WEB-003, WEB-009, WEB-010]
+
+  external_policy_checks: [none; use native same-document details disclosure behavior]
+
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Panel exclusivity and dismissal are browser-only interaction behavior.
+
+  scope:
+    include:
+      - apps/web/components/dashboard.tsx
+      - apps/web/components/saved-locations-panel.tsx
+      - apps/web/components/weather-history-panel.tsx
+      - apps/web/components/air-quality-panel.tsx
+      - apps/web/components/in-app-alerts-panel.tsx
+      - apps/web/components/weather-comparison-panel.tsx
+      - apps/web/components/preferences-panel.tsx
+      - tests/e2e/dashboard.spec.ts
+      - .agent/status.yaml
+      - .agent/tasks/web-012.yaml
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/evidence/web-012/2026-10-11.md
+    exclude:
+      - Changes to each panel's data/API behavior
+      - New modal/dialog component library or persisted state
+      - Service-worker, routing, or cross-page popup behavior
+
+  inputs:
+    required_config: [existing semantic details/summary dashboard tool panels]
+    required_secrets: []
+
+  outputs:
+    files:
+      - apps/web/components/dashboard.tsx
+      - apps/web/components/saved-locations-panel.tsx
+      - apps/web/components/weather-history-panel.tsx
+      - apps/web/components/air-quality-panel.tsx
+      - apps/web/components/in-app-alerts-panel.tsx
+      - apps/web/components/weather-comparison-panel.tsx
+      - apps/web/components/preferences-panel.tsx
+      - tests/e2e/dashboard.spec.ts
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web]
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Remove the shared details-group name and close handler; panel content/APIs remain unchanged.
+
+  validation:
+    commands:
+      - corepack pnpm typecheck
+      - corepack pnpm lint
+      - corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts --workers=1
+      - corepack pnpm --filter @atmos/web build
+    expected:
+      - Opening one toolbar details panel closes the previously open panel.
+      - Escape closes the open panel and returns focus to its summary.
+      - Pointer interaction outside the toolbar closes open panels, while clicks inside an open panel do not.
+      - Existing panel flows and mobile responsive behavior remain intact.
+
+  security_checks:
+    - Preserve native semantic details/summary controls and all existing keyboard focus handling.
+    - Do not expose panel state in URLs, storage, analytics, or logs.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+
+  telemetry:
+    metrics: [none added]
+    logs: [none added]
+    traces: [none added]
+
+  evidence:
+    - docs/evidence/web-012/2026-10-11.md
+    - pull request checks
+
+  rollback:
+    strategy: Remove the shared details group and dismissal listener; no state or data rollback is needed.
+
+  human_approval:
+    required: false
+    reason: This is a browser-only interaction refinement with no external service or data change.

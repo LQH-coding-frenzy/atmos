@@ -24,6 +24,518 @@ test('renders the responsive live-weather dashboard', async ({ page }) => {
     .toBe(true);
 });
 
+test('keeps secondary current-condition metrics behind an accessible disclosure', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const details = page.locator('.weather-extra-details');
+  const summary = details.locator('summary');
+  await expect(summary).toHaveText('More conditions');
+  await expect(details).not.toHaveAttribute('open', '');
+  await summary.focus();
+  await page.keyboard.press('Enter');
+  await expect(details).toHaveAttribute('open', '');
+  await expect(details).toContainText('Feels like');
+  await expect(details).toContainText('Pressure');
+});
+
+test('expands hourly and daily forecast metadata with keyboard controls', async ({ page }) => {
+  await page.goto('/');
+
+  const firstHour = page.locator('.hourly-item').first();
+  await firstHour.focus();
+  await page.keyboard.press('Enter');
+  await expect(firstHour).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('region', { name: /Hourly forecast details/ })).toContainText(
+    'Precipitation chance',
+  );
+
+  const firstDay = page.locator('.forecast-row').first();
+  await firstDay.focus();
+  await page.keyboard.press('Space');
+  await expect(firstDay).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('region', { name: /Daily forecast details/ })).toContainText(
+    'High / low',
+  );
+  await expect(page.getByRole('region', { name: /Daily forecast details/ })).toContainText(
+    'Precipitation chance',
+  );
+});
+
+test('explains ranked activity windows with local start and end times', async ({ page }) => {
+  await page.goto('/');
+  const activities = page.getByRole('group', { name: 'Activity' });
+  const cycling = activities.getByRole('button', { name: 'Cycling' });
+  await cycling.click();
+  await expect(cycling).toHaveAttribute('aria-pressed', 'true');
+
+  const windows = page.getByRole('list', { name: 'Ranked cycling weather windows' });
+  const firstWindow = windows.locator('li').first();
+  await expect(firstWindow).toContainText('Best');
+  await expect(firstWindow.locator('.planner-window-time')).toContainText('–');
+  const details = firstWindow.locator('details');
+  await details.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(details).toHaveAttribute('open', '');
+  await expect(details.locator('.planner-factor').first()).toBeVisible();
+});
+
+test('explains empty search results and keeps the current city when a selection fails', async ({
+  page,
+}) => {
+  const searchedLocation = {
+    id: 'london-gb',
+    name: 'London',
+    country: 'United Kingdom',
+    latitude: 51.5072,
+    longitude: -0.1276,
+    timezone: 'Europe/London',
+  };
+  let weatherRequests = 0;
+  await page.route('**/api/v1/locations/search?**', async (route) => {
+    const query = new URL(route.request().url()).searchParams.get('q');
+    await route.fulfill({
+      json: { results: query === 'Nowhere' ? [] : [searchedLocation] },
+    });
+  });
+  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+    weatherRequests += 1;
+    await route.fulfill({ status: 503, json: { error: 'unavailable' } });
+  });
+  await page.goto('/');
+
+  const search = page.getByRole('search');
+  const query = search.getByLabel('Search for a city');
+  await query.fill('Nowhere');
+  await search.getByRole('button', { name: 'Search locations' }).click();
+  await expect(page.locator('.location-search').getByRole('status')).toContainText(
+    'No matching places',
+  );
+
+  await query.fill('London');
+  await search.getByRole('button', { name: 'Search locations' }).click();
+  await page
+    .locator('.location-search')
+    .getByRole('option', { name: /London/ })
+    .click();
+  await expect(page.locator('.location-search').getByRole('status')).toContainText(
+    'Weather for London could not be loaded',
+  );
+  await expect(page.locator('.location-name')).toHaveText('Berlin');
+  expect(weatherRequests).toBe(1);
+});
+
+test('debounces and caches keyboard-accessible city suggestions', async ({ page }) => {
+  const london = {
+    id: 'london-gb',
+    name: 'London',
+    country: 'United Kingdom',
+    latitude: 51.5072,
+    longitude: -0.1276,
+    timezone: 'Europe/London',
+  };
+  let searchRequests = 0;
+  let weatherRequests = 0;
+  await page.route('**/api/v1/locations/search?**', async (route) => {
+    searchRequests += 1;
+    await route.fulfill({ json: { results: [london] } });
+  });
+  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+    weatherRequests += 1;
+    await route.fulfill({
+      json: {
+        location: london,
+        current: {
+          observedAt: '2026-09-01T10:00:00.000Z',
+          temperatureC: 18,
+          apparentTemperatureC: 17,
+          humidityPercent: 70,
+          windSpeedKph: 10,
+          pressureHpa: 1012,
+          condition: 'cloudy',
+        },
+        hourly: [
+          {
+            time: '2026-09-01T11:00:00.000Z',
+            temperatureC: 18,
+            precipitationProbability: 20,
+            condition: 'cloudy',
+          },
+        ],
+        daily: [
+          {
+            date: '2026-09-01',
+            highC: 20,
+            lowC: 14,
+            precipitationProbability: 20,
+            condition: 'cloudy',
+          },
+        ],
+        meta: {
+          provider: 'open-meteo',
+          cached: false,
+          stale: false,
+          updatedAt: '2026-09-01T10:00:00.000Z',
+        },
+      },
+    });
+  });
+  await page.goto('/');
+  const search = page.locator('.location-search');
+  const input = search.getByRole('combobox', { name: 'Search for a city' });
+  await input.fill('Lon');
+  const listbox = search.getByRole('listbox', { name: 'Location search results' });
+  await expect(listbox.getByRole('option', { name: /London/ })).toBeVisible();
+  expect(searchRequests).toBe(1);
+  await expect(input).toHaveAttribute('aria-expanded', 'true');
+
+  await page.keyboard.press('Escape');
+  await expect(listbox).toHaveCount(0);
+  await input.fill('');
+  await input.fill('Lon');
+  await expect(listbox.getByRole('option', { name: /London/ })).toBeVisible();
+  expect(searchRequests).toBe(1);
+
+  await input.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(listbox.getByRole('option', { name: /London/ })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.location-name')).toHaveText('London');
+  expect(weatherRequests).toBe(1);
+});
+
+test('persists unit and theme preferences on this device', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Fahrenheit' }).click();
+  await page.getByText('Settings', { exact: true }).click();
+  await page.getByRole('button', { name: 'Light', exact: true }).click();
+  await page.reload();
+
+  await expect(page.getByRole('button', { name: 'Fahrenheit' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+});
+
+test('keeps toolbar panels exclusive and dismisses them accessibly', async ({ page }) => {
+  await page.goto('/');
+  const savedPlaces = page.locator('.saved-locations-panel');
+  const history = page.locator('.weather-history-panel');
+  const savedSummary = savedPlaces.locator('summary');
+  const historySummary = history.locator('summary');
+
+  await savedSummary.click();
+  await expect(savedPlaces).toHaveAttribute('open', '');
+  await historySummary.click();
+  await expect(history).toHaveAttribute('open', '');
+  await expect(savedPlaces).not.toHaveAttribute('open', '');
+
+  await page.keyboard.press('Escape');
+  await expect(history).not.toHaveAttribute('open', '');
+  await expect(historySummary).toBeFocused();
+
+  const settings = page.locator('.preferences-panel');
+  await settings.locator('summary').click();
+  await expect(settings).toHaveAttribute('open', '');
+  await page.locator('.current-card').click();
+  await expect(settings).not.toHaveAttribute('open', '');
+});
+
+test('refreshes the selected city without changing its share URL and preserves it on failure', async ({
+  page,
+}) => {
+  let weatherRequests = 0;
+  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+    weatherRequests += 1;
+    if (weatherRequests > 1) {
+      await route.fulfill({ status: 503, json: { error: 'unavailable' } });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        location: {
+          id: 'paris',
+          name: 'Paris',
+          country: 'France',
+          latitude: 48.8534,
+          longitude: 2.3488,
+          timezone: 'Europe/Paris',
+        },
+        current: {
+          observedAt: '2026-09-01T10:00:00.000Z',
+          temperatureC: 20,
+          apparentTemperatureC: 19,
+          humidityPercent: 64,
+          windSpeedKph: 13,
+          pressureHpa: 1017,
+          condition: 'partly-cloudy',
+        },
+        hourly: [
+          {
+            time: '2026-09-01T10:00:00.000Z',
+            temperatureC: 20,
+            precipitationProbability: 5,
+            condition: 'partly-cloudy',
+          },
+        ],
+        daily: [
+          {
+            date: '2026-09-01',
+            highC: 22,
+            lowC: 15,
+            precipitationProbability: 10,
+            condition: 'partly-cloudy',
+          },
+        ],
+        meta: {
+          provider: 'open-meteo',
+          cached: false,
+          stale: false,
+          updatedAt: '2026-09-01T10:00:00.000Z',
+        },
+      },
+    });
+  });
+  await page.goto('/?lat=48.8534&lon=2.3488&timezone=Europe%2FParis&name=Paris&country=France');
+  const selectedUrl = page.url();
+
+  await page.getByRole('button', { name: 'Refresh weather' }).click();
+  await expect(page.locator('.location-name')).toHaveText('Paris');
+  await expect(page).toHaveURL(selectedUrl);
+
+  await page.getByRole('button', { name: 'Refresh weather' }).click();
+  await expect(page.locator('.location-status')).toContainText('Weather could not be refreshed');
+  await expect(page.locator('.location-name')).toHaveText('Paris');
+  await expect(page).toHaveURL(selectedUrl);
+  expect(weatherRequests).toBe(2);
+});
+
+test('restores searched cities from browser Back and Forward history', async ({ page }) => {
+  const paris = {
+    id: 'paris-fr',
+    name: 'Paris',
+    country: 'France',
+    latitude: 48.8534,
+    longitude: 2.3488,
+    timezone: 'Europe/Paris',
+  };
+  const potsdam = {
+    id: 'potsdam-de',
+    name: 'Potsdam',
+    country: 'Germany',
+    latitude: 52.401,
+    longitude: 13.0593,
+    timezone: 'Europe/Berlin',
+  };
+  let weatherRequests = 0;
+  await page.route('**/api/v1/locations/search?**', async (route) => {
+    const query = new URL(route.request().url()).searchParams.get('q');
+    await route.fulfill({ json: { results: query === 'Paris' ? [paris] : [potsdam] } });
+  });
+  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+    weatherRequests += 1;
+    const query = new URL(route.request().url()).searchParams;
+    const location = Number(query.get('lat')) < 50 ? paris : potsdam;
+    await route.fulfill({
+      json: {
+        location,
+        current: {
+          observedAt: '2026-09-01T10:00:00.000Z',
+          temperatureC: location === paris ? 20 : 16,
+          apparentTemperatureC: 19,
+          humidityPercent: 64,
+          windSpeedKph: 13,
+          pressureHpa: 1017,
+          condition: 'partly-cloudy',
+        },
+        hourly: [
+          {
+            time: '2026-09-01T11:00:00.000Z',
+            temperatureC: 20,
+            precipitationProbability: 5,
+            condition: 'partly-cloudy',
+          },
+        ],
+        daily: [
+          {
+            date: '2026-09-01',
+            highC: 22,
+            lowC: 15,
+            precipitationProbability: 10,
+            condition: 'partly-cloudy',
+          },
+        ],
+        meta: {
+          provider: 'open-meteo',
+          cached: false,
+          stale: false,
+          updatedAt: '2026-09-01T10:00:00.000Z',
+        },
+      },
+    });
+  });
+  await page.goto('/');
+  const initialUrl = page.url();
+  const search = page.locator('.location-search');
+  const input = search.getByLabel('Search for a city');
+
+  await input.fill('Paris');
+  await search.getByRole('button', { name: 'Search locations' }).click();
+  await page.locator('.location-search').getByRole('option', { name: /Paris/ }).click();
+  await expect(page.locator('.location-name')).toHaveText('Paris');
+
+  await input.fill('Potsdam');
+  await search.getByRole('button', { name: 'Search locations' }).click();
+  await page
+    .locator('.location-search')
+    .getByRole('option', { name: /Potsdam/ })
+    .click();
+  await expect(page.locator('.location-name')).toHaveText('Potsdam');
+
+  await page.goBack();
+  await expect(page.locator('.location-name')).toHaveText('Paris');
+  await expect(page).toHaveURL(/name=Paris/);
+  await page.goBack();
+  await expect(page.locator('.location-name')).toHaveText('Berlin');
+  await expect(page).toHaveURL(initialUrl);
+  await page.goForward();
+  await expect(page.locator('.location-name')).toHaveText('Paris');
+  expect(weatherRequests).toBeGreaterThanOrEqual(5);
+});
+
+test('previews the selected city on the map without replacing the dashboard', async ({ page }) => {
+  let previewWeatherRequests = 0;
+  let mapWorkerRequests = 0;
+  await page.route('**/maplibre/maplibre-gl-worker.mjs', async (route) => {
+    mapWorkerRequests += 1;
+    await route.continue();
+  });
+  await page.route('**/styles/liberty', async (route) => {
+    await route.fulfill({
+      contentType: 'application/json',
+      json: {
+        version: 8,
+        sources: {},
+        layers: [
+          {
+            id: 'test-background',
+            type: 'background',
+            paint: { 'background-color': '#dce9e8' },
+          },
+        ],
+      },
+    });
+  });
+  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+    previewWeatherRequests += 1;
+    await route.continue();
+  });
+  await page.goto('/');
+
+  const cityPicker = page.getByRole('combobox', { name: 'Browse cities visible on the map' });
+  await expect(cityPicker).toBeVisible();
+  await expect(cityPicker).toContainText('Berlin');
+  const mapCanvas = page.locator('.maplibregl-canvas');
+  const bounds = await mapCanvas.boundingBox();
+  expect(bounds).not.toBeNull();
+  await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
+
+  await expect(page.getByRole('region', { name: 'Weather preview for Berlin' })).toBeVisible();
+  await expect(page.locator('.location-name')).toHaveText('Berlin');
+  expect(previewWeatherRequests).toBe(0);
+  expect(mapWorkerRequests).toBeGreaterThan(0);
+  await page.getByRole('button', { name: 'Open Berlin' }).click();
+  await expect(page).toHaveURL(/lat=52.52/);
+});
+
+test('compares a searched live city without switching until explicitly requested', async ({
+  page,
+}) => {
+  const potsdam = {
+    id: 'potsdam-de',
+    name: 'Potsdam',
+    country: 'Germany',
+    latitude: 52.401,
+    longitude: 13.0593,
+    timezone: 'Europe/Berlin',
+  };
+  let weatherRequests = 0;
+  await page.route('**/api/v1/locations/search?**', async (route) => {
+    await route.fulfill({ json: { results: [potsdam] } });
+  });
+  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+    weatherRequests += 1;
+    const url = new URL(route.request().url());
+    const latitude = Number(url.searchParams.get('lat'));
+    const longitude = Number(url.searchParams.get('lon'));
+    await route.fulfill({
+      json: {
+        location: { ...potsdam, latitude, longitude },
+        current: {
+          observedAt: '2026-09-01T10:00:00.000Z',
+          temperatureC: 16,
+          apparentTemperatureC: 15,
+          humidityPercent: 58,
+          windSpeedKph: 8,
+          pressureHpa: 1015,
+          condition: 'partly-cloudy',
+        },
+        hourly: [
+          {
+            time: '2026-09-01T11:00:00.000Z',
+            temperatureC: 16,
+            precipitationProbability: 12,
+            condition: 'partly-cloudy',
+          },
+        ],
+        daily: [
+          {
+            date: '2026-09-01',
+            highC: 18,
+            lowC: 11,
+            precipitationProbability: 12,
+            condition: 'partly-cloudy',
+          },
+        ],
+        meta: {
+          provider: 'open-meteo',
+          cached: false,
+          stale: false,
+          updatedAt: '2026-09-01T10:00:00.000Z',
+        },
+      },
+    });
+  });
+  await page.goto('/');
+  const dashboardUrl = page.url();
+
+  await page.getByText('Compare cities', { exact: true }).click();
+  await page.getByLabel('Search for a city to compare').fill('Potsdam');
+  await page.getByRole('button', { name: 'Search comparison cities' }).click();
+  await page
+    .getByRole('list', { name: 'Comparison city results' })
+    .getByRole('button', { name: /Potsdam/ })
+    .click();
+
+  await expect(page.locator('.weather-comparison-city')).toHaveCount(2);
+  await expect(page.locator('.weather-comparison-delta')).toHaveText(
+    /Potsdam (is .+ than Berlin|and Berlin have the same temperature)\./,
+  );
+  await expect(page.locator('.location-name')).toHaveText('Berlin');
+  await expect(page).toHaveURL(dashboardUrl);
+  expect(weatherRequests).toBe(1);
+
+  await page.getByRole('button', { name: 'Make Potsdam current' }).click();
+  await expect(page.locator('.location-name')).toHaveText('Potsdam');
+  await expect(page).toHaveURL(/lat=52.401/);
+  await expect(page.locator('.weather-comparison-city')).toHaveCount(0);
+  expect(weatherRequests).toBe(2);
+});
+
 test('loads attributed AQI estimates only after the user expands the panel', async ({ page }) => {
   let calls = 0;
   let requestedUrl = '';
@@ -198,6 +710,12 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   const accessToken = 'test-access-token';
   let savedBerlin: typeof paris | undefined;
   let forwardedAuthorization = '';
+  let savedLocationDeleteAuthorization = '';
+  let deletedSavedLocationId = '';
+  let savedLocationPatchAuthorization = '';
+  let patchedSavedLocationName = '';
+  const browserWeatherQueries: string[] = [];
+  const removedSavedLocationIds = new Set<string>();
   let postedLocation: { name: string; latitude: number; longitude: number } | undefined;
   let savedObservation:
     | {
@@ -251,9 +769,33 @@ test('authenticates, saves the current place, and switches to an API-returned sa
       await route.fulfill({ status: 201, json: { location: savedBerlin } });
       return;
     }
-    await route.fulfill({ json: { locations: [paris, ...(savedBerlin ? [savedBerlin] : [])] } });
+    await route.fulfill({
+      json: {
+        locations: [paris, ...(savedBerlin ? [savedBerlin] : [])].filter(
+          (location) => !removedSavedLocationIds.has(location.id),
+        ),
+      },
+    });
+  });
+  await page.route('**/api/v1/locations/*', async (route) => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
+    if (route.request().method() === 'PATCH') {
+      savedLocationPatchAuthorization = route.request().headers().authorization ?? '';
+      const body = route.request().postDataJSON() as { name: string };
+      patchedSavedLocationName = body.name;
+      if (savedBerlin?.id === id) savedBerlin = { ...savedBerlin, name: body.name };
+      const location = id === paris.id ? { ...paris, name: body.name } : savedBerlin;
+      await route.fulfill({ json: { location } });
+      return;
+    }
+    savedLocationDeleteAuthorization = route.request().headers().authorization ?? '';
+    deletedSavedLocationId = id;
+    removedSavedLocationIds.add(deletedSavedLocationId);
+    await route.fulfill({ status: 204, body: '' });
   });
   await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+    const query = new URL(route.request().url()).searchParams;
+    browserWeatherQueries.push(`${query.get('lat')},${query.get('lon')}`);
     await route.fulfill({
       json: {
         location: {
@@ -383,12 +925,46 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   expect(postedLocation).toEqual({ name: 'Berlin', latitude: 52.52, longitude: 13.405 });
   expect(forwardedAuthorization).toBe(`Bearer ${accessToken}`);
 
+  await page.getByRole('button', { name: 'Rename Berlin' }).click();
+  const renameInput = page.getByRole('textbox', { name: 'New name for Berlin' });
+  await renameInput.fill('Berlin Home');
+  await page.getByRole('button', { name: 'Save name' }).click();
+  await expect(page.locator('.saved-location-status')).toContainText('Berlin Home renamed.');
+  expect(savedLocationPatchAuthorization).toBe(`Bearer ${accessToken}`);
+  expect(patchedSavedLocationName).toBe('Berlin Home');
+  await expect(page.getByRole('list', { name: 'Your saved places' })).toContainText('Berlin Home');
+  await page.getByRole('button', { name: 'Move Berlin Home up' }).click();
+  const savedPlaceList = page.getByRole('list', { name: 'Your saved places' });
+  await expect(savedPlaceList.locator('li').first()).toContainText('Berlin Home');
+  await page.getByRole('button', { name: 'Set Berlin Home as default place' }).click();
+  await expect(page.locator('.saved-location-status')).toContainText(
+    'Berlin Home is your default place on this device.',
+  );
+  const placePreferences = await page.evaluate((userId) => {
+    const value = window.localStorage.getItem(`atmos.saved-places.${userId}`);
+    return value ? JSON.parse(value) : undefined;
+  }, user.id);
+  expect(placePreferences.defaultLocationId).toBe(savedBerlin?.id);
+  expect(placePreferences.orderedLocationIds[0]).toBe(savedBerlin?.id);
+
   await page
     .getByRole('list', { name: 'Your saved places' })
-    .getByRole('button', { name: 'Paris' })
+    .getByRole('button', { name: 'Paris', exact: true })
     .click();
   await expect(page.locator('.location-name')).toHaveText('Paris');
   await expect(page).toHaveURL('/');
+
+  await page.getByText('Saved places', { exact: true }).click();
+  await page.getByRole('button', { name: 'Remove Paris from saved places' }).click();
+  const removeConfirmation = page.getByRole('group', { name: 'Remove Paris' });
+  await expect(removeConfirmation).toContainText('Remove Paris?');
+  await removeConfirmation.getByRole('button', { name: 'Remove' }).click();
+  await expect(page.locator('.saved-location-status')).toContainText(
+    'Paris removed from your places.',
+  );
+  await expect(page.getByRole('list', { name: 'Your saved places' })).not.toContainText('Paris');
+  expect(savedLocationDeleteAuthorization).toBe(`Bearer ${accessToken}`);
+  expect(deletedSavedLocationId).toBe(paris.id);
 
   await page.getByText('History', { exact: true }).click();
   await page.getByRole('button', { name: 'Record this observation' }).click();
@@ -402,6 +978,10 @@ test('authenticates, saves the current place, and switches to an API-returned sa
     temperatureC: 20,
   });
   expect(historyAuthorization).toBe(`Bearer ${accessToken}`);
+
+  const historyDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export CSV' }).click();
+  expect((await historyDownload).suggestedFilename()).toBe('atmos-history-paris-30d.csv');
 
   await page.getByRole('button', { name: /Delete observation from/ }).click();
   await expect(page.locator('.weather-history-status')).toContainText('Observation deleted.');
@@ -424,6 +1004,32 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   await page.getByRole('button', { name: /Delete alert/ }).click();
   await expect(page.locator('.in-app-alerts-status')).toContainText('Alert rule deleted');
   await expect(page.getByRole('list', { name: 'Your alert rules' })).toHaveCount(0);
+
+  await page.reload();
+  const restoredPreferences = await page.evaluate(
+    (userId) => ({
+      savedPlaces: window.localStorage.getItem(`atmos.saved-places.${userId}`),
+      authSessionKey: Object.keys(window.localStorage).find((key) => key.includes('auth-token')),
+    }),
+    user.id,
+  );
+  expect(restoredPreferences.savedPlaces).toContain(savedBerlin?.id);
+  expect(restoredPreferences.authSessionKey).toBeTruthy();
+  await page.getByText('Saved places', { exact: true }).click();
+  await expect(page.getByRole('list', { name: 'Your saved places' })).toContainText('Berlin Home');
+  await expect.poll(() => browserWeatherQueries.length).toBeGreaterThan(1);
+  await expect(page.locator('.saved-location-status')).toContainText(
+    'Showing your default place Berlin Home.',
+  );
+  await expect(page.locator('.location-name')).toHaveText('Berlin Home');
+  await expect(page).toHaveURL('/');
+
+  const requestsAfterDefault = browserWeatherQueries.length;
+  await page.goto('/?lat=48.8534&lon=2.3488&timezone=Europe%2FParis&name=Paris&country=France');
+  await expect(page.locator('.location-name')).toHaveText('Paris');
+  await page.getByText('Saved places', { exact: true }).click();
+  await expect(page.locator('.location-name')).toHaveText('Paris');
+  expect(browserWeatherQueries).toHaveLength(requestsAfterDefault);
 });
 
 test('shows email-confirmation guidance after account creation', async ({ page }) => {
@@ -450,4 +1056,109 @@ test('shows email-confirmation guidance after account creation', async ({ page }
     'check your email to confirm it',
   );
   await expect(page.getByText(user.email, { exact: true })).toHaveCount(0);
+});
+
+test('requests a non-enumerating password recovery link and handles an expired recovery session', async ({
+  page,
+}) => {
+  const user = {
+    id: '00000000-0000-4000-8000-000000000012',
+    aud: 'authenticated',
+    role: 'authenticated',
+    email: 'weather@example.test',
+    app_metadata: { provider: 'email', providers: ['email'] },
+    user_metadata: {},
+    created_at: '2026-09-27T10:00:00.000Z',
+  };
+  const accessToken = 'test-recovery-access-token';
+  let recoveryRequest: Record<string, unknown> | undefined;
+  let recoveryRequestUrl = '';
+  let updatedPassword = '';
+  let passwordUpdateAuthorization = '';
+  await page.route('**/auth/v1/recover**', async (route) => {
+    recoveryRequest = route.request().postDataJSON();
+    recoveryRequestUrl = route.request().url();
+    await route.fulfill({ status: 200, json: {} });
+  });
+  await page.route('**/auth/v1/token?grant_type=password', async (route) => {
+    await route.fulfill({
+      json: {
+        access_token: accessToken,
+        token_type: 'bearer',
+        expires_in: 3600,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        refresh_token: 'test-refresh-token',
+        user,
+      },
+    });
+  });
+  await page.route('**/auth/v1/user', async (route) => {
+    if (!['PUT', 'PATCH'].includes(route.request().method())) {
+      await route.continue();
+      return;
+    }
+    updatedPassword = String(route.request().postDataJSON().password ?? '');
+    passwordUpdateAuthorization = route.request().headers().authorization ?? '';
+    await route.fulfill({ json: user });
+  });
+  await page.goto('/');
+  await page.getByText('Saved places', { exact: true }).click();
+  await page.getByLabel('Email').fill('weather@example.test');
+  await page.getByRole('button', { name: 'Forgot password?' }).click();
+
+  await expect(page.locator('.saved-location-status')).toContainText(
+    'If an account exists for this address',
+  );
+  expect(recoveryRequest?.email).toBe('weather@example.test');
+  const recoveryOptions = recoveryRequest?.options as { emailRedirectTo?: string } | undefined;
+  const redirectTarget =
+    new URL(recoveryRequestUrl).searchParams.get('redirect_to') ??
+    (recoveryRequest?.redirect_to as string | undefined) ??
+    (recoveryRequest?.redirectTo as string | undefined) ??
+    recoveryOptions?.emailRedirectTo;
+  expect(redirectTarget).toBe('http://127.0.0.1:3000/auth/update-password');
+
+  await page.goto('/auth/update-password');
+  await expect(page.getByRole('heading', { name: 'Set a new password' })).toBeVisible();
+  await expect(page.getByRole('status')).toContainText('recovery link is missing or expired');
+  await expect(page.getByLabel('New password', { exact: true })).toHaveCount(0);
+
+  await page.goto('/');
+  await page.getByText('Saved places', { exact: true }).click();
+  await page.getByLabel('Email').fill(user.email);
+  await page.getByLabel('Password').fill('safe-example-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByText(user.email, { exact: true })).toBeVisible();
+  await page.goto('/auth/update-password');
+  await page.getByLabel('New password', { exact: true }).fill('new-safe-password-123');
+  await page.getByLabel('Confirm new password', { exact: true }).fill('new-safe-password-123');
+  await page.getByRole('button', { name: 'Update password' }).click();
+  await expect(page.locator('.password-recovery-status')).toContainText(
+    'Your password has been updated',
+  );
+  expect(updatedPassword).toBe('new-safe-password-123');
+  expect(passwordUpdateAuthorization).toBe(`Bearer ${accessToken}`);
+});
+
+test('serves a standalone web manifest and an offline worker that bypasses private APIs', async ({
+  request,
+}) => {
+  const manifestResponse = await request.get('/manifest.webmanifest');
+  expect(manifestResponse.ok()).toBe(true);
+  const manifest = await manifestResponse.json();
+  expect(manifest).toMatchObject({
+    name: 'Atmos Weather Intelligence',
+    start_url: '/',
+    display: 'standalone',
+  });
+  expect(manifest.icons).toContainEqual(
+    expect.objectContaining({ src: '/icon.svg', sizes: 'any', type: 'image/svg+xml' }),
+  );
+
+  const serviceWorkerResponse = await request.get('/sw.js');
+  expect(serviceWorkerResponse.ok()).toBe(true);
+  const serviceWorker = await serviceWorkerResponse.text();
+  expect(serviceWorker).toContain("requestUrl.pathname.startsWith('/api/')");
+  expect(serviceWorker).toContain("requestUrl.pathname.startsWith('/auth/')");
+  expect(serviceWorker).toContain("requestUrl.pathname === '/'");
 });

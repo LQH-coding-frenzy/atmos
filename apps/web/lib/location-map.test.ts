@@ -26,6 +26,11 @@ describe('createLocationMapData', () => {
     expect(data.center).toEqual([13.405, 52.52]);
     expect(data.point.geometry.coordinates).toEqual([13.405, 52.52]);
     expect(data.point.properties.condition).toBe('partly-cloudy');
+    expect(data.point.properties).toMatchObject({
+      class: 'city',
+      name: 'Berlin',
+      country: 'Germany',
+    });
     expect(data.markerColor).toBe('#cde8ed');
   });
 });
