@@ -68,6 +68,7 @@ export function AirQualityPanel({ gatewayOrigin, location }: AirQualityPanelProp
   return (
     <details
       className="air-quality-panel"
+      name="dashboard-tools"
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
       <summary>

@@ -11,10 +11,11 @@ import {
 } from '@atmos/contracts';
 import { formatTemperature } from '@atmos/domain';
 import type { Session } from '@supabase/supabase-js';
-import { History, Trash2 } from 'lucide-react';
+import { Download, History, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabaseBrowserClient } from '../lib/supabase-browser';
 import { versionAffinityHeaders } from '../lib/version-affinity';
+import { weatherHistoryToCsv } from '../lib/weather-history-export';
 
 type HistoryDays = 7 | 30 | 90;
 
@@ -249,6 +250,24 @@ export function WeatherHistoryPanel({
     }
   }
 
+  function exportHistory() {
+    if (snapshots.length === 0) return;
+    const safeLocationName = location.name
+      .toLocaleLowerCase('en-US')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    const blob = new Blob(['\uFEFF', weatherHistoryToCsv(snapshots)], {
+      type: 'text/csv;charset=utf-8',
+    });
+    const downloadUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `atmos-history-${safeLocationName || 'location'}-${days}d.csv`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1_000);
+    setMessage(`Downloaded ${snapshots.length} recorded observations as CSV.`);
+  }
+
   const alreadyRecorded = snapshots.some((snapshot) => snapshot.observed_at === current.observedAt);
   const points = historyChartPoints(snapshots, units);
   const chartDescription = snapshots
@@ -261,7 +280,7 @@ export function WeatherHistoryPanel({
     .join(', ');
 
   return (
-    <details className="weather-history-panel">
+    <details className="weather-history-panel" name="dashboard-tools">
       <summary>
         <History size={17} aria-hidden="true" />
         <span>History</span>
@@ -340,6 +359,14 @@ export function WeatherHistoryPanel({
                 <p className="sr-only" id="weather-history-chart-description">
                   {chartDescription}
                 </p>
+                <button
+                  className="export-weather-history"
+                  type="button"
+                  onClick={exportHistory}
+                  disabled={loading}
+                >
+                  <Download size={15} aria-hidden="true" /> Export CSV
+                </button>
                 <ol className="weather-history-observations" aria-label="Recorded observations">
                   {snapshots.map((snapshot) => {
                     const observedTime = formatObservedTime(

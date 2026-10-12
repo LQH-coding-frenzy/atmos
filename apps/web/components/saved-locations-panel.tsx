@@ -7,15 +7,38 @@ import {
   type SavedLocation,
 } from '@atmos/contracts';
 import type { Session } from '@supabase/supabase-js';
-import { Bookmark, LogIn, LogOut } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  Bookmark,
+  KeyRound,
+  LogIn,
+  LogOut,
+  Pencil,
+  Save,
+  Star,
+  Trash2,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabaseBrowserClient } from '../lib/supabase-browser';
+import {
+  emptySavedPlacePreferences,
+  moveSavedLocation,
+  orderSavedLocations,
+  readSavedPlacePreferences,
+  writeSavedPlacePreferences,
+  type SavedPlacePreferences,
+} from '../lib/saved-place-preferences';
 import { versionAffinityHeaders } from '../lib/version-affinity';
 
 type SavedLocationsPanelProps = {
   gatewayOrigin: string;
   currentLocation: LocationSearchResult;
-  onSelect: (location: LocationSearchResult, shareInUrl?: boolean) => Promise<boolean>;
+  initialLocationExplicit: boolean;
+  onSelect: (
+    location: LocationSearchResult,
+    urlBehavior?: 'push' | 'clear' | 'preserve',
+  ) => Promise<boolean>;
 };
 
 type AuthMode = 'sign-in' | 'sign-up';
@@ -38,11 +61,15 @@ async function fetchSavedLocations(gatewayOrigin: string, accessToken: string) {
 export function SavedLocationsPanel({
   gatewayOrigin,
   currentLocation,
+  initialLocationExplicit,
   onSelect,
 }: SavedLocationsPanelProps) {
   const client = useMemo(() => getSupabaseBrowserClient(), []);
   const panel = useRef<HTMLDetailsElement>(null);
   const locationRequestGeneration = useRef(0);
+  const appliedDefaultForUser = useRef<string | null>(null);
+  const selectionRef = useRef({ currentLocation, onSelect });
+  selectionRef.current = { currentLocation, onSelect };
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('sign-in');
@@ -51,6 +78,14 @@ export function SavedLocationsPanel({
   const [busy, setBusy] = useState(false);
   const [locations, setLocations] = useState<SavedLocation[]>([]);
   const [locationsLoading, setLocationsLoading] = useState(false);
+  const [locationsUnavailable, setLocationsUnavailable] = useState(false);
+  const [placePreferences, setPlacePreferences] = useState<SavedPlacePreferences>({
+    ...emptySavedPlacePreferences,
+  });
+  const [removingId, setRemovingId] = useState<string>();
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string>();
+  const [renamingId, setRenamingId] = useState<string>();
+  const [renameDraft, setRenameDraft] = useState('');
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -79,6 +114,20 @@ export function SavedLocationsPanel({
     };
   }, [client]);
 
+  const userId = session?.user.id ?? null;
+  useEffect(() => {
+    appliedDefaultForUser.current = null;
+    if (!userId) {
+      setPlacePreferences({ ...emptySavedPlacePreferences });
+      return;
+    }
+    try {
+      setPlacePreferences(readSavedPlacePreferences(window.localStorage, userId));
+    } catch {
+      setPlacePreferences({ ...emptySavedPlacePreferences });
+    }
+  }, [userId]);
+
   const refreshLocations = useCallback(async () => {
     if (!session) return false;
     const requestGeneration = ++locationRequestGeneration.current;
@@ -87,11 +136,56 @@ export function SavedLocationsPanel({
       const nextLocations = await fetchSavedLocations(gatewayOrigin, session.access_token);
       if (requestGeneration !== locationRequestGeneration.current) return false;
       setLocations(nextLocations);
+      setLocationsUnavailable(false);
       setMessage('');
+      if (!initialLocationExplicit && appliedDefaultForUser.current !== session.user.id) {
+        appliedDefaultForUser.current = session.user.id;
+        let defaultLocationId: string | undefined;
+        try {
+          defaultLocationId = readSavedPlacePreferences(
+            window.localStorage,
+            session.user.id,
+          ).defaultLocationId;
+        } catch {
+          defaultLocationId = undefined;
+        }
+        const defaultLocation = nextLocations.find((location) => location.id === defaultLocationId);
+        const selectedLocation = selectionRef.current.currentLocation;
+        if (
+          defaultLocation &&
+          (defaultLocation.latitude !== selectedLocation.latitude ||
+            defaultLocation.longitude !== selectedLocation.longitude ||
+            defaultLocation.name !== selectedLocation.name)
+        ) {
+          setMessage(`Loading your default place ${defaultLocation.name}…`);
+          void selectionRef.current
+            .onSelect(
+              {
+                id: defaultLocation.id,
+                name: defaultLocation.name,
+                country: 'Saved place',
+                latitude: defaultLocation.latitude,
+                longitude: defaultLocation.longitude,
+                timezone: 'auto',
+              },
+              'preserve',
+            )
+            .then((loaded) => {
+              setMessage(
+                loaded
+                  ? `Showing your default place ${defaultLocation.name}.`
+                  : `Your default place ${defaultLocation.name} could not be loaded.`,
+              );
+            });
+        }
+      } else if (appliedDefaultForUser.current === null) {
+        appliedDefaultForUser.current = session.user.id;
+      }
       return true;
     } catch {
       if (requestGeneration !== locationRequestGeneration.current) return false;
       setLocations([]);
+      setLocationsUnavailable(true);
       setMessage('Saved places are unavailable right now. Please try again.');
       return false;
     } finally {
@@ -106,11 +200,17 @@ export function SavedLocationsPanel({
     } else {
       setLocations([]);
       setLocationsLoading(false);
+      setLocationsUnavailable(false);
     }
     return () => {
       locationRequestGeneration.current += 1;
     };
   }, [refreshLocations, session]);
+
+  const orderedLocations = useMemo(
+    () => orderSavedLocations(locations, placePreferences),
+    [locations, placePreferences],
+  );
 
   async function submitAuth(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -165,6 +265,66 @@ export function SavedLocationsPanel({
     setMessage('Signed out.');
   }
 
+  function updatePlacePreferences(next: SavedPlacePreferences) {
+    setPlacePreferences(next);
+    if (!session) return;
+    try {
+      writeSavedPlacePreferences(window.localStorage, session.user.id, next);
+    } catch {
+      setMessage('This device could not save the place-order preference.');
+    }
+  }
+
+  function setDefaultPlace(location: SavedLocation) {
+    const defaultLocationId =
+      placePreferences.defaultLocationId === location.id ? undefined : location.id;
+    const nextPreferences: SavedPlacePreferences = {
+      ...placePreferences,
+      orderedLocationIds: orderedLocations.map((item) => item.id),
+    };
+    if (defaultLocationId) nextPreferences.defaultLocationId = defaultLocationId;
+    else delete nextPreferences.defaultLocationId;
+    updatePlacePreferences(nextPreferences);
+    setMessage(
+      defaultLocationId
+        ? `${location.name} is your default place on this device.`
+        : `Default place cleared on this device.`,
+    );
+  }
+
+  function moveSavedPlace(location: SavedLocation, direction: -1 | 1) {
+    const orderedIds = moveSavedLocation(
+      orderedLocations.map((item) => item.id),
+      location.id,
+      direction,
+    );
+    if (orderedIds.every((id, index) => id === orderedLocations[index]?.id)) return;
+    updatePlacePreferences({ ...placePreferences, orderedLocationIds: orderedIds });
+    setMessage(`${location.name} moved ${direction < 0 ? 'up' : 'down'}.`);
+  }
+
+  async function requestPasswordReset() {
+    if (!client) return;
+    const resetEmail = email.trim();
+    if (!resetEmail) {
+      setMessage('Enter your email address first.');
+      return;
+    }
+    setBusy(true);
+    setMessage('');
+    try {
+      const { error } = await client.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: new URL('/auth/update-password', window.location.origin).href,
+      });
+      if (error) throw error;
+      setMessage('If an account exists for this address, a password reset link has been sent.');
+    } catch {
+      setMessage('Password recovery is unavailable right now. Please try again later.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveCurrentLocation() {
     if (!session) return;
     if (
@@ -216,13 +376,91 @@ export function SavedLocationsPanel({
         longitude: location.longitude,
         timezone: 'auto',
       },
-      false,
+      'clear',
     );
     if (selected) {
       setMessage(`Showing weather for ${location.name}.`);
       if (panel.current) panel.current.open = false;
     } else {
       setMessage(`Weather for ${location.name} could not be loaded. Please try again.`);
+    }
+  }
+
+  async function removeSavedLocation(location: SavedLocation) {
+    if (!session) return;
+    setRemovingId(location.id);
+    setMessage('');
+    try {
+      const response = await fetch(
+        new URL(`/api/v1/locations/${encodeURIComponent(location.id)}`, gatewayOrigin),
+        {
+          method: 'DELETE',
+          headers: {
+            ...versionAffinityHeaders(),
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        },
+      );
+      if (!response.ok) throw new Error('Remove failed');
+      locationRequestGeneration.current += 1;
+      setLocations((current) => current.filter((item) => item.id !== location.id));
+      const nextPreferences: SavedPlacePreferences = {
+        ...placePreferences,
+        orderedLocationIds: placePreferences.orderedLocationIds.filter((id) => id !== location.id),
+      };
+      if (nextPreferences.defaultLocationId === location.id) {
+        delete nextPreferences.defaultLocationId;
+      }
+      updatePlacePreferences(nextPreferences);
+      setConfirmRemoveId(undefined);
+      setMessage(`${location.name} removed from your places.`);
+    } catch {
+      setMessage(`${location.name} could not be removed. Please try again.`);
+    } finally {
+      setRemovingId(undefined);
+    }
+  }
+
+  async function renameSavedLocation(
+    event: React.FormEvent<HTMLFormElement>,
+    location: SavedLocation,
+  ) {
+    event.preventDefault();
+    if (!session) return;
+    const name = renameDraft.trim();
+    if (name.length < 1 || name.length > 120) {
+      setMessage('Choose a place name between 1 and 120 characters.');
+      return;
+    }
+    setBusy(true);
+    setMessage('');
+    try {
+      const response = await fetch(
+        new URL(`/api/v1/locations/${encodeURIComponent(location.id)}`, gatewayOrigin),
+        {
+          method: 'PATCH',
+          headers: {
+            ...versionAffinityHeaders(),
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ name }),
+        },
+      );
+      const parsed = savedLocationResponseSchema.safeParse(
+        await response.json().catch(() => undefined),
+      );
+      if (!response.ok || !parsed.success) throw new Error('Rename failed');
+      setLocations((current) =>
+        current.map((item) => (item.id === location.id ? parsed.data.location : item)),
+      );
+      setRenamingId(undefined);
+      setRenameDraft('');
+      setMessage(`${parsed.data.location.name} renamed.`);
+    } catch {
+      setMessage(`${location.name} could not be renamed. Please try again.`);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -233,7 +471,7 @@ export function SavedLocationsPanel({
   );
 
   return (
-    <details className="saved-locations-panel" ref={panel}>
+    <details className="saved-locations-panel" name="dashboard-tools" ref={panel}>
       <summary aria-controls="saved-locations-content">
         <Bookmark size={17} aria-hidden="true" />
         <span>Saved places</span>
@@ -285,6 +523,16 @@ export function SavedLocationsPanel({
                 ? 'Need an account? Create one'
                 : 'Already registered? Sign in'}
             </button>
+            {authMode === 'sign-in' ? (
+              <button
+                className="saved-location-mode-toggle"
+                type="button"
+                onClick={() => void requestPasswordReset()}
+                disabled={busy}
+              >
+                <KeyRound size={14} aria-hidden="true" /> Forgot password?
+              </button>
+            ) : null}
           </>
         ) : null}
         {authReady && session ? (
@@ -306,20 +554,170 @@ export function SavedLocationsPanel({
             {locationsLoading ? <p role="status">Loading saved places…</p> : null}
             {locations.length > 0 ? (
               <ul aria-label="Your saved places">
-                {locations.map((location) => (
+                {orderedLocations.map((location, index) => (
                   <li key={location.id}>
-                    <button
-                      type="button"
-                      onClick={() => void selectSavedLocation(location)}
-                      disabled={busy}
-                    >
-                      {location.name}
-                    </button>
+                    <div className="saved-location-row">
+                      <button
+                        type="button"
+                        onClick={() => void selectSavedLocation(location)}
+                        disabled={
+                          busy ||
+                          removingId !== undefined ||
+                          renamingId !== undefined ||
+                          locationsLoading
+                        }
+                      >
+                        {location.name}
+                      </button>
+                      <div
+                        className="saved-location-actions"
+                        role="group"
+                        aria-label={`Manage ${location.name}`}
+                      >
+                        <button
+                          className="saved-location-default"
+                          type="button"
+                          onClick={() => setDefaultPlace(location)}
+                          disabled={busy || removingId !== undefined || renamingId !== undefined}
+                          aria-label={
+                            placePreferences.defaultLocationId === location.id
+                              ? `Clear default place ${location.name}`
+                              : `Set ${location.name} as default place`
+                          }
+                          aria-pressed={placePreferences.defaultLocationId === location.id}
+                          title={
+                            placePreferences.defaultLocationId === location.id
+                              ? 'Default place on this device'
+                              : 'Set as default on this device'
+                          }
+                        >
+                          <Star
+                            size={15}
+                            fill={
+                              placePreferences.defaultLocationId === location.id
+                                ? 'currentColor'
+                                : 'none'
+                            }
+                            aria-hidden="true"
+                          />
+                        </button>
+                        <button
+                          className="move-saved-location"
+                          type="button"
+                          onClick={() => moveSavedPlace(location, -1)}
+                          disabled={
+                            busy ||
+                            removingId !== undefined ||
+                            renamingId !== undefined ||
+                            index === 0
+                          }
+                          aria-label={`Move ${location.name} up`}
+                        >
+                          <ArrowUp size={14} aria-hidden="true" />
+                        </button>
+                        <button
+                          className="move-saved-location"
+                          type="button"
+                          onClick={() => moveSavedPlace(location, 1)}
+                          disabled={
+                            busy ||
+                            removingId !== undefined ||
+                            renamingId !== undefined ||
+                            index === orderedLocations.length - 1
+                          }
+                          aria-label={`Move ${location.name} down`}
+                        >
+                          <ArrowDown size={14} aria-hidden="true" />
+                        </button>
+                        <button
+                          className="edit-saved-location"
+                          type="button"
+                          onClick={() => {
+                            setRenamingId(location.id);
+                            setRenameDraft(location.name);
+                            setConfirmRemoveId(undefined);
+                            setMessage('');
+                          }}
+                          disabled={busy || removingId !== undefined || renamingId !== undefined}
+                          aria-label={`Rename ${location.name}`}
+                        >
+                          <Pencil size={14} aria-hidden="true" />
+                        </button>
+                        <button
+                          className="remove-saved-location"
+                          type="button"
+                          onClick={() => {
+                            setConfirmRemoveId(location.id);
+                            setMessage('');
+                          }}
+                          disabled={busy || removingId !== undefined || renamingId !== undefined}
+                          aria-label={`Remove ${location.name} from saved places`}
+                        >
+                          <Trash2 size={15} aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
+                    {renamingId === location.id ? (
+                      <form
+                        className="saved-location-rename-form"
+                        onSubmit={(event) => void renameSavedLocation(event, location)}
+                      >
+                        <label className="sr-only" htmlFor={`rename-location-${location.id}`}>
+                          New name for {location.name}
+                        </label>
+                        <input
+                          id={`rename-location-${location.id}`}
+                          type="text"
+                          minLength={1}
+                          maxLength={120}
+                          required
+                          autoFocus
+                          value={renameDraft}
+                          onChange={(event) => setRenameDraft(event.target.value)}
+                        />
+                        <button type="submit" disabled={busy}>
+                          <Save size={14} aria-hidden="true" /> Save name
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRenamingId(undefined);
+                            setRenameDraft('');
+                          }}
+                          disabled={busy}
+                        >
+                          Cancel
+                        </button>
+                      </form>
+                    ) : null}
+                    {confirmRemoveId === location.id ? (
+                      <div
+                        className="saved-location-confirm"
+                        role="group"
+                        aria-label={`Remove ${location.name}`}
+                      >
+                        <span>Remove {location.name}?</span>
+                        <button
+                          type="button"
+                          onClick={() => void removeSavedLocation(location)}
+                          disabled={removingId === location.id}
+                        >
+                          {removingId === location.id ? 'Removing…' : 'Remove'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmRemoveId(undefined)}
+                          disabled={removingId === location.id}
+                        >
+                          Keep
+                        </button>
+                      </div>
+                    ) : null}
                   </li>
                 ))}
               </ul>
             ) : null}
-            {!locationsLoading && locations.length === 0 ? (
+            {!locationsLoading && locations.length === 0 && !locationsUnavailable ? (
               <p className="saved-locations-empty">Save this location to find it here later.</p>
             ) : null}
           </>

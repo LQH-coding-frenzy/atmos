@@ -1,0 +1,81 @@
+task:
+  id: WEB-010
+  title: Expose extra current-condition metadata on demand
+  status: DONE
+  objective: Make the existing feels-like temperature and pressure available through a compact disclosure without crowding the default current-weather card.
+
+  depends_on: [WEB-003, WX-004]
+
+  external_policy_checks: [reuse current dashboard contract fields; no additional request]
+
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: This is a progressive-disclosure UI over existing current-weather data.
+
+  scope:
+    include:
+      - apps/web/components/dashboard.tsx
+      - apps/web/app/globals.css
+      - tests/e2e/dashboard.spec.ts
+      - .agent/status.yaml
+      - .agent/tasks/web-010.yaml
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/evidence/web-010/2026-10-11.md
+    exclude:
+      - New weather contract fields, API routes, or provider requests
+      - Expanding the default dashboard's visible metric count
+
+  inputs:
+    required_config: [existing current.apparentTemperatureC and current.pressureHpa fields]
+    required_secrets: []
+
+  outputs:
+    files:
+      - apps/web/components/dashboard.tsx
+      - apps/web/app/globals.css
+      - tests/e2e/dashboard.spec.ts
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web]
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Remove the details disclosure; primary current temperature, humidity, and wind stay unchanged.
+
+  validation:
+    commands:
+      - corepack pnpm typecheck
+      - corepack pnpm lint
+      - corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts --workers=1
+      - corepack pnpm --filter @atmos/web build
+    expected:
+      - The default current-weather card retains its existing primary temperature, humidity, and wind hierarchy.
+      - A keyboard-accessible disclosure shows feels-like temperature in the selected unit and pressure in hPa.
+      - Changing the selected city updates these values from the existing dashboard response without a new request.
+
+  security_checks:
+    - Display contract values as React text and keep existing provider attribution/freshness status.
+    - Add no API calls, telemetry, or persisted user data.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+
+  telemetry:
+    metrics: [none added]
+    logs: [none added]
+    traces: [none added]
+
+  evidence:
+    - docs/evidence/web-010/2026-10-11.md
+    - pull request checks
+
+  rollback:
+    strategy: Revert the local current-weather details disclosure; no API or data behavior changes.
+
+  human_approval:
+    required: false
+    reason: This is a small local display improvement using existing weather values.

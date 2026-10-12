@@ -1,0 +1,83 @@
+task:
+  id: WEB-007
+  title: Expand hourly and daily forecast details
+  status: DONE
+  objective: Keep the dashboard summary compact while making each hourly and daily forecast entry keyboard-accessible and expandable for its available weather metadata.
+
+  depends_on: [WEB-006, FEAT-CHART-001, WEB-002]
+
+  external_policy_checks: [reuse the existing cached dashboard response; no new provider requests]
+
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Expanded details use weather fields already delivered to the dashboard and remain local component state.
+
+  scope:
+    include:
+      - apps/web/components/dashboard.tsx
+      - apps/web/app/globals.css
+      - tests/e2e/dashboard.spec.ts
+      - .agent/status.yaml
+      - .agent/tasks/web-007.yaml
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/evidence/web-007/2026-10-11.md
+    exclude:
+      - New weather fields, provider routes, or increased request frequency
+      - Forecast model changes or chart scoring changes
+      - Persistence, polling, scheduled refresh, or alerts
+
+  inputs:
+    required_config: [existing dashboard hourly and daily forecast arrays]
+    required_secrets: []
+
+  outputs:
+    files:
+      - apps/web/components/dashboard.tsx
+      - apps/web/app/globals.css
+      - tests/e2e/dashboard.spec.ts
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web]
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert the local disclosure state and styles; no API or data compatibility changes exist.
+
+  validation:
+    commands:
+      - corepack pnpm typecheck
+      - corepack pnpm lint
+      - corepack pnpm --filter @atmos/web build
+      - corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts --workers=1
+    expected:
+      - Hour controls toggle their details with mouse, Enter, and Space; assistive labels report expanded/collapsed state.
+      - Daily controls disclose the date's condition, high/low, and precipitation probability without adding data requests.
+      - Changing selected city clears any expanded forecast detail.
+      - Mobile forecast rows remain touch-operable and avoid horizontal page overflow.
+
+  security_checks:
+    - Render normalized contract values as React text; do not inject provider strings as HTML.
+    - Do not persist expansion state or alter provider/network request behavior.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+
+  telemetry:
+    metrics: [none added]
+    logs: [none added]
+    traces: [none added]
+
+  evidence:
+    - docs/evidence/web-007/2026-10-11.md
+    - pull request checks
+
+  rollback:
+    strategy: Revert the detail disclosures/styles; the compact forecast cards and APIs remain.
+
+  human_approval:
+    required: false
+    reason: This is a local UI enhancement using already-delivered forecast data.

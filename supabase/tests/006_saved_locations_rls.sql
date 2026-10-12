@@ -1,5 +1,5 @@
 begin;
-select plan(7);
+select plan(11);
 
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, raw_app_meta_data, raw_user_meta_data, created_at, updated_at) values
   ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000041', 'authenticated', 'authenticated', 'location-a@example.test', '', '{}', '{}', now(), now()),
@@ -17,7 +17,11 @@ select is_empty($$select * from public.saved_locations where id = '50000000-0000
 select lives_ok($$insert into public.saved_locations (user_id, name, latitude, longitude) values ('00000000-0000-0000-0000-000000000041', 'C', 3, 3)$$, 'owner can insert');
 select throws_ok($$insert into public.saved_locations (user_id, name, latitude, longitude) values ('00000000-0000-0000-0000-000000000042', 'D', 4, 4)$$, '42501', null, 'cross-user insert denied');
 select lives_ok($$update public.saved_locations set name = 'nope' where id = '50000000-0000-0000-0000-000000000002'$$, 'cross-user update is a no-op');
+select lives_ok($$update public.saved_locations set name = 'A renamed' where id = '50000000-0000-0000-0000-000000000001'$$, 'owner can rename own location');
+select is((select name from public.saved_locations where id = '50000000-0000-0000-0000-000000000001'), 'A renamed', 'owner rename persists');
+select lives_ok($$delete from public.saved_locations where id = '50000000-0000-0000-0000-000000000001'$$, 'owner can delete own location');
 reset role;
 select is((select name from public.saved_locations where id = '50000000-0000-0000-0000-000000000002'), 'B', 'cross-user update leaves row unchanged');
+select is_empty($$select * from public.saved_locations where id = '50000000-0000-0000-0000-000000000001'$$, 'owner delete removes saved location');
 select * from finish();
 rollback;

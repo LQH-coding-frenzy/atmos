@@ -1,0 +1,96 @@
+task:
+  id: FEAT-CMP-002
+  title: Compare current weather with another live city
+  status: DONE
+  objective: Let users search for a second city and compare its current weather and next-hour rain chance with the selected dashboard city using the existing gateway.
+
+  depends_on: [FEAT-CMP-001, WEB-002, WEB-003, EDGE-004, WX-004]
+
+  external_policy_checks:
+    [reuse existing Open-Meteo gateway contract and attribution; no new vendor or credentials]
+
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Comparison is an explicit client-side read of the existing public weather dashboard endpoint; the gateway retains validation and caching.
+
+  scope:
+    include:
+      - apps/web/components/dashboard.tsx
+      - apps/web/components/weather-comparison-panel.tsx
+      - apps/web/lib/weather-comparison.ts
+      - apps/web/lib/weather-comparison.test.ts
+      - apps/web/app/globals.css
+      - tests/e2e/dashboard.spec.ts
+      - docs/evidence/feat-cmp-002/2026-10-11.md
+      - .agent/status.yaml
+      - .agent/tasks/feat-cmp-002.yaml
+      - docs/architecture/atmos-devsecops-master-plan.md
+    exclude:
+      - Database schema or persistence for comparison history
+      - Automatic polling, scheduled comparisons, or alerts
+      - New weather providers or backend routes
+      - Changes to existing city search contract or weather gateway caching
+
+  inputs:
+    required_config:
+      - Existing location search endpoint
+      - Existing public weather dashboard endpoint
+    required_secrets: []
+
+  outputs:
+    files:
+      - apps/web/components/dashboard.tsx
+      - apps/web/components/weather-comparison-panel.tsx
+      - apps/web/app/globals.css
+      - apps/web/lib/weather-comparison.ts
+      - apps/web/lib/weather-comparison.test.ts
+      - tests/e2e/dashboard.spec.ts
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web]
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert the comparison panel and helper; no persistent data or backend API changes exist.
+
+  validation:
+    commands:
+      - corepack pnpm exec vitest run apps/web/lib/weather-comparison.test.ts
+      - corepack pnpm typecheck
+      - corepack pnpm lint
+      - corepack pnpm --filter @atmos/web build
+      - corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts --workers=1
+    expected:
+      - Comparison city search distinguishes empty results, unavailable search, and failed weather fetches.
+      - Comparison weather is fetched only after explicit city selection; the main dashboard city and URL remain unchanged until user action explicitly switches to it.
+      - Side-by-side current temperature, condition, humidity, wind, and next-hour rain chance use normalized dashboard contracts and selected display units.
+      - Temperature deltas are calculated correctly for Celsius and Fahrenheit, with no offset applied to differences.
+      - Only one comparison-city request is active at a time; previous requests are aborted or ignored.
+
+  security_checks:
+    - Use the existing public gateway and validated LocationSearchResult coordinates; do not call weather providers directly from the browser.
+    - Do not persist city comparison history, account data, or pointer-derived coordinates.
+    - Display existing Open-Meteo attribution and freshness metadata; never fabricate comparison values on errors.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+
+  telemetry:
+    metrics: [existing gateway cache/provider metrics only]
+    logs: [none added]
+    traces: [existing gateway weather request traces]
+
+  evidence:
+    - docs/evidence/feat-cmp-002/2026-10-11.md
+    - pull request checks
+
+  rollback:
+    strategy: Revert the comparison UI and helper; the task adds no API, schema, or persisted state.
+
+  human_approval:
+    required: false
+    reason: This is a bounded client-only feature using the existing approved Open-Meteo gateway and quota controls.

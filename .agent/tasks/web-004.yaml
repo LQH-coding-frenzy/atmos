@@ -1,0 +1,98 @@
+task:
+  id: WEB-004
+  title: Complete saved-place and password-recovery controls
+  status: DONE
+  objective: Let signed-in users rename their saved places and recover an account password through Supabase Auth without changing database policy or schema.
+
+  depends_on: [WEB-003, FEAT-LOC-UI-001, AUTH-001, RLS-002, ROUTE-001]
+
+  external_policy_checks:
+    [
+      use existing Supabase Auth and the existing owner-only saved_locations UPDATE policy; no new vendor,
+      secret,
+      or redirect origin,
+    ]
+
+  runtime_placement:
+    allowed: [vercel-nextjs, supabase-edge-function]
+    selected: vercel-nextjs
+    reason: Recovery uses the existing Supabase browser Auth client; saved-place rename is a user-JWT-authenticated call through the existing Supabase Edge Function and RLS.
+
+  scope:
+    include:
+      - apps/web/app/auth/update-password/page.tsx
+      - apps/web/app/globals.css
+      - apps/web/components/saved-locations-panel.tsx
+      - supabase/functions/api-v1/index.ts
+      - supabase/tests/006_saved_locations_rls.sql
+      - tests/e2e/dashboard.spec.ts
+      - .agent/status.yaml
+      - .agent/tasks/web-004.yaml
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/evidence/web-004/2026-10-11.md
+    exclude:
+      - Database schema, GRANT, or RLS policy changes
+      - Account deletion, email-address changes, OAuth providers, or new email delivery vendors
+      - Password storage, logging, or telemetry outside Supabase Auth
+
+  inputs:
+    required_config:
+      - Existing Supabase Auth browser configuration
+      - Existing saved_locations UPDATE grant/policy and versioned api-v1 route
+    required_secrets: []
+
+  outputs:
+    files:
+      - apps/web/app/auth/update-password/page.tsx
+      - apps/web/components/saved-locations-panel.tsx
+      - supabase/functions/api-v1/index.ts
+      - supabase/tests/006_saved_locations_rls.sql
+      - tests/e2e/dashboard.spec.ts
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web, supabase-api-v1]
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert the additive PATCH route and auth pages; existing saved-place rows and Auth sessions remain compatible.
+
+  validation:
+    commands:
+      - corepack pnpm exec supabase test db --local supabase/tests/006_saved_locations_rls.sql
+      - corepack pnpm typecheck
+      - corepack pnpm lint
+      - corepack pnpm --filter @atmos/web build
+      - corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts --workers=1
+    expected:
+      - A user can rename only their own saved places; malformed names/IDs are rejected, and other users' rows remain unchanged under RLS.
+      - Password-reset requests respond with non-enumerating guidance and target the same origin's `/auth/update-password` route.
+      - A recovery session can set a validated new password; expired/missing sessions display a safe retry path.
+      - Auth tokens, password values, and email addresses are not logged or exposed in error messages.
+
+  security_checks:
+    - Use the existing Supabase browser publishable key and user JWT; never use a service-role key.
+    - RLS remains enabled and unchanged; API updates filter by authenticated user ID as defense in depth.
+    - Do not reveal whether an email address has an account during recovery.
+    - Enforce password confirmation, minimum length, and a 128-character maximum client-side; Supabase Auth remains authoritative.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+
+  telemetry:
+    metrics: [existing authenticated API metrics only]
+    logs: [none added; no email/password/session values logged]
+    traces: [existing authenticated API traces]
+
+  evidence:
+    - docs/evidence/web-004/2026-10-11.md
+    - pull request checks
+
+  rollback:
+    strategy: Revert UI/API additions; no migration or policy change requires data rollback.
+
+  human_approval:
+    required: false
+    reason: The task uses existing Supabase Auth, API routing, grants, RLS policies, and approved account UX.

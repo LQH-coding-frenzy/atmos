@@ -1,0 +1,101 @@
+task:
+  id: WEB-006
+  title: Add installable offline dashboard recovery
+  status: DONE
+  objective: Make Atmos installable and preserve the last successful non-device city dashboard locally for a clear, stale offline experience.
+
+  depends_on: [WEB-005, WEB-003, WEB-002]
+
+  external_policy_checks:
+    [none; use browser platform PWA/service-worker APIs and same-origin assets only]
+
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Installability, app-shell caching, connectivity state, and the last-known public city snapshot belong in the browser; no new backend route or worker service is required.
+
+  scope:
+    include:
+      - apps/web/app/globals.css
+      - apps/web/app/layout.tsx
+      - apps/web/app/manifest.ts
+      - apps/web/components/dashboard.tsx
+      - apps/web/components/pwa-registration.tsx
+      - apps/web/lib/offline-dashboard.ts
+      - apps/web/lib/offline-dashboard.test.ts
+      - apps/web/public/sw.js
+      - tests/e2e/dashboard.spec.ts
+      - eslint.config.mjs
+      - .agent/status.yaml
+      - .agent/tasks/web-006.yaml
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/evidence/web-006/2026-10-11.md
+    exclude:
+      - API/Auth response caching or authenticated user data
+      - Device-geolocation snapshot persistence
+      - Background sync, push/email notifications, or scheduled refresh
+      - New providers, paid services, or server-side storage
+
+  inputs:
+    required_config:
+      - Existing same-origin Next.js app shell and icon.svg
+      - Existing public dashboard contract for schema-validated local snapshot storage
+    required_secrets: []
+
+  outputs:
+    files:
+      - apps/web/app/manifest.ts
+      - apps/web/public/sw.js
+      - apps/web/components/pwa-registration.tsx
+      - apps/web/lib/offline-dashboard.ts
+      - apps/web/components/dashboard.tsx
+      - tests/e2e/dashboard.spec.ts
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web]
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert the manifest/service worker and client snapshot helper; remove the WEB-006 cache name to clear only the app-shell cache.
+
+  validation:
+    commands:
+      - corepack pnpm exec vitest run apps/web/lib/offline-dashboard.test.ts
+      - corepack pnpm typecheck
+      - corepack pnpm lint
+      - corepack pnpm --filter @atmos/web build
+      - corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts --workers=1
+    expected:
+      - The web manifest references the existing same-origin SVG icon and specifies standalone display.
+      - The service worker caches only the root shell and same-origin static assets, never /api, /auth, cross-origin requests, or query-specific location pages.
+      - Offline navigation falls back to the cached root shell and the client restores a schema-validated city dashboard marked stale.
+      - Device-geolocation dashboards are never written to local storage or Cache Storage.
+      - The offline banner reports disconnection and stale saved-city data; refresh works after reconnection.
+
+  security_checks:
+    - Service worker bypasses API/Auth routes and non-GET requests.
+    - Persist only a public city forecast under one same-origin localStorage key; skip device-geolocation snapshots.
+    - Validate stored JSON against dashboardSchema before rendering; malformed snapshots are ignored.
+    - Do not log location, forecast, or connectivity details.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+
+  telemetry:
+    metrics: [none added]
+    logs: [none added]
+    traces: [none added]
+
+  evidence:
+    - docs/evidence/web-006/2026-10-11.md
+    - pull request checks
+
+  rollback:
+    strategy: Remove the service-worker registration, manifest, and local snapshot helper; app and public gateway remain usable online.
+
+  human_approval:
+    required: false
+    reason: This is a browser-only offline enhancement with no external provider or persistent server-side state.

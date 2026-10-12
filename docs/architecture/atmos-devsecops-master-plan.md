@@ -2,7 +2,7 @@
 document: Atmos DevSecOps Master Plan
 version: 2.1.0
 status: cv-showcase-scope
-last_updated: 2026-09-20
+last_updated: 2026-10-11
 validation:
   last_validated: 2026-08-31
   result: GO
@@ -3278,6 +3278,16 @@ DONE
 | WX-004 | Open-Meteo usage/attribution/quota guard | WX-003, GOV-003 | licence + provider-budget evidence |
 | WEB-001 | Next.js shell | REPO-001 | apps/web |
 | WEB-002 | dashboard core | WEB-001, WX-002 | UI baseline |
+| WEB-003 | dashboard UX recovery, local preferences, history export, visual refresh, and Weather Watch city previews | WEB-002, FEAT-LOC-UI-001, FEAT-MAP-001, FEAT-AQI-LIVE-001, FEAT-PLAN-001, HIST-CAP-001, HIST-MGMT-001, WX-004 | dashboard/map experience |
+| WEB-004 | saved-place rename and Supabase Auth password recovery flow | WEB-003, FEAT-LOC-UI-001, AUTH-001, RLS-002, ROUTE-001 | account/location UX |
+| WEB-005 | device-local saved-place default and ordering | WEB-004, FEAT-LOC-UI-001 | saved-place UX |
+| WEB-006 | installable offline shell with last-known city forecast recovery | WEB-005, WEB-003, WEB-002 | PWA/offline UX |
+| WEB-007 | expandable hourly and daily forecast metadata | WEB-006, FEAT-CHART-001, WEB-002 | forecast UX |
+| WEB-008 | restore dashboard city on browser history navigation | WEB-003, WEB-007, FEAT-GEO-001 | navigation UX |
+| WEB-009 | bounded keyboard-accessible city search suggestions | WEB-003, WEB-008, FEAT-LOC-UI-001 | search UX |
+| WEB-010 | expandable current-weather feels-like and pressure details | WEB-003, WX-004 | current weather UX |
+| WEB-011 | actionable local-time activity planner windows | WEB-003, WEB-007, FEAT-PLAN-001, WX-004 | planner UX |
+| WEB-012 | exclusive, dismissible dashboard tool panels | WEB-003, WEB-009, WEB-010 | dashboard interaction UX |
 | SUPA-001 | local Supabase init | REPO-001 | supabase config |
 | DB-001 | base schema migrations | SUPA-001, DOM-001 | SQL migrations |
 | DB-002 | seed/test fixtures | DB-001 | seed |
@@ -3304,6 +3314,7 @@ DONE
 | HIST-MGMT-001 | delete own weather history observations | EDGE-003, FEAT-LOC-UI-001, HIST-CAP-001, RLS-002, ROUTE-001, WEB-002 | feature |
 | FEAT-PLAN-001 | deterministic planner | DOM-002, FUNC-001 | feature |
 | FEAT-CMP-001 | comparison | FEAT-PLAN-001 | feature |
+| FEAT-CMP-002 | on-demand live city weather comparison | FEAT-CMP-001, WEB-002, WEB-003, EDGE-004, WX-004 | feature |
 | HIST-001 | snapshot schema | DB-001 | data tables |
 | ALERT-001 | alert rule schema/RLS | DB-001, RLS-001 | alert model |
 | ALERT-002 | evaluator Edge Function | ALERT-001, WX-003 | evaluation |

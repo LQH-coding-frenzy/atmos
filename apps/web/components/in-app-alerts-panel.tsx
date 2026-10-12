@@ -327,6 +327,7 @@ export function InAppAlertsPanel({
   return (
     <details
       className="in-app-alerts-panel"
+      name="dashboard-tools"
       onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
       <summary>

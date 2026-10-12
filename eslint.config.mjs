@@ -8,6 +8,7 @@ export default tseslint.config(
       '**/.next/**',
       '**/node_modules/**',
       '**/dist/**',
+      'apps/web/public/maplibre/**',
       '**/coverage/**',
       '**/.vercel/**',
       'weather-dashboard-rough-design-example/**',
@@ -25,9 +26,15 @@ export default tseslint.config(
     },
   },
   {
-    files: ['scripts/**/*.mjs', 'jobs/**/*.mjs'],
+    files: ['scripts/**/*.mjs', 'jobs/**/*.mjs', 'apps/web/scripts/**/*.mjs'],
     languageOptions: {
       globals: globals.node,
+    },
+  },
+  {
+    files: ['apps/web/public/sw.js'],
+    languageOptions: {
+      globals: globals.serviceworker,
     },
   },
 );
