@@ -1,7 +1,7 @@
 task:
   id: AUTH-002
   title: Add Google OAuth and safe self-service account deletion
-  status: REVIEW
+  status: DONE
   objective: Expose the owner-configured Google OAuth provider and allow an authenticated user to delete only their own account after recent sign-in and explicit email/phrase confirmation.
 
   depends_on: [AUTH-001, WEB-004, RLS-002, ROUTE-001]
