@@ -3292,6 +3292,7 @@ DONE
 | DB-001 | base schema migrations | SUPA-001, DOM-001 | SQL migrations |
 | DB-002 | seed/test fixtures | DB-001 | seed |
 | AUTH-001 | Supabase Auth frontend | WEB-001, SUPA-001 | auth UI/session |
+| AUTH-002 | Google OAuth and recent-auth self-service account deletion | AUTH-001, WEB-004, RLS-002, ROUTE-001 | authenticated account controls |
 | RLS-001 | RLS baseline | DB-001, AUTH-001 | policies |
 | RLS-002 | pgTAP RLS tests | RLS-001 | security tests |
 | FUNC-001 | Hono Edge Function template | SUPA-001, DOM-001 | api-template |

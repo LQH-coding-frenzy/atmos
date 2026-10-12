@@ -11,6 +11,7 @@ import {
   ArrowDown,
   ArrowUp,
   Bookmark,
+  Globe2,
   KeyRound,
   LogIn,
   LogOut,
@@ -21,11 +22,13 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabaseBrowserClient } from '../lib/supabase-browser';
+import { offlineDashboardStorageKey } from '../lib/offline-dashboard';
 import {
   emptySavedPlacePreferences,
   moveSavedLocation,
   orderSavedLocations,
   readSavedPlacePreferences,
+  savedPlacePreferencesKey,
   writeSavedPlacePreferences,
   type SavedPlacePreferences,
 } from '../lib/saved-place-preferences';
@@ -86,6 +89,9 @@ export function SavedLocationsPanel({
   const [confirmRemoveId, setConfirmRemoveId] = useState<string>();
   const [renamingId, setRenamingId] = useState<string>();
   const [renameDraft, setRenameDraft] = useState('');
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteConfirmationEmail, setDeleteConfirmationEmail] = useState('');
+  const [deleteConfirmationPhrase, setDeleteConfirmationPhrase] = useState('');
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -265,6 +271,22 @@ export function SavedLocationsPanel({
     setMessage('Signed out.');
   }
 
+  async function signInWithGoogle() {
+    if (!client) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      const { error } = await client.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin },
+      });
+      if (error) throw error;
+    } catch {
+      setMessage('Google sign-in is unavailable. Check the provider setup and try again.');
+      setBusy(false);
+    }
+  }
+
   function updatePlacePreferences(next: SavedPlacePreferences) {
     setPlacePreferences(next);
     if (!session) return;
@@ -320,6 +342,66 @@ export function SavedLocationsPanel({
       setMessage('If an account exists for this address, a password reset link has been sent.');
     } catch {
       setMessage('Password recovery is unavailable right now. Please try again later.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteAccount(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!client || !session?.user.email) return;
+    if (
+      deleteConfirmationEmail.trim().toLocaleLowerCase('en-US') !==
+        session.user.email.trim().toLocaleLowerCase('en-US') ||
+      deleteConfirmationPhrase !== 'DELETE'
+    ) {
+      setMessage('Confirm your account email and type DELETE to continue.');
+      return;
+    }
+    setBusy(true);
+    setMessage('');
+    try {
+      const {
+        data: { session: activeSession },
+      } = await client.auth.getSession();
+      if (!activeSession) throw new Error('Session unavailable');
+      const response = await fetch(new URL('/api/v1/account', gatewayOrigin), {
+        method: 'DELETE',
+        headers: {
+          ...versionAffinityHeaders(),
+          Authorization: `Bearer ${activeSession.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          confirmationEmail: deleteConfirmationEmail,
+          confirmationPhrase: deleteConfirmationPhrase,
+        }),
+      });
+      const body = (await response.json().catch(() => undefined)) as
+        { error?: { code?: string } } | undefined;
+      if (response.status === 401 && body?.error?.code === 'ACCOUNT_REAUTH_REQUIRED') {
+        setMessage('For your security, sign out and sign in again before deleting your account.');
+        return;
+      }
+      if (!response.ok) throw new Error('Account deletion failed');
+
+      const deletedUserId = session.user.id;
+      try {
+        await client.auth.signOut({ scope: 'local' });
+        window.localStorage.removeItem(savedPlacePreferencesKey(deletedUserId));
+        window.localStorage.removeItem(offlineDashboardStorageKey);
+      } catch {
+        // Server-side deletion succeeded; a stale local session is safe to clear on next sign-in.
+      }
+      setSession(null);
+      setLocations([]);
+      setPlacePreferences({ ...emptySavedPlacePreferences });
+      setDeleteAccountOpen(false);
+      setDeleteConfirmationEmail('');
+      setDeleteConfirmationPhrase('');
+      setMessage('Your account and its saved data were deleted.');
+    } catch {
+      setMessage('Account deletion is unavailable right now. Please try again later.');
     } finally {
       setBusy(false);
     }
@@ -511,6 +593,17 @@ export function SavedLocationsPanel({
                 {busy ? 'Please wait…' : authMode === 'sign-up' ? 'Create account' : 'Sign in'}
               </button>
             </form>
+            <div className="saved-location-oauth-separator" aria-hidden="true">
+              <span>or</span>
+            </div>
+            <button
+              className="google-oauth-button"
+              type="button"
+              onClick={() => void signInWithGoogle()}
+              disabled={busy}
+            >
+              <Globe2 size={16} aria-hidden="true" /> Continue with Google
+            </button>
             <button
               className="saved-location-mode-toggle"
               type="button"
@@ -542,6 +635,62 @@ export function SavedLocationsPanel({
               <button type="button" onClick={signOut} disabled={busy} aria-label="Sign out">
                 <LogOut size={16} aria-hidden="true" />
               </button>
+            </div>
+            <div className="account-delete-zone">
+              <button
+                className="account-delete-trigger"
+                type="button"
+                onClick={() => {
+                  setDeleteAccountOpen((open) => !open);
+                  setDeleteConfirmationEmail('');
+                  setDeleteConfirmationPhrase('');
+                  setMessage('');
+                }}
+                disabled={busy}
+                aria-expanded={deleteAccountOpen}
+              >
+                {deleteAccountOpen ? 'Cancel account deletion' : 'Delete account'}
+              </button>
+              {deleteAccountOpen ? (
+                <form className="account-delete-form" onSubmit={deleteAccount}>
+                  <p>
+                    Permanently delete this account, saved places, weather history, and alert rules.
+                    For security, you must have signed in during the last five minutes.
+                  </p>
+                  <label htmlFor="account-delete-email">Confirm your account email</label>
+                  <input
+                    id="account-delete-email"
+                    type="email"
+                    autoComplete="email"
+                    maxLength={254}
+                    required
+                    value={deleteConfirmationEmail}
+                    onChange={(event) => setDeleteConfirmationEmail(event.target.value)}
+                  />
+                  <label htmlFor="account-delete-phrase">Type DELETE to confirm</label>
+                  <input
+                    id="account-delete-phrase"
+                    type="text"
+                    autoComplete="off"
+                    maxLength={6}
+                    required
+                    value={deleteConfirmationPhrase}
+                    onChange={(event) => setDeleteConfirmationPhrase(event.target.value)}
+                  />
+                  <button
+                    className="account-delete-confirm"
+                    type="submit"
+                    disabled={
+                      busy ||
+                      deleteConfirmationEmail.trim().toLocaleLowerCase('en-US') !==
+                        session.user.email?.trim().toLocaleLowerCase('en-US') ||
+                      deleteConfirmationPhrase !== 'DELETE'
+                    }
+                  >
+                    {busy ? 'Deleting…' : 'Delete account permanently'}
+                  </button>
+                </form>
+              ) : null}
             </div>
             <button
               className="save-current-location"

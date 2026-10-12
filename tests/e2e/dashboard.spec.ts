@@ -1140,6 +1140,84 @@ test('requests a non-enumerating password recovery link and handles an expired r
   expect(passwordUpdateAuthorization).toBe(`Bearer ${accessToken}`);
 });
 
+test('starts Google OAuth through the configured Supabase provider', async ({ page }) => {
+  let authorizationUrl = '';
+  await page.route('**/auth/v1/authorize**', async (route) => {
+    authorizationUrl = route.request().url();
+    await route.fulfill({
+      status: 302,
+      headers: { location: 'http://127.0.0.1:3000/?oauth-started=1' },
+    });
+  });
+  await page.goto('/');
+  await page.getByText('Saved places', { exact: true }).click();
+  await page.getByRole('button', { name: 'Continue with Google' }).click();
+  await page.waitForURL('**/?oauth-started=1');
+
+  const authorization = new URL(authorizationUrl);
+  expect(authorization.searchParams.get('provider')).toBe('google');
+  expect(authorization.searchParams.get('redirect_to')).toBe('http://127.0.0.1:3000');
+});
+
+test('deletes only the confirmed signed-in account through the authenticated API', async ({
+  page,
+}) => {
+  const user = {
+    id: '00000000-0000-4000-8000-000000000013',
+    aud: 'authenticated',
+    role: 'authenticated',
+    email: 'delete-me@example.test',
+    app_metadata: { provider: 'email', providers: ['email'] },
+    user_metadata: {},
+    created_at: '2026-09-27T10:00:00.000Z',
+    last_sign_in_at: new Date().toISOString(),
+  };
+  const accessToken = 'test-account-delete-access-token';
+  let deleteAuthorization = '';
+  let deletePayload: { confirmationEmail?: string; confirmationPhrase?: string } | undefined;
+  await page.route('**/auth/v1/token?grant_type=password', async (route) => {
+    await route.fulfill({
+      json: {
+        access_token: accessToken,
+        token_type: 'bearer',
+        expires_in: 3600,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        refresh_token: 'test-delete-refresh-token',
+        user,
+      },
+    });
+  });
+  await page.route('**/api/v1/locations', async (route) => {
+    await route.fulfill({ json: { locations: [] } });
+  });
+  await page.route('**/api/v1/account', async (route) => {
+    deleteAuthorization = route.request().headers().authorization ?? '';
+    deletePayload = route.request().postDataJSON();
+    await route.fulfill({ status: 204, body: '' });
+  });
+
+  await page.goto('/');
+  await page.getByText('Saved places', { exact: true }).click();
+  await page.getByLabel('Email').fill(user.email);
+  await page.getByLabel('Password').fill('safe-example-password');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByText(user.email, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Delete account' }).click();
+  await page.getByLabel('Confirm your account email').fill(user.email);
+  await page.getByLabel('Type DELETE to confirm').fill('DELETE');
+  await page.getByRole('button', { name: 'Delete account permanently' }).click();
+
+  await expect(page.locator('.saved-location-status')).toContainText(
+    'Your account and its saved data were deleted.',
+  );
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  expect(deleteAuthorization).toBe(`Bearer ${accessToken}`);
+  expect(deletePayload).toEqual({
+    confirmationEmail: user.email,
+    confirmationPhrase: 'DELETE',
+  });
+});
+
 test('serves a standalone web manifest and an offline worker that bypasses private APIs', async ({
   request,
 }) => {
