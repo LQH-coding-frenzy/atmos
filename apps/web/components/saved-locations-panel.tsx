@@ -42,6 +42,7 @@ type SavedLocationsPanelProps = {
     location: LocationSearchResult,
     urlBehavior?: 'push' | 'clear' | 'preserve',
   ) => Promise<boolean>;
+  presentation?: 'page' | 'popover';
 };
 
 type AuthMode = 'sign-in' | 'sign-up';
@@ -66,6 +67,7 @@ export function SavedLocationsPanel({
   currentLocation,
   initialLocationExplicit,
   onSelect,
+  presentation = 'popover',
 }: SavedLocationsPanelProps) {
   const client = useMemo(() => getSupabaseBrowserClient(), []);
   const panel = useRef<HTMLDetailsElement>(null);
@@ -462,7 +464,7 @@ export function SavedLocationsPanel({
     );
     if (selected) {
       setMessage(`Showing weather for ${location.name}.`);
-      if (panel.current) panel.current.open = false;
+      if (presentation === 'popover' && panel.current) panel.current.open = false;
     } else {
       setMessage(`Weather for ${location.name} could not be loaded. Please try again.`);
     }
@@ -553,12 +555,30 @@ export function SavedLocationsPanel({
   );
 
   return (
-    <details className="saved-locations-panel" name="dashboard-tools" ref={panel}>
+    <details
+      className={
+        presentation === 'page'
+          ? 'saved-locations-panel saved-locations-page'
+          : 'saved-locations-panel'
+      }
+      name={presentation === 'page' ? undefined : 'dashboard-tools'}
+      open={presentation === 'page'}
+      ref={panel}
+    >
       <summary aria-controls="saved-locations-content">
         <Bookmark size={17} aria-hidden="true" />
-        <span>Saved places</span>
+        <span>
+          {presentation === 'page' ? 'Account controls and saved places' : 'Saved places'}
+        </span>
       </summary>
-      <section className="saved-locations-popover" id="saved-locations-content">
+      <section
+        className={
+          presentation === 'page'
+            ? 'saved-locations-popover saved-locations-page-content'
+            : 'saved-locations-popover'
+        }
+        id="saved-locations-content"
+      >
         <h2>Your places</h2>
         {!authReady ? <p role="status">Checking account…</p> : null}
         {authReady && !client ? (
@@ -692,14 +712,16 @@ export function SavedLocationsPanel({
                 </form>
               ) : null}
             </div>
-            <button
-              className="save-current-location"
-              type="button"
-              onClick={saveCurrentLocation}
-              disabled={busy || currentLocationIsSaved}
-            >
-              {currentLocationIsSaved ? 'Already saved' : `Save ${currentLocation.name}`}
-            </button>
+            {presentation === 'popover' ? (
+              <button
+                className="save-current-location"
+                type="button"
+                onClick={saveCurrentLocation}
+                disabled={busy || currentLocationIsSaved}
+              >
+                {currentLocationIsSaved ? 'Already saved' : `Save ${currentLocation.name}`}
+              </button>
+            ) : null}
             {locationsLoading ? <p role="status">Loading saved places…</p> : null}
             {locations.length > 0 ? (
               <ul aria-label="Your saved places">
@@ -867,7 +889,11 @@ export function SavedLocationsPanel({
               </ul>
             ) : null}
             {!locationsLoading && locations.length === 0 && !locationsUnavailable ? (
-              <p className="saved-locations-empty">Save this location to find it here later.</p>
+              <p className="saved-locations-empty">
+                {presentation === 'page'
+                  ? 'No saved places yet. Search for a city on the dashboard and save it there.'
+                  : 'Save this location to find it here later.'}
+              </p>
             ) : null}
           </>
         ) : null}

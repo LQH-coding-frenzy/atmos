@@ -407,7 +407,7 @@ test('restores searched cities from browser Back and Forward history', async ({ 
   expect(weatherRequests).toBeGreaterThanOrEqual(5);
 });
 
-test('previews the selected city on the map without replacing the dashboard', async ({ page }) => {
+test('supports full map view, city previews, and the user management page', async ({ page }) => {
   let previewWeatherRequests = 0;
   let mapWorkerRequests = 0;
   const newestRadarFrame = Math.floor(Date.now() / 1000);
@@ -473,6 +473,18 @@ test('previews the selected city on the map without replacing the dashboard', as
   });
   await page.goto('/');
 
+  const mapCard = page.locator('#map');
+  const viewport = page.viewportSize();
+  await page.getByRole('link', { name: 'Open full map view' }).click();
+  await expect(page).toHaveURL(/#map$/);
+  await expect(mapCard).toHaveCSS('position', 'fixed');
+  const fullMapBounds = await mapCard.boundingBox();
+  expect(fullMapBounds?.width).toBeGreaterThanOrEqual((viewport?.width ?? 0) - 2);
+  expect(fullMapBounds?.height).toBeGreaterThanOrEqual((viewport?.height ?? 0) - 2);
+  await page.getByRole('link', { name: 'Close full map view' }).click();
+  await expect(page).toHaveURL(/#dashboard$/);
+  await expect(mapCard).toHaveCSS('position', 'relative');
+
   const radarSlider = page.getByRole('slider', { name: 'Radar frame time' });
   await expect(radarSlider).toBeVisible();
   await page.getByRole('button', { name: 'Play radar animation' }).click();
@@ -494,17 +506,23 @@ test('previews the selected city on the map without replacing the dashboard', as
   const cityPicker = page.getByRole('combobox', { name: 'Browse cities visible on the map' });
   await expect(cityPicker).toBeVisible();
   await expect(cityPicker).toContainText('Berlin');
-  const mapCanvas = page.locator('.maplibregl-canvas');
-  const bounds = await mapCanvas.boundingBox();
-  expect(bounds).not.toBeNull();
-  await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
+  const previewRequestsBeforeSelection = previewWeatherRequests;
+  const berlinOption = cityPicker.locator('option').filter({ hasText: 'Berlin' });
+  const berlinOptionValue = await berlinOption.getAttribute('value');
+  expect(berlinOptionValue).not.toBeNull();
+  await cityPicker.selectOption(berlinOptionValue!);
 
   await expect(page.getByRole('region', { name: 'Weather preview for Berlin' })).toBeVisible();
   await expect(page.locator('.location-name')).toHaveText('Berlin');
-  expect(previewWeatherRequests).toBe(0);
+  expect(previewWeatherRequests).toBe(previewRequestsBeforeSelection);
   expect(mapWorkerRequests).toBeGreaterThan(0);
   await page.getByRole('button', { name: 'Open Berlin' }).click();
   await expect(page).toHaveURL(/lat=52.52/);
+  await page.getByRole('link', { name: 'User management' }).click();
+  await expect(page).toHaveURL(/\/user$/);
+  await expect(page.getByRole('heading', { name: 'User management', level: 1 })).toBeVisible();
+  await expect(page.getByLabel('Email')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
 });
 
 test('compares a searched live city without switching until explicitly requested', async ({

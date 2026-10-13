@@ -22,6 +22,7 @@ import {
   RefreshCw,
   Snowflake,
   Sun,
+  UserRound,
   X,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -428,6 +429,14 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
           </div>
           <div className="topbar-actions">
             <LocationSearch gatewayOrigin={gatewayOrigin} onSelect={selectLocation} />
+            <a
+              className="user-management-link"
+              href="/user"
+              aria-label="User management"
+              title="User management"
+            >
+              <UserRound size={18} aria-hidden="true" />
+            </a>
             <SavedLocationsPanel
               gatewayOrigin={gatewayOrigin}
               currentLocation={dashboard.location}

@@ -23,6 +23,8 @@ import type {
 import {
   LocateFixed,
   MapPinned,
+  Maximize2,
+  Minimize2,
   Pause,
   Play,
   RefreshCw,
@@ -422,6 +424,14 @@ export function DashboardMap({
   }, [gatewayOrigin]);
 
   useEffect(() => {
+    const resizeMap = () => {
+      window.requestAnimationFrame(() => mapRef.current?.resize());
+    };
+    window.addEventListener('hashchange', resizeMap);
+    return () => window.removeEventListener('hashchange', resizeMap);
+  }, []);
+
+  useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     const source = map.getSource('atmos-current-location') as GeoJSONSource | undefined;
@@ -739,16 +749,39 @@ export function DashboardMap({
   const selectedOpenWeatherLayer = openWeatherMapLayerSchema.safeParse(selectedMapLayer);
 
   return (
-    <article className="map-card" id="map" aria-labelledby="map-title">
+    <article className="map-card" id="map" aria-labelledby="map-title" tabIndex={-1}>
       <div className="local-map-canvas" ref={mapElement} aria-label="Interactive weather map" />
       <header className="map-overlay-heading">
         <div>
           <p className="eyebrow">Weather watch</p>
           <h2 id="map-title">Explore nearby cities</h2>
         </div>
-        <button type="button" className="map-recenter" onClick={recenter} aria-label="Recenter map">
-          <LocateFixed size={17} aria-hidden="true" />
-        </button>
+        <div className="map-overlay-actions">
+          <a
+            className="map-fullscreen-open"
+            href="#map"
+            aria-label="Open full map view"
+            title="Open full map view"
+          >
+            <Maximize2 size={16} aria-hidden="true" />
+          </a>
+          <a
+            className="map-fullscreen-close"
+            href="#dashboard"
+            aria-label="Close full map view"
+            title="Close full map view"
+          >
+            <Minimize2 size={16} aria-hidden="true" />
+          </a>
+          <button
+            type="button"
+            className="map-recenter"
+            onClick={recenter}
+            aria-label="Recenter map"
+          >
+            <LocateFixed size={17} aria-hidden="true" />
+          </button>
+        </div>
       </header>
       <label className="map-layer-control">
         <span>Map layer</span>
