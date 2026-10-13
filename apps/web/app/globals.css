@@ -1579,6 +1579,129 @@ a:focus-visible {
   background: var(--popover-bg);
   backdrop-filter: blur(18px);
 }
+.map-layer-control,
+.map-radar-controls,
+.map-current-layer-status {
+  position: absolute;
+  z-index: 3;
+  border: 1px solid var(--line);
+  border-radius: 15px;
+  background: var(--popover-bg);
+  color: var(--ink);
+  box-shadow: 0 12px 28px rgba(5, 24, 27, 0.18);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+.map-layer-control {
+  top: 88px;
+  right: 14px;
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+  font-size: 10px;
+}
+.map-layer-control select {
+  max-width: 180px;
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+}
+.map-layer-control option {
+  background: var(--popover-bg);
+  color: var(--ink);
+}
+.map-radar-controls {
+  top: 138px;
+  right: 14px;
+  width: min(340px, calc(100% - 28px));
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+}
+.map-radar-controls-heading,
+.map-radar-timeline,
+.map-radar-opacity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.map-radar-controls-heading .eyebrow {
+  margin: 0 0 2px;
+  font-size: 9px;
+}
+.map-radar-source,
+.map-radar-status,
+.map-radar-timeline span,
+.map-radar-opacity span {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+}
+.map-radar-playback {
+  display: flex;
+  gap: 4px;
+}
+.map-radar-playback button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--control-bg);
+  color: var(--ink);
+}
+.map-radar-playback button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.map-radar-timeline,
+.map-radar-opacity {
+  min-height: 24px;
+}
+.map-radar-timeline input,
+.map-radar-opacity input {
+  width: 100%;
+  min-width: 60px;
+  accent-color: var(--accent);
+}
+.map-radar-opacity span {
+  flex: 0 0 auto;
+}
+.map-current-layer-status {
+  top: 138px;
+  right: 14px;
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 11px;
+}
+.map-current-layer-status p {
+  margin: 0;
+  color: var(--muted);
+}
+.map-current-layer-opacity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.map-current-layer-opacity span {
+  flex: 0 0 auto;
+}
+.map-current-layer-opacity input {
+  width: 100%;
+  min-width: 60px;
+  accent-color: var(--accent);
+}
 .map-feedback {
   position: absolute;
   z-index: 1;
@@ -2225,6 +2348,9 @@ footer {
   .in-app-alerts-popover,
   .preferences-popover,
   .map-overlay-heading > div,
+  .map-layer-control,
+  .map-radar-controls,
+  .map-current-layer-status,
   .map-weather-preview,
   .map-city-picker {
     backdrop-filter: none;

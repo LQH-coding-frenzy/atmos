@@ -410,6 +410,8 @@ test('restores searched cities from browser Back and Forward history', async ({ 
 test('previews the selected city on the map without replacing the dashboard', async ({ page }) => {
   let previewWeatherRequests = 0;
   let mapWorkerRequests = 0;
+  const newestRadarFrame = Math.floor(Date.now() / 1000);
+  const previousRadarFrame = newestRadarFrame - 600;
   await page.route('**/maplibre/maplibre-gl-worker.mjs', async (route) => {
     mapWorkerRequests += 1;
     await route.continue();
@@ -430,11 +432,59 @@ test('previews the selected city on the map without replacing the dashboard', as
       },
     });
   });
+  await page.route('**/api/v1/weather/radar/frames*', async (route) => {
+    await route.fulfill({
+      json: {
+        generatedAt: newestRadarFrame,
+        tileHost: 'https://tilecache.rainviewer.com',
+        frames: [{ timestamp: previousRadarFrame }, { timestamp: newestRadarFrame }],
+      },
+    });
+  });
+  await page.route('**/api/v1/weather/map/layers', async (route) => {
+    await route.fulfill({ json: { openWeatherAvailable: true } });
+  });
+  await page.route('**/api/v1/weather/maps/openweather/**', async (route) => {
+    await route.fulfill({
+      contentType: 'image/png',
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/pL8AAAAASUVORK5CYII=',
+        'base64',
+      ),
+    });
+  });
+  await page.route('https://tilecache.rainviewer.com/**', async (route) => {
+    await route.fulfill({
+      contentType: 'image/png',
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/pL8AAAAASUVORK5CYII=',
+        'base64',
+      ),
+    });
+  });
   await page.route('**/api/v1/weather/dashboard?**', async (route) => {
     previewWeatherRequests += 1;
     await route.continue();
   });
   await page.goto('/');
+
+  const radarSlider = page.getByRole('slider', { name: 'Radar frame time' });
+  await expect(radarSlider).toBeVisible();
+  await page.getByRole('button', { name: 'Play radar animation' }).click();
+  await expect(page.getByRole('button', { name: 'Pause radar animation' })).toBeVisible();
+  const previousFrameTileRequest = page.waitForRequest((request) =>
+    request.url().includes(`/v2/radar/${previousRadarFrame}/`),
+  );
+  await page.getByRole('button', { name: 'Next radar frame' }).click();
+  await previousFrameTileRequest;
+  const openWeatherTileRequest = page.waitForRequest((request) =>
+    request.url().includes('/api/v1/weather/maps/openweather/precipitation_new/'),
+  );
+  await page.getByRole('combobox', { name: 'Weather map layer' }).selectOption('precipitation_new');
+  await expect(page.getByText('OpenWeather · Precipitation · current snapshot')).toBeVisible();
+  await openWeatherTileRequest;
+  await page.getByRole('combobox', { name: 'Weather map layer' }).selectOption('cities');
+  await expect(radarSlider).toBeHidden();
 
   const cityPicker = page.getByRole('combobox', { name: 'Browse cities visible on the map' });
   await expect(cityPicker).toBeVisible();

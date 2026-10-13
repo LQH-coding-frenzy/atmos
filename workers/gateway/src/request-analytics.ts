@@ -2,7 +2,8 @@ export type RequestAnalyticsDataset = {
   writeDataPoint(point: { indexes: string[]; blobs: string[]; doubles: number[] }): void;
 };
 
-export type AnalyticsProvider = 'cache' | 'none' | 'open-meteo' | 'supabase';
+export type AnalyticsProvider =
+  'cache' | 'none' | 'open-meteo' | 'openweather' | 'rainviewer' | 'supabase';
 
 type RequestAnalyticsInput = {
   workerVersionId?: string;
@@ -42,6 +43,9 @@ export function requestRouteGroup(method: string, path: string) {
   if (path === '/version') return 'version';
   if (path === '/api/v1/weather/dashboard') return 'weather_dashboard';
   if (path === '/api/v1/weather/air-quality') return 'air_quality';
+  if (path === '/api/v1/weather/radar/frames') return 'weather_radar_frames';
+  if (path === '/api/v1/weather/map/layers') return 'weather_map_layers';
+  if (path.startsWith('/api/v1/weather/maps/openweather/')) return 'weather_map_tiles';
   if (path.startsWith('/api/')) return 'api_proxy';
   return method === 'OPTIONS' ? 'preflight_other' : 'not_found';
 }

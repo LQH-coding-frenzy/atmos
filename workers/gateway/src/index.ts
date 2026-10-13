@@ -2,13 +2,19 @@ import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import { OpenMeteoProvider } from '@atmos/provider-openmeteo';
-import { airQualitySchema } from '@atmos/contracts';
+import {
+  airQualitySchema,
+  openWeatherMapLayerSchema,
+  weatherMapConfigurationSchema,
+  weatherRadarTimelineSchema,
+} from '@atmos/contracts';
 import type {
   AirQuality,
   AirQualityProvider,
   Dashboard,
   LocationSearchProvider,
   LocationSearchResult,
+  WeatherRadarTimeline,
   WeatherProvider,
 } from '@atmos/contracts';
 import { createCorrelation } from './correlation';
@@ -23,6 +29,7 @@ import {
 
 type Bindings = {
   CORS_ORIGIN?: string;
+  OPENWEATHER_API_KEY?: string;
   RELEASE_ID?: string;
   SUPABASE_FUNCTION_URL?: string;
   REQUEST_ANALYTICS?: RequestAnalyticsDataset;
@@ -42,8 +49,16 @@ type WeatherCache = Pick<Cache, 'match' | 'put'>;
 
 const weatherCacheTtlSeconds = 300;
 const airQualityCacheTtlSeconds = 300;
+const weatherRadarCacheTtlSeconds = 300;
+const weatherMapTileCacheTtlSeconds = 300;
+const openWeatherTileRequestsPerWindow = 50;
+const openWeatherTileWindowMilliseconds = 60_000;
 const staleWeatherCacheTtlSeconds = 3600;
 const locationSearchCacheTtlSeconds = 86400;
+const rainViewerMetadataUrl = 'https://api.rainviewer.com/public/weather-maps.json';
+const rainViewerTileHost = 'https://tilecache.rainviewer.com';
+let openWeatherTileWindowStartedAt = 0;
+let openWeatherTileRequestCount = 0;
 const forwardedProxyHeaders = new Set(['accept', 'authorization', 'content-type']);
 const locationSearchInFlight = new Map<string, Promise<LocationSearchResult[]>>();
 const airQualityInFlight = new Map<string, Promise<AirQuality>>();
@@ -56,7 +71,7 @@ function gatewayError(
   context: Context<GatewayEnvironment>,
   code: string,
   message: string,
-  status: 400 | 401 | 404 | 503,
+  status: 400 | 401 | 404 | 429 | 503,
 ) {
   return context.json({ error: { code, message, request_id: context.get('requestId') } }, status);
 }
@@ -143,6 +158,95 @@ function airQualityCacheKeys(url: string, input: NonNullable<ReturnType<typeof a
     fresh: new Request(freshUrl, { method: 'GET' }),
     stale: new Request(staleUrl, { method: 'GET' }),
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function reserveOpenWeatherTileRequest(now = Date.now()) {
+  if (
+    now < openWeatherTileWindowStartedAt ||
+    now - openWeatherTileWindowStartedAt >= openWeatherTileWindowMilliseconds
+  ) {
+    openWeatherTileWindowStartedAt = now;
+    openWeatherTileRequestCount = 0;
+  }
+  if (openWeatherTileRequestCount >= openWeatherTileRequestsPerWindow) return false;
+  openWeatherTileRequestCount += 1;
+  return true;
+}
+
+function openWeatherTileInput(params: Record<string, string>) {
+  const layer = openWeatherMapLayerSchema.safeParse(params.layer);
+  const { z: zoomValue, x: xValue, y: yValue } = params;
+  if (
+    !layer.success ||
+    !/^\d{1,2}$/.test(zoomValue ?? '') ||
+    !/^\d{1,7}$/.test(xValue ?? '') ||
+    !/^\d{1,7}$/.test(yValue ?? '')
+  ) {
+    return undefined;
+  }
+
+  const zoom = Number(zoomValue);
+  const x = Number(xValue);
+  const y = Number(yValue);
+  const tilesAcross = 2 ** zoom;
+  if (
+    !Number.isSafeInteger(zoom) ||
+    zoom < 0 ||
+    zoom > 17 ||
+    !Number.isSafeInteger(x) ||
+    !Number.isSafeInteger(y) ||
+    x < 0 ||
+    x >= tilesAcross ||
+    y < 0 ||
+    y >= tilesAcross
+  ) {
+    return undefined;
+  }
+
+  return { layer: layer.data, zoom, x, y } as const;
+}
+
+function normalizeRainViewerTimeline(payload: unknown): WeatherRadarTimeline | undefined {
+  if (!isRecord(payload) || payload.host !== rainViewerTileHost) return undefined;
+  if (!isRecord(payload.radar) || !Array.isArray(payload.radar.past)) return undefined;
+
+  const now = Math.floor(Date.now() / 1000);
+  const oldestAllowed = now - 2 * 60 * 60;
+  const newestAllowed = now + 60;
+  const frames = payload.radar.past
+    .flatMap((frame) => {
+      if (!isRecord(frame)) return [];
+      const timestamp = frame.time;
+      if (
+        typeof timestamp !== 'number' ||
+        !Number.isInteger(timestamp) ||
+        timestamp < oldestAllowed ||
+        timestamp > newestAllowed ||
+        frame.path !== `/v2/radar/${timestamp}`
+      ) {
+        return [];
+      }
+      return [{ timestamp }];
+    })
+    .sort((left, right) => left.timestamp - right.timestamp)
+    .slice(-13);
+
+  const generatedAt =
+    typeof payload.generated === 'number' &&
+    Number.isInteger(payload.generated) &&
+    payload.generated > 0
+      ? payload.generated
+      : null;
+  const parsed = weatherRadarTimelineSchema.safeParse({
+    generatedAt,
+    tileHost: rainViewerTileHost,
+    frames,
+  });
+  return parsed.success ? parsed.data : undefined;
 }
 
 function locationSearchInput(context: { req: { query: (name: string) => string | undefined } }) {
@@ -518,6 +622,200 @@ export function createApp(
         context,
         'AIR_QUALITY_UNAVAILABLE',
         'Air quality is temporarily unavailable.',
+        503,
+      );
+    } finally {
+      context.set('providerDurationMs', performance.now() - providerStartedAt);
+    }
+  });
+
+  app.get('/api/v1/weather/radar/frames', async (context) => {
+    const radarCache =
+      cache ??
+      (typeof caches === 'undefined'
+        ? noWeatherCache
+        : (caches as CacheStorage & { default: WeatherCache }).default);
+    const cacheKey = new Request(new URL('/api/v1/weather/radar/frames', context.req.url), {
+      method: 'GET',
+    });
+
+    try {
+      const cached = await radarCache.match(cacheKey);
+      if (cached) {
+        context.set('analyticsProvider', 'cache');
+        const response = new Response(cached.body, cached);
+        response.headers.set('x-cache', 'HIT');
+        return response;
+      }
+    } catch {
+      // Radar metadata remains available when the best-effort edge cache is unavailable.
+    }
+
+    const providerStartedAt = performance.now();
+    context.set('analyticsProvider', 'rainviewer');
+    try {
+      const upstream = await fetch(rainViewerMetadataUrl, {
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!upstream.ok) throw new Error('RainViewer metadata request failed');
+
+      const contentLength = Number(upstream.headers.get('content-length'));
+      if (Number.isFinite(contentLength) && contentLength > 64_000) {
+        throw new Error('RainViewer metadata response exceeded the size limit');
+      }
+      const body = await upstream.text();
+      if (body.length > 64_000)
+        throw new Error('RainViewer metadata response exceeded the size limit');
+
+      let payload: unknown;
+      try {
+        payload = JSON.parse(body);
+      } catch {
+        throw new Error('RainViewer metadata was not valid JSON');
+      }
+      const timeline = normalizeRainViewerTimeline(payload);
+      if (!timeline) throw new Error('RainViewer metadata did not match the expected contract');
+
+      const cacheControl = `public, max-age=${weatherRadarCacheTtlSeconds}, s-maxage=${weatherRadarCacheTtlSeconds}`;
+      const response = context.json(timeline);
+      response.headers.set('cache-control', cacheControl);
+      response.headers.set('x-cache', 'MISS');
+      try {
+        await radarCache.put(
+          cacheKey,
+          Response.json(timeline, { headers: { 'cache-control': cacheControl } }),
+        );
+      } catch {
+        // Cache writes are an optimization, not a reason to reject valid radar metadata.
+      }
+      return response;
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          event: 'weather_radar_metadata_failed',
+          request_id: context.get('requestId'),
+          trace_id: context.get('traceparent').split('-')[1],
+          error_type: error instanceof Error ? error.name : 'unknown',
+        }),
+      );
+      return gatewayError(
+        context,
+        'RADAR_UNAVAILABLE',
+        'Weather radar is temporarily unavailable.',
+        503,
+      );
+    } finally {
+      context.set('providerDurationMs', performance.now() - providerStartedAt);
+    }
+  });
+
+  app.get('/api/v1/weather/map/layers', (context) => {
+    const configuration = weatherMapConfigurationSchema.parse({
+      openWeatherAvailable: Boolean(context.env?.OPENWEATHER_API_KEY?.trim()),
+    });
+    const response = context.json(configuration);
+    response.headers.set('cache-control', 'no-store');
+    return response;
+  });
+
+  app.get('/api/v1/weather/maps/openweather/:layer/:z/:x/:y', async (context) => {
+    const input = openWeatherTileInput(context.req.param());
+    if (!input) {
+      return gatewayError(
+        context,
+        'INVALID_MAP_TILE',
+        'A supported weather-map layer and valid tile coordinates are required.',
+        400,
+      );
+    }
+
+    const apiKey = context.env?.OPENWEATHER_API_KEY?.trim();
+    if (!apiKey) {
+      return gatewayError(
+        context,
+        'OPENWEATHER_MAPS_UNAVAILABLE',
+        'OpenWeather map layers are not configured.',
+        503,
+      );
+    }
+
+    const tileUrl = new URL(context.req.url);
+    tileUrl.search = '';
+    const cacheKey = new Request(tileUrl, { method: 'GET' });
+    const tileCache =
+      cache ??
+      (typeof caches === 'undefined'
+        ? noWeatherCache
+        : (caches as CacheStorage & { default: WeatherCache }).default);
+    try {
+      const cached = await tileCache.match(cacheKey);
+      if (cached) {
+        context.set('analyticsProvider', 'cache');
+        const response = new Response(cached.body, cached);
+        response.headers.set('x-cache', 'HIT');
+        return response;
+      }
+    } catch {
+      // Continue to the provider when a best-effort edge cache read fails.
+    }
+
+    if (!reserveOpenWeatherTileRequest()) {
+      return gatewayError(
+        context,
+        'MAP_TILE_RATE_LIMITED',
+        'Weather-map tiles are temporarily rate limited.',
+        429,
+      );
+    }
+
+    const providerStartedAt = performance.now();
+    context.set('analyticsProvider', 'openweather');
+    try {
+      const upstreamUrl = new URL(
+        `https://tile.openweathermap.org/map/${input.layer}/${input.zoom}/${input.x}/${input.y}.png`,
+      );
+      upstreamUrl.searchParams.set('appid', apiKey);
+      const upstream = await fetch(upstreamUrl, {
+        headers: { accept: 'image/png' },
+        signal: AbortSignal.timeout(5_000),
+      });
+      const contentLength = Number(upstream.headers.get('content-length'));
+      if (
+        !upstream.ok ||
+        !upstream.headers.get('content-type')?.startsWith('image/png') ||
+        (Number.isFinite(contentLength) && contentLength > 1_000_000)
+      ) {
+        throw new Error('OpenWeather returned an invalid map tile');
+      }
+
+      const cacheControl = `public, max-age=${weatherMapTileCacheTtlSeconds}, s-maxage=${weatherMapTileCacheTtlSeconds}`;
+      const response = new Response(upstream.body, {
+        headers: {
+          'cache-control': cacheControl,
+          'content-type': 'image/png',
+          'x-cache': 'MISS',
+        },
+      });
+      try {
+        await tileCache.put(cacheKey, response.clone());
+      } catch {
+        // Cache writes are an optimization, not a reason to reject a valid tile.
+      }
+      return response;
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          event: 'openweather_map_tile_failed',
+          request_id: context.get('requestId'),
+          trace_id: context.get('traceparent').split('-')[1],
+          error_type: error instanceof Error ? error.name : 'unknown',
+        }),
+      );
+      return gatewayError(
+        context,
+        'OPENWEATHER_MAPS_UNAVAILABLE',
+        'OpenWeather map tiles are temporarily unavailable.',
         503,
       );
     } finally {

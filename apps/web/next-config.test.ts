@@ -25,8 +25,10 @@ describe('web response security headers', () => {
     expect(policy).toContain("object-src 'none'");
     expect(policy).toContain("frame-ancestors 'none'");
     expect(policy).toContain(
-      "connect-src 'self' https://*.supabase.co https://*.workers.dev https://api.rainify.dpdns.org https://tiles.openfreemap.org",
+      "connect-src 'self' https://*.supabase.co https://*.workers.dev https://api.rainify.dpdns.org https://tiles.openfreemap.org https://tilecache.rainviewer.com",
     );
-    expect(policy).toContain("img-src 'self' blob: data: https://tiles.openfreemap.org");
+    expect(policy).toContain(
+      "img-src 'self' blob: data: https://tiles.openfreemap.org https://tilecache.rainviewer.com",
+    );
   });
 });

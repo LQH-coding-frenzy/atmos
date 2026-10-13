@@ -6,8 +6,11 @@ import {
   createAlertRuleRequestSchema,
   createWeatherSnapshotRequestSchema,
   locationInputSchema,
+  openWeatherMapLayerSchema,
   savedLocationResponseSchema,
   savedLocationsResponseSchema,
+  weatherMapConfigurationSchema,
+  weatherRadarTimelineSchema,
   weatherSnapshotResponseSchema,
   weatherSnapshotsResponseSchema,
   updateAlertRuleRequestSchema,
@@ -18,6 +21,49 @@ describe('locationInputSchema', () => {
     expect(() =>
       locationInputSchema.parse({ latitude: 91, longitude: 13, timezone: 'Europe/Berlin' }),
     ).toThrow();
+  });
+});
+
+describe('weather radar timeline contract', () => {
+  const timeline = {
+    generatedAt: 1_791_825_600,
+    tileHost: 'https://tilecache.rainviewer.com' as const,
+    frames: [{ timestamp: 1_791_825_000 }, { timestamp: 1_791_825_600 }],
+  };
+
+  it('accepts an ordered RainViewer timeline with a fixed trusted tile host', () => {
+    expect(weatherRadarTimelineSchema.parse(timeline)).toEqual(timeline);
+  });
+
+  it('rejects malformed hosts, duplicate timestamps, and oversized timelines', () => {
+    expect(() =>
+      weatherRadarTimelineSchema.parse({ ...timeline, tileHost: 'https://tiles.attacker.test' }),
+    ).toThrow();
+    expect(() =>
+      weatherRadarTimelineSchema.parse({
+        ...timeline,
+        frames: [{ timestamp: 1_791_825_600 }, { timestamp: 1_791_825_600 }],
+      }),
+    ).toThrow();
+    expect(() =>
+      weatherRadarTimelineSchema.parse({
+        ...timeline,
+        frames: Array.from({ length: 14 }, (_, index) => ({ timestamp: 1_791_825_000 + index })),
+      }),
+    ).toThrow();
+  });
+});
+
+describe('weather map configuration contract', () => {
+  it('allows configured or unavailable OpenWeather current-map layers', () => {
+    expect(weatherMapConfigurationSchema.parse({ openWeatherAvailable: false })).toEqual({
+      openWeatherAvailable: false,
+    });
+    expect(weatherMapConfigurationSchema.parse({ openWeatherAvailable: true })).toEqual({
+      openWeatherAvailable: true,
+    });
+    expect(openWeatherMapLayerSchema.parse('precipitation_new')).toBe('precipitation_new');
+    expect(() => openWeatherMapLayerSchema.parse('radar_forecast')).toThrow();
   });
 });
 

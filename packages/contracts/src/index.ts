@@ -16,6 +16,45 @@ export type Location = z.infer<typeof locationSchema>;
 export const locationSearchResultSchema = locationSchema;
 export type LocationSearchResult = z.infer<typeof locationSearchResultSchema>;
 
+export const weatherRadarFrameSchema = z.object({
+  timestamp: z.number().int().positive(),
+});
+
+export const weatherRadarTimelineSchema = z
+  .object({
+    generatedAt: z.number().int().positive().nullable(),
+    tileHost: z.literal('https://tilecache.rainviewer.com'),
+    frames: z.array(weatherRadarFrameSchema).max(13),
+  })
+  .superRefine(({ frames }, context) => {
+    for (let index = 1; index < frames.length; index += 1) {
+      const previous = frames[index - 1];
+      const current = frames[index];
+      if (previous && current && current.timestamp <= previous.timestamp) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Radar frames must be unique and sorted from oldest to newest.',
+          path: ['frames', index, 'timestamp'],
+        });
+      }
+    }
+  });
+export type WeatherRadarTimeline = z.infer<typeof weatherRadarTimelineSchema>;
+
+export const openWeatherMapLayerSchema = z.enum([
+  'precipitation_new',
+  'clouds_new',
+  'pressure_new',
+  'wind_new',
+  'temp_new',
+]);
+export type OpenWeatherMapLayer = z.infer<typeof openWeatherMapLayerSchema>;
+
+export const weatherMapConfigurationSchema = z.object({
+  openWeatherAvailable: z.boolean(),
+});
+export type WeatherMapConfiguration = z.infer<typeof weatherMapConfigurationSchema>;
+
 export const savedLocationSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(120),

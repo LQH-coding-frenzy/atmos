@@ -329,6 +329,147 @@ describe('gateway', () => {
     });
   });
 
+  it('normalizes and caches recent RainViewer frames behind the gateway contract', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const payload = {
+      version: '2.0',
+      generated: now,
+      host: 'https://tilecache.rainviewer.com',
+      radar: {
+        past: [now - 600, now - 300, now].map((timestamp) => ({
+          time: timestamp,
+          path: `/v2/radar/${timestamp}`,
+        })),
+      },
+    };
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      void input;
+      return Response.json(payload);
+    });
+    vi.stubGlobal('fetch', fetcher);
+
+    const cachedResponses = new Map<string, Response>();
+    const cache = {
+      match: vi.fn(async (request: Request) => cachedResponses.get(request.url)?.clone()),
+      put: vi.fn(async (request: Request, response: Response) => {
+        cachedResponses.set(request.url, response.clone());
+      }),
+    };
+    const weatherApp = createApp(new MockWeatherProvider(), cache);
+
+    const first = await weatherApp.request('http://localhost/api/v1/weather/radar/frames');
+    expect(first.status).toBe(200);
+    expect(first.headers.get('x-cache')).toBe('MISS');
+    expect(first.headers.get('cache-control')).toBe('public, max-age=300, s-maxage=300');
+    await expect(first.json()).resolves.toEqual({
+      generatedAt: now,
+      tileHost: 'https://tilecache.rainviewer.com',
+      frames: [{ timestamp: now - 600 }, { timestamp: now - 300 }, { timestamp: now }],
+    });
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(fetcher.mock.calls[0]?.[0]).toBe('https://api.rainviewer.com/public/weather-maps.json');
+
+    const second = await weatherApp.request('http://localhost/api/v1/weather/radar/frames');
+    expect(second.headers.get('x-cache')).toBe('HIT');
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('fails closed when RainViewer returns an unexpected tile host', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          generated: Math.floor(Date.now() / 1000),
+          host: 'https://tiles.attacker.example',
+          radar: { past: [] },
+        }),
+      ),
+    );
+
+    const response = await app.request('http://localhost/api/v1/weather/radar/frames');
+
+    expect(response.status).toBe(503);
+    const body = await response.text();
+    expect(body).toContain('RADAR_UNAVAILABLE');
+    expect(body).not.toContain('attacker.example');
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
+  it('reports OpenWeather map availability without exposing the configured key', async () => {
+    const available = await app.request('http://localhost/api/v1/weather/map/layers', undefined, {
+      OPENWEATHER_API_KEY: 'server-only-test-key',
+    });
+    const unavailable = await app.request('http://localhost/api/v1/weather/map/layers');
+
+    expect(available.headers.get('cache-control')).toBe('no-store');
+    await expect(available.json()).resolves.toEqual({ openWeatherAvailable: true });
+    await expect(unavailable.json()).resolves.toEqual({ openWeatherAvailable: false });
+  });
+
+  it('proxies only allowed OpenWeather current tiles and caches the image', async () => {
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      void input;
+      return new Response(new Uint8Array([137, 80, 78, 71]), {
+        headers: { 'content-type': 'image/png', 'content-length': '4' },
+      });
+    });
+    vi.stubGlobal('fetch', fetcher);
+
+    const cachedResponses = new Map<string, Response>();
+    const cache = {
+      match: vi.fn(async (request: Request) => cachedResponses.get(request.url)?.clone()),
+      put: vi.fn(async (request: Request, response: Response) => {
+        cachedResponses.set(request.url, response.clone());
+      }),
+    };
+    const weatherApp = createApp(new MockWeatherProvider(), cache);
+    const url =
+      'http://localhost/api/v1/weather/maps/openweather/precipitation_new/2/2/1?appid=untrusted';
+    const first = await weatherApp.request(url, undefined, {
+      OPENWEATHER_API_KEY: 'server-only-test-key',
+    });
+
+    expect(first.status).toBe(200);
+    expect(first.headers.get('content-type')).toBe('image/png');
+    expect(first.headers.get('x-cache')).toBe('MISS');
+    expect(first.headers.get('cache-control')).toBe('public, max-age=300, s-maxage=300');
+    expect(await first.arrayBuffer()).toEqual(Uint8Array.from([137, 80, 78, 71]).buffer);
+    expect(fetcher.mock.calls[0]?.[0].toString()).toBe(
+      'https://tile.openweathermap.org/map/precipitation_new/2/2/1.png?appid=server-only-test-key',
+    );
+    expect(fetcher.mock.calls[0]?.[0].toString()).not.toContain('untrusted');
+
+    const second = await weatherApp.request(url, undefined, {
+      OPENWEATHER_API_KEY: 'server-only-test-key',
+    });
+    expect(second.headers.get('x-cache')).toBe('HIT');
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it('rejects OpenWeather tile injection and fails closed without a key', async () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+    const invalid = await app.request(
+      'http://localhost/api/v1/weather/maps/openweather/other/2/2/1',
+      undefined,
+      { OPENWEATHER_API_KEY: 'server-only-test-key' },
+    );
+    const disabled = await app.request(
+      'http://localhost/api/v1/weather/maps/openweather/precipitation_new/2/2/1',
+    );
+
+    expect(invalid.status).toBe(400);
+    await expect(invalid.json()).resolves.toMatchObject({
+      error: { code: 'INVALID_MAP_TILE' },
+    });
+    expect(disabled.status).toBe(503);
+    await expect(disabled.json()).resolves.toMatchObject({
+      error: { code: 'OPENWEATHER_MAPS_UNAVAILABLE' },
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it('serves cached, bounded Open-Meteo air-quality responses', async () => {
     const airQuality = {
       observedAt: '2026-09-27T10:00:00.000Z',
