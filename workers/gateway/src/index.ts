@@ -221,16 +221,18 @@ function normalizeRainViewerTimeline(payload: unknown): WeatherRadarTimeline | u
     .flatMap((frame) => {
       if (!isRecord(frame)) return [];
       const timestamp = frame.time;
+      const path = frame.path;
       if (
         typeof timestamp !== 'number' ||
         !Number.isInteger(timestamp) ||
         timestamp < oldestAllowed ||
         timestamp > newestAllowed ||
-        frame.path !== `/v2/radar/${timestamp}`
+        typeof path !== 'string' ||
+        !/^\/v2\/radar\/[A-Za-z0-9_-]{1,64}$/.test(path)
       ) {
         return [];
       }
-      return [{ timestamp }];
+      return [{ timestamp, path }];
     })
     .sort((left, right) => left.timestamp - right.timestamp)
     .slice(-13);
@@ -635,9 +637,9 @@ export function createApp(
       (typeof caches === 'undefined'
         ? noWeatherCache
         : (caches as CacheStorage & { default: WeatherCache }).default);
-    const cacheKey = new Request(new URL('/api/v1/weather/radar/frames', context.req.url), {
-      method: 'GET',
-    });
+    const cacheUrl = new URL('/api/v1/weather/radar/frames', context.req.url);
+    cacheUrl.searchParams.set('__atmos_cache_schema', '2');
+    const cacheKey = new Request(cacheUrl, { method: 'GET' });
 
     try {
       const cached = await radarCache.match(cacheKey);

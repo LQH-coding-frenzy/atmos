@@ -71,6 +71,7 @@ task:
       [
         'valid recent RainViewer frames are normalized and cached',
         'invalid provider metadata fails closed without exposing upstream details',
+        'provider-supplied opaque radar paths are preserved in MapLibre tile URLs',
         'OpenWeather current layers are allowlisted, proxied with a Worker-only key, and cached without exposing the key',
         'map UI disables OpenWeather until the gateway reports that its key is configured',
         'radar timeline, attribution, rate-conscious animation, current-map layers, and city previews work together',

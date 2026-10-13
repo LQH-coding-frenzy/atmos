@@ -18,6 +18,7 @@ export type LocationSearchResult = z.infer<typeof locationSearchResultSchema>;
 
 export const weatherRadarFrameSchema = z.object({
   timestamp: z.number().int().positive(),
+  path: z.string().regex(/^\/v2\/radar\/[A-Za-z0-9_-]{1,64}$/),
 });
 
 export const weatherRadarTimelineSchema = z

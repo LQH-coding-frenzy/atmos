@@ -5,10 +5,10 @@ const rainViewerTileHost = 'https://tilecache.rainviewer.com';
 export const rainViewerMaximumZoom = 7;
 export const rainViewerPlaybackIntervalMilliseconds = 15_000;
 
-export function rainViewerTileTemplate(timestamp: number) {
-  if (!Number.isSafeInteger(timestamp) || timestamp <= 0) return undefined;
+export function rainViewerTileTemplate(path: string) {
+  if (!/^\/v2\/radar\/[A-Za-z0-9_-]{1,64}$/.test(path)) return undefined;
 
-  return `${rainViewerTileHost}/v2/radar/${timestamp}/256/{z}/{x}/{y}/2/1_0.png`;
+  return `${rainViewerTileHost}${path}/256/{z}/{x}/{y}/2/1_0.png`;
 }
 
 export function openWeatherTileTemplate(gatewayOrigin: string, layer: OpenWeatherMapLayer) {

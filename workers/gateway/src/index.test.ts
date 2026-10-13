@@ -336,9 +336,9 @@ describe('gateway', () => {
       generated: now,
       host: 'https://tilecache.rainviewer.com',
       radar: {
-        past: [now - 600, now - 300, now].map((timestamp) => ({
+        past: [now - 600, now - 300, now].map((timestamp, index) => ({
           time: timestamp,
-          path: `/v2/radar/${timestamp}`,
+          path: `/v2/radar/frame-${index}`,
         })),
       },
     };
@@ -364,7 +364,11 @@ describe('gateway', () => {
     await expect(first.json()).resolves.toEqual({
       generatedAt: now,
       tileHost: 'https://tilecache.rainviewer.com',
-      frames: [{ timestamp: now - 600 }, { timestamp: now - 300 }, { timestamp: now }],
+      frames: [
+        { timestamp: now - 600, path: '/v2/radar/frame-0' },
+        { timestamp: now - 300, path: '/v2/radar/frame-1' },
+        { timestamp: now, path: '/v2/radar/frame-2' },
+      ],
     });
     expect(fetcher).toHaveBeenCalledOnce();
     expect(fetcher.mock.calls[0]?.[0]).toBe('https://api.rainviewer.com/public/weather-maps.json');

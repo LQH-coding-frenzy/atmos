@@ -540,7 +540,7 @@ export function DashboardMap({
     let maxzoom = rainViewerMaximumZoom;
 
     if (isRadarLayer && frame) {
-      tileTemplate = rainViewerTileTemplate(frame.timestamp);
+      tileTemplate = rainViewerTileTemplate(frame.path);
     } else if (selectedOpenWeatherLayer.success && openWeatherAvailable) {
       tileTemplate = openWeatherTileTemplate(gatewayOrigin, selectedOpenWeatherLayer.data);
       maxzoom = 17;

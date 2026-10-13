@@ -28,7 +28,10 @@ describe('weather radar timeline contract', () => {
   const timeline = {
     generatedAt: 1_791_825_600,
     tileHost: 'https://tilecache.rainviewer.com' as const,
-    frames: [{ timestamp: 1_791_825_000 }, { timestamp: 1_791_825_600 }],
+    frames: [
+      { timestamp: 1_791_825_000, path: '/v2/radar/9d080488b7e9' },
+      { timestamp: 1_791_825_600, path: '/v2/radar/2160626c1c69' },
+    ],
   };
 
   it('accepts an ordered RainViewer timeline with a fixed trusted tile host', () => {
@@ -42,13 +45,19 @@ describe('weather radar timeline contract', () => {
     expect(() =>
       weatherRadarTimelineSchema.parse({
         ...timeline,
-        frames: [{ timestamp: 1_791_825_600 }, { timestamp: 1_791_825_600 }],
+        frames: [
+          { timestamp: 1_791_825_600, path: '/v2/radar/9d080488b7e9' },
+          { timestamp: 1_791_825_600, path: '/v2/radar/2160626c1c69' },
+        ],
       }),
     ).toThrow();
     expect(() =>
       weatherRadarTimelineSchema.parse({
         ...timeline,
-        frames: Array.from({ length: 14 }, (_, index) => ({ timestamp: 1_791_825_000 + index })),
+        frames: Array.from({ length: 14 }, (_, index) => ({
+          timestamp: 1_791_825_000 + index,
+          path: `/v2/radar/frame-${index}`,
+        })),
       }),
     ).toThrow();
   });

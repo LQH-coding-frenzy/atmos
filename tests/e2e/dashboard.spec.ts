@@ -412,6 +412,8 @@ test('previews the selected city on the map without replacing the dashboard', as
   let mapWorkerRequests = 0;
   const newestRadarFrame = Math.floor(Date.now() / 1000);
   const previousRadarFrame = newestRadarFrame - 600;
+  const newestRadarPath = '/v2/radar/2160626c1c69';
+  const previousRadarPath = '/v2/radar/9d080488b7e9';
   await page.route('**/maplibre/maplibre-gl-worker.mjs', async (route) => {
     mapWorkerRequests += 1;
     await route.continue();
@@ -437,7 +439,10 @@ test('previews the selected city on the map without replacing the dashboard', as
       json: {
         generatedAt: newestRadarFrame,
         tileHost: 'https://tilecache.rainviewer.com',
-        frames: [{ timestamp: previousRadarFrame }, { timestamp: newestRadarFrame }],
+        frames: [
+          { timestamp: previousRadarFrame, path: previousRadarPath },
+          { timestamp: newestRadarFrame, path: newestRadarPath },
+        ],
       },
     });
   });
@@ -473,7 +478,7 @@ test('previews the selected city on the map without replacing the dashboard', as
   await page.getByRole('button', { name: 'Play radar animation' }).click();
   await expect(page.getByRole('button', { name: 'Pause radar animation' })).toBeVisible();
   const previousFrameTileRequest = page.waitForRequest((request) =>
-    request.url().includes(`/v2/radar/${previousRadarFrame}/`),
+    request.url().includes(`${previousRadarPath}/`),
   );
   await page.getByRole('button', { name: 'Next radar frame' }).click();
   await previousFrameTileRequest;
