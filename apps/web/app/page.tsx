@@ -1,21 +1,13 @@
 import { dashboardSchema, type Dashboard as DashboardData } from '@atmos/contracts';
 import { Dashboard } from '../components/dashboard';
 import { RetryWeatherButton } from '../components/retry-weather-button';
+import { defaultLocation } from '../lib/default-location';
 import { browserGatewayOrigin, serverGatewayOrigin } from '../lib/gateway-origin';
 
 // A failed build-time weather request must never be cached as the public page.
 export const dynamic = 'force-dynamic';
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
-
-const defaultLocation = {
-  id: 'berlin-de',
-  name: 'Berlin',
-  country: 'Germany',
-  latitude: 52.52,
-  longitude: 13.405,
-  timezone: 'Europe/Berlin',
-};
 
 function selectedLocation(searchParams: Record<string, string | string[] | undefined>) {
   const value = (name: string) => {
