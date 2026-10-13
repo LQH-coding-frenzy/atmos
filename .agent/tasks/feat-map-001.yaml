@@ -1,7 +1,7 @@
 task:
   id: FEAT-MAP-001
   title: Weather Watch radar and current map layers
-  status: IN_PROGRESS
+  status: DONE
   objective: Extend Weather Watch with a validated RainViewer radar timeline and optional OpenWeather free current-map layers.
   depends_on: [WEB-002]
   external_policy_checks:
