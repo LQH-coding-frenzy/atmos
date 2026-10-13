@@ -1,37 +1,58 @@
 task:
   id: FEAT-MAP-001
-  title: Interactive local dashboard map
-  status: DONE
-  objective: Render an interactive MapLibre surface centered on the documented mock dashboard location.
+  title: Weather Watch radar and current map layers
+  status: IN_PROGRESS
+  objective: Extend Weather Watch with a validated RainViewer radar timeline and optional OpenWeather free current-map layers.
   depends_on: [WEB-002]
-  external_policy_checks: [none]
+  external_policy_checks:
+    [
+      'RainViewer free API is for personal and educational use; only past two hours at 10-minute intervals; max zoom 7; 100 requests/IP/min; no paid nowcast or future frames; keep provider attribution visible.',
+      'OpenWeather free Weather Maps 1.0 requires an API key, allows current layers only, and lists 60 calls/minute and 1,000,000 calls/month; paid history/forecast maps are excluded.',
+    ]
   runtime_placement:
-    allowed: [vercel-nextjs]
-    selected: vercel-nextjs
-    reason: Map interaction is browser-only and the initial inline style uses no tile provider or credentials.
+    allowed: [cloudflare-worker, vercel-nextjs]
+    selected: cloudflare-worker
+    reason: Normalize and cache public radar-frame metadata behind the existing gateway contract; MapLibre renders provider tiles in the browser.
   scope:
     include:
       [
         .agent/status.yaml,
         .agent/tasks/feat-map-001.yaml,
+        packages/contracts/src/index.ts,
         apps/web/app/globals.css,
-        apps/web/components/dashboard.tsx,
         apps/web/components/dashboard-map.tsx,
-        apps/web/lib/mock-map.ts,
-        apps/web/lib/mock-map.test.ts,
-        apps/web/package.json,
-        pnpm-lock.yaml,
-        docs/evidence/feat-map-001/2026-09-04.md,
+        apps/web/lib/weather-radar.ts,
+        apps/web/lib/weather-radar.test.ts,
+        apps/web/next.config.ts,
+        apps/web/next-config.test.ts,
+        workers/gateway/src/index.ts,
+        workers/gateway/src/index.test.ts,
+        workers/gateway/src/request-analytics.ts,
+        packages/contracts/src/index.test.ts,
+        tests/e2e/dashboard.spec.ts,
+        docs/design/provenance.md,
+        docs/evidence/feat-map-001/2026-10-13.md,
       ]
-    exclude: [external map tiles, live weather overlays, place search, remote Vercel deployment]
+    exclude:
+      [
+        OpenWeather history/forecast and paid global precipitation products,
+        paid provider plans,
+        secret value disclosure or rotation,
+        database changes,
+      ]
   inputs:
     required_config: []
-    required_secrets: []
+    required_secrets: [OPENWEATHER_API_KEY]
   outputs:
-    files: [apps/web/components/dashboard-map.tsx, apps/web/lib/mock-map.ts]
+    files:
+      [
+        packages/contracts/src/index.ts,
+        apps/web/components/dashboard-map.tsx,
+        workers/gateway/src/index.ts,
+      ]
     terraform_resources: []
     database_changes: [none]
-    deployed_units: [web]
+    deployed_units: [cloudflare-worker, vercel-nextjs]
   compatibility:
     requires_expand_contract: false
     stable_version_compatible: true
@@ -39,22 +60,40 @@ task:
   validation:
     commands:
       [
-        corepack pnpm exec vitest run apps/web/lib/mock-map.test.ts,
-        corepack pnpm --filter @atmos/web build,
+        corepack pnpm format:check,
+        corepack pnpm lint,
+        corepack pnpm typecheck,
+        corepack pnpm test,
+        corepack pnpm build,
+        'corepack pnpm exec playwright test --workers=1',
       ]
-    expected: [map marker preserves dashboard coordinates, production build succeeds]
+    expected:
+      [
+        'valid recent RainViewer frames are normalized and cached',
+        'invalid provider metadata fails closed without exposing upstream details',
+        'OpenWeather current layers are allowlisted, proxied with a Worker-only key, and cached without exposing the key',
+        'map UI disables OpenWeather until the gateway reports that its key is configured',
+        'radar timeline, attribution, rate-conscious animation, current-map layers, and city previews work together',
+        'browser build succeeds without embedding provider secrets',
+      ]
   security_checks: [gitleaks, codeql_or_semgrep, trivy_if_applicable]
   budget_checks:
     worker_cpu_budget_ms: 7
     creates_paid_resource: false
     requires_student_credit: false
   telemetry:
-    metrics: ['none; the local map loads no external tile or telemetry service']
-    logs: ['none; no user location is logged']
-    traces: ['none; client-only map interaction']
-  evidence: [docs/evidence/feat-map-001/2026-09-04.md, pull request checks]
+    metrics:
+      [
+        'existing bounded weather_radar_frames and weather_map_tiles route groups; provider labels only, no coordinates or tile identifiers',
+      ]
+    logs:
+      [
+        'sanitized radar and map-tile failures include error type and request correlation only; never include the OpenWeather key',
+      ]
+    traces: ['existing request correlation only; radar requests contain no location coordinates']
+  evidence: [docs/evidence/feat-map-001/2026-10-13.md, pull request checks]
   rollback:
-    strategy: Revert the MapLibre component and restore the previous static map preview; no persisted state exists.
+    strategy: Revert the additive gateway and map overlay changes; no persisted state or schema changes exist.
   human_approval:
-    required: false
-    reason: ''
+    required: true
+    reason: Owner reported OPENWEATHER_API_KEY configured as a production Worker secret and authorized continuing; deployments must still pass the protected Production environments and smoke gates.
