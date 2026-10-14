@@ -25,43 +25,71 @@ export function ForecastTrendChart({ daily, metric, units }: ForecastTrendChartP
     if (!element) return;
 
     const chart = echarts.init(element, undefined, { renderer: 'svg' });
-    chart.setOption({
-      animation: false,
-      grid: { top: 16, right: 12, bottom: 28, left: 38 },
-      tooltip: {
-        trigger: 'axis',
-        valueFormatter: (value: string | number) => `${value} ${trend.unit}`,
-      },
-      xAxis: {
-        type: 'category',
-        boundaryGap: false,
-        data: trend.labels,
-        axisLine: { lineStyle: { color: '#59616d' } },
-        axisLabel: { color: '#9da6b2' },
-      },
-      yAxis: {
-        type: 'value',
-        axisLabel: { color: '#9da6b2', formatter: `{value} ${trend.unit}` },
-        splitLine: { lineStyle: { color: 'rgba(255, 255, 255, 0.1)', type: 'dashed' } },
-      },
-      series: [
-        {
-          name: trend.label,
-          type: 'line',
-          data: trend.values,
-          smooth: true,
-          showSymbol: true,
-          lineStyle: { color: '#d9e4e6', width: 3 },
-          itemStyle: { color: '#cde8ed', borderColor: '#282c33', borderWidth: 3 },
-          areaStyle: { color: 'rgba(205, 232, 237, 0.12)' },
+    const renderChart = () => {
+      const styles = getComputedStyle(element);
+      const accent = styles.color;
+      const muted = getComputedStyle(element.parentElement!).color;
+      const ink = getComputedStyle(document.body).color;
+      chart.setOption({
+        animation: false,
+        textStyle: { fontFamily: 'inherit' },
+        grid: { top: 20, right: 14, bottom: 30, left: 48 },
+        tooltip: {
+          trigger: 'axis',
+          confine: true,
+          backgroundColor: styles.backgroundColor,
+          borderColor: styles.borderTopColor,
+          textStyle: { color: ink, fontSize: 12 },
+          valueFormatter: (value: string | number) =>
+            `${value}${trend.unit === '%' ? '%' : `°${trend.unit}`}`,
         },
-      ],
-    });
+        xAxis: {
+          type: 'category',
+          boundaryGap: false,
+          data: trend.labels,
+          axisTick: { show: false },
+          axisLine: { show: false },
+          axisLabel: { color: muted, margin: 14 },
+        },
+        yAxis: {
+          type: 'value',
+          scale: metric === 'temperature',
+          axisLabel: { color: muted, formatter: trend.unit === '%' ? '{value}%' : `{value}°` },
+          splitNumber: 4,
+          splitLine: { lineStyle: { color: styles.borderTopColor, type: 'dashed' } },
+        },
+        series: [
+          {
+            name: trend.label,
+            type: 'line',
+            data: trend.values,
+            smooth: 0.25,
+            showSymbol: true,
+            symbolSize: 7,
+            lineStyle: { color: accent, width: 3 },
+            itemStyle: { color: accent, borderColor: styles.backgroundColor, borderWidth: 2 },
+            areaStyle: { color: accent, opacity: 0.08 },
+          },
+        ],
+      });
+    };
+    renderChart();
 
-    const observer = new ResizeObserver(() => chart.resize());
+    const observer = new ResizeObserver(() => {
+      if (element.clientWidth) chart.resize();
+    });
     observer.observe(element);
+    const themeObserver = new MutationObserver(renderChart);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
+    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+    systemTheme.addEventListener('change', renderChart);
     return () => {
       observer.disconnect();
+      themeObserver.disconnect();
+      systemTheme.removeEventListener('change', renderChart);
       chart.dispose();
     };
   }, [daily, metric, units]);

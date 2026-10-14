@@ -1,0 +1,46 @@
+/* Skyglass: tonal content surfaces, glass reserved for floating controls. */
+:root {
+  color-scheme: light dark;
+  --ink: light-dark(#202e40, #e7eef8);
+  --muted: light-dark(#596b80, #a0b0c6);
+  --line: light-dark(#dbe3ee, #2b3c51);
+  --shell: light-dark(#f4f7fc, #0e1826);
+  --raised: light-dark(#ffffff, #172436);
+  --surface-low: light-dark(#eaf0f8, #121f30);
+  --surface-high: light-dark(#e2ebf8, #20334a);
+  --accent: light-dark(#305eab, #a9caff);
+  --accent-ink: light-dark(#ffffff, #102b50);
+  --accent-soft: light-dark(#dce9ff, #253f60);
+  --accent-muted: light-dark(#466b9e, #91b4e3);
+  --warning: light-dark(#79550c, #f0cc87);
+  --danger: light-dark(#ac3546, #ffb3bd);
+  --danger-ink: light-dark(#ffffff, #54202b);
+  --glass: light-dark(rgb(250 252 255 / 88%), rgb(21 34 52 / 91%));
+  --glass-border: light-dark(rgb(255 255 255 / 90%), rgb(186 212 255 / 16%));
+  --popover-bg: var(--raised);
+  --control-bg: var(--surface-low);
+  --control-hover: var(--accent-soft);
+  --inset-bg: var(--surface-low);
+  --hourly-bg: var(--surface-low);
+  --hero-start: light-dark(#e5efff, #1b3553);
+  --hero-end: light-dark(#edf4ff, #172b43);
+  --sun: light-dark(#aa6515, #ffcf83);
+  --shadow: 0 12px 40px light-dark(rgb(44 65 97 / 7%), rgb(0 0 0 / 16%));
+  --floating-shadow: 0 12px 36px light-dark(rgb(34 55 84 / 14%), rgb(0 0 0 / 26%));
+  --map-control-icon-filter: none;
+  --radius-control: 14px;
+  --radius-panel: 26px;
+}
+
+html[data-theme='light'] {
+  color-scheme: light;
+}
+html[data-theme='dark'] {
+  color-scheme: dark;
+  --map-control-icon-filter: invert(1);
+}
+@media (prefers-color-scheme: dark) {
+  html[data-theme='system'] {
+    --map-control-icon-filter: invert(1);
+  }
+}

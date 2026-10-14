@@ -465,6 +465,7 @@ export function SavedLocationsPanel({
     if (selected) {
       setMessage(`Showing weather for ${location.name}.`);
       if (presentation === 'popover' && panel.current) panel.current.open = false;
+      panel.current?.closest('dialog')?.close();
     } else {
       setMessage(`Weather for ${location.name} could not be loaded. Please try again.`);
     }
@@ -579,7 +580,13 @@ export function SavedLocationsPanel({
         }
         id="saved-locations-content"
       >
-        <h2>Your places</h2>
+        <h2>
+          {presentation === 'page'
+            ? session
+              ? 'Your saved places'
+              : 'Make yourself at home.'
+            : 'Your places'}
+        </h2>
         {!authReady ? <p role="status">Checking account…</p> : null}
         {authReady && !client ? (
           <p role="status">Account access is unavailable. Public weather still works.</p>

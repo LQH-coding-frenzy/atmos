@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createLocationMapData } from '../lib/location-map';
+import { observeMapAppearance } from '../lib/map-appearance';
 import {
   cityPreviewCacheMilliseconds,
   mapCityFromFeature,
@@ -55,6 +56,7 @@ type DashboardMapProps = {
   dashboard: DashboardData;
   gatewayOrigin: string;
   units: UnitSystem;
+  observatory?: boolean;
   onSelectLocation: (dashboard: DashboardData) => void;
   onOpenLocation: (location: LocationSearchResult) => Promise<boolean>;
 };
@@ -126,11 +128,16 @@ export function DashboardMap({
   dashboard,
   gatewayOrigin,
   units,
+  observatory = false,
   onSelectLocation,
   onOpenLocation,
 }: DashboardMapProps) {
   const mapElement = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const openMapLink = useRef<HTMLAnchorElement>(null);
+  const closeMapLink = useRef<HTMLAnchorElement>(null);
+  const viewOpener = useRef<HTMLElement | null>(null);
+  const wasObservatory = useRef(false);
   const propsRef = useRef({ dashboard, gatewayOrigin, onSelectLocation, onOpenLocation });
   propsRef.current = { dashboard, gatewayOrigin, onSelectLocation, onOpenLocation };
 
@@ -164,12 +171,37 @@ export function DashboardMap({
   selectedRadarTimestampRef.current = selectedRadarTimestamp;
 
   useEffect(() => {
+    if (observatory) {
+      viewOpener.current ??= document.querySelector<HTMLElement>('.app-navigation a[href="#map"]');
+      closeMapLink.current?.focus({ preventScroll: true });
+    } else if (wasObservatory.current) {
+      viewOpener.current?.focus({ preventScroll: true });
+      viewOpener.current = null;
+    }
+    wasObservatory.current = observatory;
+    const onEscape = (event: KeyboardEvent) => {
+      if (
+        event.key !== 'Escape' ||
+        !observatory ||
+        event.defaultPrevented ||
+        document.querySelector('dialog[open]') ||
+        event.target instanceof HTMLSelectElement
+      )
+        return;
+      window.location.hash = 'dashboard';
+    };
+    window.addEventListener('keydown', onEscape);
+    return () => window.removeEventListener('keydown', onEscape);
+  }, [observatory]);
+
+  useEffect(() => {
     const container = mapElement.current;
     if (!container) return;
 
     let disposed = false;
     let mapLoadComplete = false;
     let styleTimeout: number | undefined;
+    let stopObservingAppearance: (() => void) | undefined;
     let cityLayerIds: string[] = [];
     let hasPlaceLayers = false;
 
@@ -191,10 +223,7 @@ export function DashboardMap({
           cooperativeGestures: true,
         });
         mapRef.current = instance;
-        instance.addControl(
-          new maplibregl.NavigationControl({ showCompass: false }),
-          'bottom-right',
-        );
+        instance.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
         const collectVisibleCities = () => {
           if (!cityLayerIds.length) return;
@@ -373,6 +402,7 @@ export function DashboardMap({
 
         instance.once('style.load', () => {
           if (disposed) return;
+          stopObservingAppearance = observeMapAppearance(instance);
           setMapReady(true);
           setMapError(false);
           if (styleTimeout) window.clearTimeout(styleTimeout);
@@ -416,6 +446,7 @@ export function DashboardMap({
       if (debounceTimer.current) window.clearTimeout(debounceTimer.current);
       if (closeTimer.current) window.clearTimeout(closeTimer.current);
       previewController.current?.abort();
+      stopObservingAppearance?.();
       mapRef.current?.remove();
       mapRef.current = null;
       observer.disconnect();
@@ -753,8 +784,10 @@ export function DashboardMap({
       <div className="local-map-canvas" ref={mapElement} aria-label="Interactive weather map" />
       <header className="map-overlay-heading">
         <div>
-          <p className="eyebrow">Weather watch</p>
-          <h2 id="map-title">Explore nearby cities</h2>
+          <p className="eyebrow">
+            {observatory ? 'Map-first perspective' : 'A change of perspective'}
+          </p>
+          <h2 id="map-title">{observatory ? 'Observatory' : 'Weather, beyond your window.'}</h2>
         </div>
         <div className="map-overlay-actions">
           <a
@@ -762,6 +795,10 @@ export function DashboardMap({
             href="#map"
             aria-label="Open full map view"
             title="Open full map view"
+            ref={openMapLink}
+            onClick={(event) => {
+              viewOpener.current = event.currentTarget;
+            }}
           >
             <Maximize2 size={16} aria-hidden="true" />
           </a>
@@ -770,6 +807,7 @@ export function DashboardMap({
             href="#dashboard"
             aria-label="Close full map view"
             title="Close full map view"
+            ref={closeMapLink}
           >
             <Minimize2 size={16} aria-hidden="true" />
           </a>
@@ -906,18 +944,21 @@ export function DashboardMap({
                 />
                 <span>{formatRadarTimestamp(selectedRadarFrame.timestamp)}</span>
               </label>
-              <label className="map-radar-opacity">
-                <span>Overlay opacity</span>
-                <input
-                  type="range"
-                  min={0.15}
-                  max={0.85}
-                  step={0.05}
-                  value={radarOpacity}
-                  aria-label="Radar overlay opacity"
-                  onChange={(event) => setRadarOpacity(Number(event.target.value))}
-                />
-              </label>
+              <details className="map-opacity-settings">
+                <summary>Opacity</summary>
+                <label className="map-radar-opacity">
+                  <span>Overlay opacity</span>
+                  <input
+                    type="range"
+                    min={0.15}
+                    max={0.85}
+                    step={0.05}
+                    value={radarOpacity}
+                    aria-label="Radar overlay opacity"
+                    onChange={(event) => setRadarOpacity(Number(event.target.value))}
+                  />
+                </label>
+              </details>
             </>
           ) : null}
         </section>

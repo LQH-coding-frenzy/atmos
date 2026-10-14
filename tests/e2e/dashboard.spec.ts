@@ -1,4 +1,13 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+async function openWeatherTool(page: Page, name: string) {
+  const dialog = page.getByRole('dialog', { name: 'Weather tools' });
+  if (!(await dialog.isVisible())) {
+    await page.getByRole('button', { name: 'Open weather tools' }).click();
+  }
+  const summary = dialog.locator('.tool-list > details > summary').filter({ hasText: name });
+  if ((await summary.locator('..').getAttribute('open')) === null) await summary.click();
+}
 
 test('renders the responsive live-weather dashboard', async ({ page }) => {
   await page.goto('/');
@@ -14,11 +23,16 @@ test('renders the responsive live-weather dashboard', async ({ page }) => {
   );
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'Open navigation' }).click();
   await expect(page.getByRole('navigation', { name: 'Main navigation' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Close navigation' })).toBeFocused();
+  const hero = await page.locator('.hero-temperature').boundingBox();
+  expect(hero!.y + hero!.height).toBeLessThan(844);
+  await page.getByRole('button', { name: 'Open weather tools' }).click();
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.locator('.preferences-panel > summary')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Close weather tools' })).toBeFocused();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', { name: 'Open navigation' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Open weather tools' })).toBeFocused();
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
     .toBe(true);
@@ -210,7 +224,7 @@ test('debounces and caches keyboard-accessible city suggestions', async ({ page 
 test('persists unit and theme preferences on this device', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Fahrenheit' }).click();
-  await page.getByText('Settings', { exact: true }).click();
+  await openWeatherTool(page, 'Settings');
   await page.getByRole('button', { name: 'Light', exact: true }).click();
   await page.reload();
 
@@ -219,10 +233,17 @@ test('persists unit and theme preferences on this device', async ({ page }) => {
     'true',
   );
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.goto('/user');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.goto('/privacy');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 });
 
-test('keeps toolbar panels exclusive and dismisses them accessibly', async ({ page }) => {
+test('keeps tools exclusive, traps focus, and dismisses the shared drawer accessibly', async ({
+  page,
+}) => {
   await page.goto('/');
+  await page.getByRole('button', { name: 'Open weather tools' }).click();
   const savedPlaces = page.locator('.saved-locations-panel');
   const history = page.locator('.weather-history-panel');
   const savedSummary = savedPlaces.locator('summary');
@@ -241,8 +262,14 @@ test('keeps toolbar panels exclusive and dismisses them accessibly', async ({ pa
   const settings = page.locator('.preferences-panel');
   await settings.locator('summary').click();
   await expect(settings).toHaveAttribute('open', '');
-  await page.locator('.current-card').click();
+  await page.keyboard.press('Escape');
   await expect(settings).not.toHaveAttribute('open', '');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Weather tools' })).not.toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open weather tools' })).toBeFocused();
+  await page.getByRole('button', { name: 'Open weather tools' }).click();
+  await page.mouse.click(5, 5);
+  await expect(page.getByRole('dialog', { name: 'Weather tools' })).not.toBeVisible();
 });
 
 test('refreshes the selected city without changing its share URL and preserves it on failure', async ({
@@ -397,8 +424,8 @@ test('restores searched cities from browser Back and Forward history', async ({ 
   await expect(page.locator('.location-name')).toHaveText('Potsdam');
 
   await page.goBack();
-  await expect(page.locator('.location-name')).toHaveText('Paris');
   await expect(page).toHaveURL(/name=Paris/);
+  await expect(page.locator('.location-name')).toHaveText('Paris');
   await page.goBack();
   await expect(page.locator('.location-name')).toHaveText('Berlin');
   await expect(page).toHaveURL(initialUrl);
@@ -475,15 +502,29 @@ test('supports full map view, city previews, and the user management page', asyn
 
   const mapCard = page.locator('#map');
   const viewport = page.viewportSize();
+  const requestsBeforeViewSwitch = previewWeatherRequests;
   await page.getByRole('link', { name: 'Open full map view' }).click();
   await expect(page).toHaveURL(/#map$/);
   await expect(mapCard).toHaveCSS('position', 'fixed');
   const fullMapBounds = await mapCard.boundingBox();
   expect(fullMapBounds?.width).toBeGreaterThanOrEqual((viewport?.width ?? 0) - 2);
   expect(fullMapBounds?.height).toBeGreaterThanOrEqual((viewport?.height ?? 0) - 2);
+  await expect(page.locator('.map-inspector')).toBeVisible();
+  await page.getByRole('button', { name: 'Trends', exact: true }).click();
+  await expect(page.getByRole('img', { name: 'Daily high temperature chart' })).toBeVisible();
+  await expect(page.locator('.current-card')).not.toBeVisible();
+  await page.getByRole('button', { name: 'Plan', exact: true }).click();
+  await page.getByRole('button', { name: 'Cycling', exact: true }).click();
+  await expect(page.getByRole('list', { name: 'Ranked cycling weather windows' })).toBeVisible();
   await page.getByRole('link', { name: 'Close full map view' }).click();
   await expect(page).toHaveURL(/#dashboard$/);
   await expect(mapCard).toHaveCSS('position', 'relative');
+  expect(previewWeatherRequests).toBe(requestsBeforeViewSwitch);
+  await expect(page.getByRole('button', { name: 'Cycling', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  expect(mapWorkerRequests).toBe(1);
 
   const radarSlider = page.getByRole('slider', { name: 'Radar frame time' });
   await expect(radarSlider).toBeVisible();
@@ -555,6 +596,59 @@ test('publishes Google OAuth privacy and terms pages linked from the homepage', 
   ).toBeVisible();
 });
 
+test('opens mobile Observatory directly with a viewport-anchored dock and a collapsible inspector', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/#map');
+  await expect(page.locator('.weather-app')).toHaveClass(/is-map-view/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Atmos Observatory' })).toHaveCount(1);
+  const inspector = page.getByRole('button', { name: /Berlin.*Weather at a glance/ });
+  await expect(inspector).toHaveAttribute('aria-expanded', 'false');
+  const navigation = page.getByRole('navigation', { name: 'Main navigation' });
+  const dock = await navigation.boundingBox();
+  expect(dock!.y).toBeGreaterThan(740);
+  expect(dock!.y + dock!.height).toBeLessThanOrEqual(844);
+  const zoom = page.getByRole('button', { name: 'Zoom in', exact: true });
+  await expect(zoom).toBeVisible();
+  const zoomBounds = await zoom.boundingBox();
+  const radarBounds = await page
+    .getByRole('region', { name: 'RainViewer radar playback' })
+    .boundingBox();
+  expect(zoomBounds!.y + zoomBounds!.height).toBeLessThan(radarBounds!.y);
+
+  await inspector.click();
+  await expect(page.locator('.current-card')).toBeVisible();
+  await page.getByRole('button', { name: '7 days', exact: true }).click();
+  await expect(page.locator('.forecast-card')).toBeVisible();
+  await expect(page.locator('.current-card')).not.toBeVisible();
+  await openWeatherTool(page, 'Settings');
+  await page.getByRole('button', { name: 'Dark', exact: true }).click();
+  await page.getByRole('button', { name: 'Close weather tools' }).click();
+  await expect(page).toHaveURL('/#map');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.setViewportSize({ width: 320, height: 740 });
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
+    .toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(page).toHaveURL('/#dashboard');
+  await expect(navigation.getByRole('link', { name: 'Map', exact: true })).toBeFocused();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    )
+    .toBe(true);
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await navigation.getByRole('link', { name: 'Map', exact: true }).click();
+  await expect(page).toHaveURL('/#map');
+  await navigation.getByRole('link', { name: 'Weather', exact: true }).click();
+  await expect(page).toHaveURL('/#dashboard');
+  await expect(page.locator('.hero-temperature')).toBeVisible();
+});
+
 test('compares a searched live city without switching until explicitly requested', async ({
   page,
 }) => {
@@ -616,7 +710,7 @@ test('compares a searched live city without switching until explicitly requested
   await page.goto('/');
   const dashboardUrl = page.url();
 
-  await page.getByText('Compare cities', { exact: true }).click();
+  await openWeatherTool(page, 'Compare cities');
   await page.getByLabel('Search for a city to compare').fill('Potsdam');
   await page.getByRole('button', { name: 'Search comparison cities' }).click();
   await page
@@ -670,7 +764,7 @@ test('loads attributed AQI estimates only after the user expands the panel', asy
   await page.goto('/');
 
   expect(calls).toBe(0);
-  await page.getByText('Air quality', { exact: true }).click();
+  await openWeatherTool(page, 'Air quality');
 
   await expect(page.locator('.aqi-index').nth(0)).toContainText('42');
   await expect(page.locator('.aqi-index').nth(0)).toContainText('Good');
@@ -680,6 +774,11 @@ test('loads attributed AQI estimates only after the user expands the panel', asy
   await expect(page.getByRole('link', { name: 'CAMS ENSEMBLE' })).toBeVisible();
   expect(new URL(requestedUrl).searchParams.get('lat')).toBe('52.52');
   expect(new URL(requestedUrl).searchParams.get('lon')).toBe('13.405');
+  expect(calls).toBe(1);
+  await page.getByRole('button', { name: 'Close weather tools' }).click();
+  await expect(page.locator('.air-quality-panel')).not.toHaveAttribute('open', '');
+  await page.getByRole('button', { name: 'Open weather tools' }).click();
+  await expect(page.locator('.air-quality-panel')).not.toHaveAttribute('open', '');
   expect(calls).toBe(1);
 });
 
@@ -730,7 +829,9 @@ test('loads weather from device coordinates without adding them to the page URL'
   await context.grantPermissions(['geolocation'], { origin: 'http://127.0.0.1:3000' });
   await context.setGeolocation({ latitude: 48.8534, longitude: 2.3488 });
   let weatherRequest = '';
+  let weatherRequestCount = 0;
   await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+    weatherRequestCount += 1;
     weatherRequest = route.request().url();
     await route.fulfill({
       contentType: 'application/json',
@@ -788,6 +889,21 @@ test('loads weather from device coordinates without adding them to the page URL'
   expect(new URL(weatherRequest).searchParams.get('lat')).toBe('48.8534');
   expect(new URL(weatherRequest).searchParams.get('lon')).toBe('2.3488');
   await expect(page).toHaveURL('/');
+  const requestsBeforeViews = weatherRequestCount;
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('link', { name: 'Map', exact: true })
+    .click();
+  await expect(page).toHaveURL('/#map');
+  await expect(page.locator('.location-name')).toHaveText('Your location');
+  await page.goBack();
+  await expect(page).toHaveURL('/');
+  await expect(page.locator('.location-name')).toHaveText('Your location');
+  await page.goForward();
+  await expect(page).toHaveURL('/#map');
+  await page.getByRole('button', { name: 'Use my current location' }).click();
+  await expect.poll(() => weatherRequestCount).toBe(requestsBeforeViews + 1);
+  await expect(page).toHaveURL('/#map');
 });
 
 test('authenticates, saves the current place, and switches to an API-returned saved place', async ({
@@ -1014,7 +1130,7 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   });
 
   await page.goto('/');
-  await page.getByText('Saved places', { exact: true }).click();
+  await openWeatherTool(page, 'Saved places');
   await page.getByLabel('Email').fill(user.email);
   await page.getByLabel('Password').fill('safe-example-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
@@ -1057,7 +1173,7 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   await expect(page.locator('.location-name')).toHaveText('Paris');
   await expect(page).toHaveURL('/');
 
-  await page.getByText('Saved places', { exact: true }).click();
+  await openWeatherTool(page, 'Saved places');
   await page.getByRole('button', { name: 'Remove Paris from saved places' }).click();
   const removeConfirmation = page.getByRole('group', { name: 'Remove Paris' });
   await expect(removeConfirmation).toContainText('Remove Paris?');
@@ -1069,10 +1185,10 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   expect(savedLocationDeleteAuthorization).toBe(`Bearer ${accessToken}`);
   expect(deletedSavedLocationId).toBe(paris.id);
 
-  await page.getByText('History', { exact: true }).click();
+  await openWeatherTool(page, 'History');
   await page.getByRole('button', { name: 'Record this observation' }).click();
   await expect(page.locator('.weather-history-status')).toContainText('recorded.');
-  await expect(page.getByRole('list', { name: 'Recorded observations' })).toContainText('20 deg');
+  await expect(page.getByRole('list', { name: 'Recorded observations' })).toContainText('20°');
   expect(postedObservation).toMatchObject({
     latitude: 48.8534,
     longitude: 2.3488,
@@ -1092,7 +1208,7 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   expect(deleteAuthorization).toBe(`Bearer ${accessToken}`);
   expect(deletedSnapshotId).toBe('00000000-0000-4000-8000-000000000030');
 
-  await page.getByText('Alerts', { exact: true }).click();
+  await openWeatherTool(page, 'Alerts');
   await page.getByLabel('Threshold').fill('18');
   await page.getByRole('button', { name: 'Add in-app rule' }).click();
   await expect(page.locator('.in-app-alert-status')).toHaveText('Matches current forecast');
@@ -1118,7 +1234,7 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   );
   expect(restoredPreferences.savedPlaces).toContain(savedBerlin?.id);
   expect(restoredPreferences.authSessionKey).toBeTruthy();
-  await page.getByText('Saved places', { exact: true }).click();
+  await openWeatherTool(page, 'Saved places');
   await expect(page.getByRole('list', { name: 'Your saved places' })).toContainText('Berlin Home');
   await expect.poll(() => browserWeatherQueries.length).toBeGreaterThan(1);
   await expect(page.locator('.saved-location-status')).toContainText(
@@ -1130,7 +1246,7 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   const requestsAfterDefault = browserWeatherQueries.length;
   await page.goto('/?lat=48.8534&lon=2.3488&timezone=Europe%2FParis&name=Paris&country=France');
   await expect(page.locator('.location-name')).toHaveText('Paris');
-  await page.getByText('Saved places', { exact: true }).click();
+  await openWeatherTool(page, 'Saved places');
   await expect(page.locator('.location-name')).toHaveText('Paris');
   expect(browserWeatherQueries).toHaveLength(requestsAfterDefault);
 });
@@ -1149,7 +1265,7 @@ test('shows email-confirmation guidance after account creation', async ({ page }
     await route.fulfill({ json: { user, session: null } });
   });
   await page.goto('/');
-  await page.getByText('Saved places', { exact: true }).click();
+  await openWeatherTool(page, 'Saved places');
   await page.getByRole('button', { name: 'Need an account? Create one' }).click();
   await page.getByLabel('Email').fill(user.email);
   await page.getByLabel('Password').fill('safe-example-password');
@@ -1233,7 +1349,7 @@ test('requests a non-enumerating password recovery link and handles an expired r
     await route.fulfill({ json: user });
   });
   await page.goto('/');
-  await page.getByText('Saved places', { exact: true }).click();
+  await openWeatherTool(page, 'Saved places');
   await page.getByLabel('Email').fill('weather@example.test');
   await page.getByRole('button', { name: 'Forgot password?' }).click();
 
@@ -1255,7 +1371,7 @@ test('requests a non-enumerating password recovery link and handles an expired r
   await expect(page.getByLabel('New password', { exact: true })).toHaveCount(0);
 
   await page.goto('/');
-  await page.getByText('Saved places', { exact: true }).click();
+  await openWeatherTool(page, 'Saved places');
   await page.getByLabel('Email').fill(user.email);
   await page.getByLabel('Password').fill('safe-example-password');
   await page.getByRole('button', { name: 'Sign in' }).click();
@@ -1281,7 +1397,7 @@ test('starts Google OAuth through the configured Supabase provider', async ({ pa
     });
   });
   await page.goto('/');
-  await page.getByText('Saved places', { exact: true }).click();
+  await openWeatherTool(page, 'Saved places');
   await page.getByRole('button', { name: 'Continue with Google' }).click();
   await page.waitForURL('**/?oauth-started=1');
 
@@ -1328,7 +1444,7 @@ test('deletes only the confirmed signed-in account through the authenticated API
   });
 
   await page.goto('/');
-  await page.getByText('Saved places', { exact: true }).click();
+  await openWeatherTool(page, 'Saved places');
   await page.getByLabel('Email').fill(user.email);
   await page.getByLabel('Password').fill('safe-example-password');
   await page.getByRole('button', { name: 'Sign in' }).click();

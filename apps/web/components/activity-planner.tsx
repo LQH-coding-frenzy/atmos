@@ -26,11 +26,11 @@ export function ActivityPlanner({ hourly, location }: ActivityPlannerProps) {
   });
 
   return (
-    <article className="planner-card panel">
+    <article className="planner-card panel" id="activities" aria-labelledby="activity-title">
       <div className="card-heading">
         <div>
-          <p className="eyebrow">Weather intelligence</p>
-          <h2>Plan an activity</h2>
+          <p className="eyebrow">Make time for outside</p>
+          <h2 id="activity-title">Find your window.</h2>
         </div>
         <div className="metric-tabs" role="group" aria-label="Activity">
           {supportedPlannerActivities.map((item) => (
