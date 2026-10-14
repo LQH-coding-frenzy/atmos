@@ -1,5 +1,6 @@
 import { dashboardSchema, type Dashboard as DashboardData } from '@atmos/contracts';
 import { Dashboard } from '../components/dashboard';
+import { LegalLinks } from '../components/legal-links';
 import { RetryWeatherButton } from '../components/retry-weather-button';
 import { defaultLocation } from '../lib/default-location';
 import { browserGatewayOrigin, serverGatewayOrigin } from '../lib/gateway-origin';
@@ -96,6 +97,7 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
           <h1 id="weather-unavailable-title">Weather data is temporarily unavailable.</h1>
           <p>The dashboard keeps real weather honest and will not substitute mock data.</p>
           <RetryWeatherButton />
+          <LegalLinks />
         </section>
       </main>
     );

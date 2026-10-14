@@ -30,3 +30,46 @@ user. It uses the owner-configured current Supabase Secret Key through the serve
 the browser or written to logs. Existing foreign keys cascade the profile, saved places, weather
 history, and alert data when Supabase Auth removes the user. No service-role key, schema migration,
 or RLS policy change is used.
+
+## Google OAuth brand verification
+
+The browser calls Supabase Google OAuth without adding custom Google API scopes. Supabase's web
+Google setup uses `openid`, `https://www.googleapis.com/auth/userinfo.email`, and
+`https://www.googleapis.com/auth/userinfo.profile`; Atmos does not request Gmail, Drive, Calendar,
+or other Google API access. Keep the Data Access list limited to those identity scopes unless the
+application functionality changes.
+
+For the production app, use these Branding URLs in Google Auth Platform after the policy routes are
+deployed and publicly accessible:
+
+| Field                              | Value                               |
+| ---------------------------------- | ----------------------------------- |
+| Application name                   | Atmos                               |
+| Application home page              | `https://rainify.dpdns.org/`        |
+| Privacy policy                     | `https://rainify.dpdns.org/privacy` |
+| Terms of service                   | `https://rainify.dpdns.org/terms`   |
+| User support and developer contact | `jach96443@gmail.com`               |
+| Authorized app domain              | `rainify.dpdns.org`                 |
+
+The Web OAuth client must retain `https://rainify.dpdns.org` as its production JavaScript origin
+and the exact Supabase callback `https://oxgwprvkotfvyacpqayx.supabase.co/auth/v1/callback` as an
+authorized redirect URI. The wildcard redirect `https://rainify.dpdns.org/**` belongs in Supabase
+Auth's redirect allow-list, not in the Google OAuth client.
+
+### Verify ownership before submitting
+
+Google requires Search Console ownership for authorized domains. The Public Suffix List includes
+`dpdns.org`, so the top private domain for this deployment is `rainify.dpdns.org`. In Google Search
+Console, create a Domain property for `rainify.dpdns.org`, add the exact TXT record Google provides
+at the DNS provider that controls this host, and verify it. The Google account that owns the
+Search Console property must also be an Owner or Editor on the Google Cloud project used by this
+OAuth client. Do not claim ownership of the shared `dpdns.org` or `supabase.co` domains.
+
+After the public policy pages are live and ownership is verified, review the OAuth app's Audience,
+Branding, and Data Access sections. Submit Branding verification, wait for the status to become
+Ready to publish, then publish the branding and set the intended external audience to production.
+Check Verification Center for any additional review requested by Google; the current implementation
+uses only basic identity scopes and has no feature that needs Gmail, Drive, Calendar, or contacts.
+If the console says the Supabase callback host itself needs ownership verification, pause rather
+than claiming the shared `supabase.co` domain; resolve the callback-domain requirement with the
+project's Auth-domain configuration before resubmitting.

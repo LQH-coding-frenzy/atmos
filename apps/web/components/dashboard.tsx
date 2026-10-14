@@ -44,6 +44,7 @@ import {
   saveOfflineDashboard,
 } from '../lib/offline-dashboard';
 import { locationFromShareUrl } from '../lib/location-url';
+import { LegalLinks } from './legal-links';
 
 type DashboardProps = {
   initialDashboard: DashboardData;
@@ -726,6 +727,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
         <footer>
           <span>Live weather data: Open-Meteo.</span>
           <span>Maps: OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors.</span>
+          <LegalLinks />
         </footer>
       </section>
     </main>

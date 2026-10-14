@@ -4,6 +4,7 @@ import type { LocationSearchResult } from '@atmos/contracts';
 import { LayoutDashboard, Map, UserRound } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { defaultLocation } from '../lib/default-location';
+import { LegalLinks } from './legal-links';
 import { SavedLocationsPanel } from './saved-locations-panel';
 
 type UserManagementPageProps = {
@@ -83,6 +84,7 @@ export function UserManagementPage({ gatewayOrigin }: UserManagementPageProps) {
         <footer>
           <span>Live weather data: Open-Meteo.</span>
           <span>Maps: OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors.</span>
+          <LegalLinks />
         </footer>
       </section>
     </main>
