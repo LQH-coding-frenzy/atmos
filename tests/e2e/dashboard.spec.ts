@@ -525,6 +525,36 @@ test('supports full map view, city previews, and the user management page', asyn
   await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
 });
 
+test('publishes Google OAuth privacy and terms pages linked from the homepage', async ({
+  page,
+}) => {
+  await page.goto('/');
+
+  const homepageLegalLinks = page.getByRole('navigation', { name: 'Legal information' });
+  await expect(homepageLegalLinks.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute(
+    'href',
+    '/privacy',
+  );
+  await expect(homepageLegalLinks.getByRole('link', { name: 'Terms of Service' })).toHaveAttribute(
+    'href',
+    '/terms',
+  );
+
+  await page.goto('/privacy');
+  await expect(page.getByRole('heading', { name: 'Privacy Policy', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Google sign-in' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'jach96443@gmail.com' })).toHaveAttribute(
+    'href',
+    'mailto:jach96443@gmail.com',
+  );
+
+  await page.goto('/terms');
+  await expect(page.getByRole('heading', { name: 'Terms of Service', level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Weather information is not safety advice' }),
+  ).toBeVisible();
+});
+
 test('compares a searched live city without switching until explicitly requested', async ({
   page,
 }) => {
@@ -1129,6 +1159,34 @@ test('shows email-confirmation guidance after account creation', async ({ page }
     'check your email to confirm it',
   );
   await expect(page.getByText(user.email, { exact: true })).toHaveCount(0);
+});
+
+test('publishes Google OAuth privacy and terms pages from the public site', async ({ page }) => {
+  await page.goto('/');
+
+  const homepageLegalLinks = page.getByRole('navigation', { name: 'Legal information' });
+  await expect(homepageLegalLinks.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute(
+    'href',
+    '/privacy',
+  );
+  await expect(homepageLegalLinks.getByRole('link', { name: 'Terms of Service' })).toHaveAttribute(
+    'href',
+    '/terms',
+  );
+
+  await page.goto('/privacy');
+  await expect(page.getByRole('heading', { name: 'Privacy Policy', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Google sign-in' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'jach96443@gmail.com' })).toHaveAttribute(
+    'href',
+    'mailto:jach96443@gmail.com',
+  );
+
+  await page.goto('/terms');
+  await expect(page.getByRole('heading', { name: 'Terms of Service', level: 1 })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Weather information is not safety advice' }),
+  ).toBeVisible();
 });
 
 test('requests a non-enumerating password recovery link and handles an expired recovery session', async ({
