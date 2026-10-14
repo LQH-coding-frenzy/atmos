@@ -10,7 +10,14 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="system" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem('atmos.theme');if(t==='light'||t==='dark'||t==='system')document.documentElement.dataset.theme=t}catch{}`,
+          }}
+        />
+      </head>
       <body>
         <PwaRegistration />
         {children}

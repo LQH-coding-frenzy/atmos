@@ -13,19 +13,20 @@ import {
   CloudLightning,
   CloudRain,
   CloudSun,
+  ArrowUpRight,
+  ChevronDown,
   Droplets,
-  Gauge,
+  Wind,
   LocateFixed,
   LayoutDashboard,
   Map,
-  Menu,
+  MapPin,
   RefreshCw,
   Snowflake,
   Sun,
   UserRound,
-  X,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { DashboardMap } from './dashboard-map';
 import { ActivityPlanner } from './activity-planner';
 import { ForecastTrendChart } from './forecast-trend-chart';
@@ -45,6 +46,7 @@ import {
 } from '../lib/offline-dashboard';
 import { locationFromShareUrl } from '../lib/location-url';
 import { LegalLinks } from './legal-links';
+import { WeatherTools } from './weather-tools';
 
 type DashboardProps = {
   initialDashboard: DashboardData;
@@ -115,15 +117,19 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
   const [units, setUnits] = useState<UnitSystem>('metric');
   const [theme, setTheme] = useState<ThemePreference>('system');
   const [preferencesReady, setPreferencesReady] = useState(false);
-  const [navigationOpen, setNavigationOpen] = useState(false);
+  const [mapView, setMapView] = useState(false);
+  const [mapPanelOpen, setMapPanelOpen] = useState(true);
+  const [mapPanel, setMapPanel] = useState('now');
   const [activeMetric, setActiveMetric] = useState<ForecastTrendMetric>('temperature');
   const [selectedHourTime, setSelectedHourTime] = useState<string | null>(null);
   const [selectedDayDate, setSelectedDayDate] = useState<string | null>(null);
   const [locationStatus, setLocationStatus] = useState<
     'idle' | 'locating' | 'success' | 'permission-denied' | 'unavailable' | 'weather-failed'
   >('idle');
-  const menuButton = useRef<HTMLButtonElement>(null);
-  const closeButton = useRef<HTMLButtonElement>(null);
+  const mapViewRef = useRef(false);
+  const mapPanelInitialized = useRef(false);
+  const currentLocationRef = useRef(initialDashboard.location);
+  const locationSearchRef = useRef('');
   const locationRequestGeneration = useRef(0);
   const locationRequestController = useRef<AbortController | null>(null);
   const selectLocationRef = useRef<
@@ -136,6 +142,13 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
   const [connectivityReady, setConnectivityReady] = useState(false);
   const [refreshStatus, setRefreshStatus] = useState<'idle' | 'refreshing' | 'failed'>('idle');
   const currentTemperature = temperature(dashboard.current.temperatureC, units);
+  const LocationHeading = mapView ? 'h2' : 'h1';
+  currentLocationRef.current = dashboard.location;
+  const forecastLow = Math.min(...dashboard.daily.map((day) => day.lowC));
+  const forecastRange = Math.max(
+    1,
+    Math.max(...dashboard.daily.map((day) => day.highC)) - forecastLow,
+  );
   const selectedHourIndex = dashboard.hourly.findIndex((hour) => hour.time === selectedHourTime);
   const selectedHour = selectedHourIndex >= 0 ? dashboard.hourly[selectedHourIndex] : undefined;
 
@@ -159,8 +172,8 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
   }, []);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
+    if (preferencesReady) document.documentElement.dataset.theme = theme;
+  }, [preferencesReady, theme]);
 
   useEffect(() => {
     if (!preferencesReady) return;
@@ -172,53 +185,23 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
     }
   }, [preferencesReady, theme, units]);
 
-  function closeNavigation() {
-    setNavigationOpen(false);
-    requestAnimationFrame(() => menuButton.current?.focus());
-  }
-
   useEffect(() => {
-    if (!navigationOpen) return;
-    closeButton.current?.focus();
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') closeNavigation();
-    }
-    window.addEventListener('keydown', closeOnEscape);
-    return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [navigationOpen]);
-
-  useEffect(() => {
-    const closeToolPanels = (restoreFocus: boolean) => {
-      const openPanels = Array.from(
-        document.querySelectorAll<HTMLDetailsElement>(
-          '.topbar-actions details[name="dashboard-tools"][open]',
-        ),
-      );
-      for (const panel of openPanels) panel.open = false;
-      if (restoreFocus) openPanels.at(-1)?.querySelector('summary')?.focus();
+    locationSearchRef.current = window.location.search;
+    const syncView = () => {
+      const nextMapView = window.location.hash === '#map';
+      mapViewRef.current = nextMapView;
+      setMapView(nextMapView);
+      if (nextMapView && !mapPanelInitialized.current) {
+        setMapPanelOpen(window.matchMedia('(min-width: 900px)').matches);
+        mapPanelInitialized.current = true;
+      }
     };
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      const openPanel = document.querySelector<HTMLDetailsElement>(
-        '.topbar-actions details[name="dashboard-tools"][open]',
-      );
-      if (!openPanel || (target instanceof Node && openPanel.contains(target))) return;
-      closeToolPanels(false);
-    };
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      const hasOpenPanel = document.querySelector(
-        '.topbar-actions details[name="dashboard-tools"][open]',
-      );
-      if (!hasOpenPanel) return;
-      event.preventDefault();
-      closeToolPanels(true);
-    };
-    document.addEventListener('pointerdown', handlePointerDown, true);
-    window.addEventListener('keydown', handleEscape);
+    syncView();
+    window.addEventListener('hashchange', syncView);
+    window.addEventListener('popstate', syncView);
     return () => {
-      document.removeEventListener('pointerdown', handlePointerDown, true);
-      window.removeEventListener('keydown', handleEscape);
+      window.removeEventListener('hashchange', syncView);
+      window.removeEventListener('popstate', syncView);
     };
   }, []);
 
@@ -295,9 +278,17 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
           name: selectedLocation.name,
           country: selectedLocation.country,
         }).toString();
-        window.history.pushState({}, '', locationUrl);
+        // Preserve the App Router's current entry metadata. Weather selection is
+        // local state; a queued router URL transition must not overwrite Back.
+        window.history.pushState({ ...window.history.state }, '', locationUrl);
+        locationSearchRef.current = locationUrl.search;
       } else if (urlBehavior === 'clear') {
-        window.history.replaceState({}, '', window.location.pathname);
+        window.history.replaceState(
+          { ...window.history.state },
+          '',
+          `${window.location.pathname}${mapViewRef.current ? '#map' : ''}`,
+        );
+        locationSearchRef.current = '';
       }
       return true;
     } catch {
@@ -313,10 +304,21 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
 
   useEffect(() => {
     function restoreHistoryLocation() {
+      const searchChanged = window.location.search !== locationSearchRef.current;
+      locationSearchRef.current = window.location.search;
       const sharedLocation = locationFromShareUrl(new URL(window.location.href));
       if (sharedLocation.kind === 'invalid') return;
+      // Empty-query hash navigation must retain a device/default saved place.
+      if (!searchChanged && sharedLocation.kind === 'root') return;
       const location =
         sharedLocation.kind === 'location' ? sharedLocation.location : initialDashboard.location;
+      const current = currentLocationRef.current;
+      if (
+        current.latitude === location.latitude &&
+        current.longitude === location.longitude &&
+        current.name === location.name
+      )
+        return;
       void selectLocationRef.current(location, 'preserve');
     }
     window.addEventListener('popstate', restoreHistoryLocation);
@@ -347,7 +349,8 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
       name: selectedDashboard.location.name,
       country: selectedDashboard.location.country,
     }).toString();
-    window.history.pushState({}, '', locationUrl);
+    window.history.pushState({ ...window.history.state }, '', locationUrl);
+    locationSearchRef.current = locationUrl.search;
   }
 
   function useCurrentLocation() {
@@ -381,94 +384,64 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
   }
 
   return (
-    <main className="atmos-page">
-      <aside
-        id="main-navigation"
-        className={navigationOpen ? 'sidebar sidebar-open' : 'sidebar'}
-        aria-label="Main navigation"
-      >
-        <div className="brand" aria-label="Atmos home">
-          a<span>o</span>
-        </div>
-        <button
-          className="close-nav"
-          onClick={closeNavigation}
-          aria-label="Close navigation"
-          ref={closeButton}
-        >
-          <X size={18} />
-        </button>
-        <nav aria-label="Main navigation">
-          <a href="#dashboard" aria-current="page" onClick={closeNavigation}>
-            <LayoutDashboard size={19} />
-            <span>Dashboard</span>
-          </a>
-          <a href="#map" onClick={closeNavigation}>
-            <Map size={19} />
-            <span>Map</span>
-          </a>
-        </nav>
-      </aside>
-
-      <section className="dashboard-shell" id="dashboard" inert={navigationOpen}>
+    <main
+      className={`atmos-page weather-app${mapView ? ' is-map-view' : ''}`}
+      data-map-panel={mapPanelOpen ? mapPanel : 'closed'}
+    >
+      <a className="skip-link" href="#current-weather">
+        Skip to weather
+      </a>
+      <section className="dashboard-shell" id="dashboard">
         <header className="topbar">
-          <button
-            className="menu-button"
-            onClick={() => setNavigationOpen(true)}
-            aria-label="Open navigation"
-            aria-controls="main-navigation"
-            aria-expanded={navigationOpen}
-            ref={menuButton}
-          >
-            <Menu size={21} />
-          </button>
-          <div>
-            <p className="eyebrow">Weather intelligence</p>
-            <h1>
-              {formatDashboardDate(dashboard.current.observedAt, dashboard.location.timezone)}
-            </h1>
-          </div>
-          <div className="topbar-actions">
+          {mapView ? <h1 className="sr-only">Atmos Observatory</h1> : null}
+          <a className="app-brand" href="#dashboard" aria-label="Atmos home">
+            <span className="brand" aria-hidden="true">
+              a<span>o</span>
+            </span>
+            <span>
+              atmos<span className="brand-caption">A little closer to outside.</span>
+            </span>
+          </a>
+          <div className="search-cluster">
             <LocationSearch gatewayOrigin={gatewayOrigin} onSelect={selectLocation} />
-            <a
-              className="user-management-link"
-              href="/user"
-              aria-label="User management"
-              title="User management"
-            >
-              <UserRound size={18} aria-hidden="true" />
-            </a>
-            <SavedLocationsPanel
-              gatewayOrigin={gatewayOrigin}
-              currentLocation={dashboard.location}
-              initialLocationExplicit={initialDashboard.location.id !== 'berlin-de'}
-              onSelect={selectLocation}
-            />
-            <WeatherHistoryPanel
-              gatewayOrigin={gatewayOrigin}
-              location={dashboard.location}
-              current={dashboard.current}
-              provider={dashboard.meta.provider}
-              stale={dashboard.meta.stale}
-              units={units}
-            />
-            <AirQualityPanel gatewayOrigin={gatewayOrigin} location={dashboard.location} />
-            <InAppAlertsPanel
-              gatewayOrigin={gatewayOrigin}
-              location={dashboard.location}
-              current={dashboard.current}
-              hourly={dashboard.hourly}
-              stale={dashboard.meta.stale}
-            />
-            <WeatherComparisonPanel
-              current={dashboard}
-              gatewayOrigin={gatewayOrigin}
-              units={units}
-              onUseAsCurrent={selectLocation}
-            />
-            <PreferencesPanel theme={theme} onThemeChange={setTheme} />
             <button
-              className="refresh-weather-button"
+              className="current-location-button icon-button"
+              type="button"
+              onClick={useCurrentLocation}
+              disabled={locationStatus === 'locating'}
+              aria-label="Use my current location"
+              title="Use my current location"
+            >
+              <LocateFixed
+                size={18}
+                aria-hidden="true"
+                className={locationStatus === 'locating' ? 'refresh-spinning' : undefined}
+              />
+            </button>
+          </div>
+          <div className="header-utilities">
+            <div className="unit-switch" aria-label="Temperature unit">
+              <button
+                type="button"
+                className={units === 'metric' ? 'active' : ''}
+                onClick={() => setUnits('metric')}
+                aria-pressed={units === 'metric'}
+                aria-label="Celsius"
+              >
+                °C
+              </button>
+              <button
+                type="button"
+                className={units === 'imperial' ? 'active' : ''}
+                onClick={() => setUnits('imperial')}
+                aria-pressed={units === 'imperial'}
+                aria-label="Fahrenheit"
+              >
+                °F
+              </button>
+            </div>
+            <button
+              className="refresh-weather-button icon-button"
               type="button"
               onClick={() => void refreshWeather()}
               disabled={refreshStatus === 'refreshing'}
@@ -481,36 +454,108 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
                 className={refreshStatus === 'refreshing' ? 'refresh-spinning' : undefined}
               />
             </button>
-            <button
-              className="current-location-button"
-              type="button"
-              onClick={useCurrentLocation}
-              disabled={locationStatus === 'locating'}
-              aria-label="Use my current location"
-            >
-              <LocateFixed size={17} aria-hidden="true" />
-              <span>{locationStatus === 'locating' ? 'Locating…' : 'My location'}</span>
-            </button>
-            <div className="unit-switch" aria-label="Temperature unit">
-              <button
-                className={units === 'metric' ? 'active' : ''}
-                onClick={() => setUnits('metric')}
-                aria-pressed={units === 'metric'}
-                aria-label="Celsius"
-              >
-                C
-              </button>
-              <button
-                className={units === 'imperial' ? 'active' : ''}
-                onClick={() => setUnits('imperial')}
-                aria-pressed={units === 'imperial'}
-                aria-label="Fahrenheit"
-              >
-                F
-              </button>
-            </div>
           </div>
+          <nav className="app-navigation" aria-label="Main navigation">
+            <a href="#dashboard" aria-label="Weather" aria-current={!mapView ? 'page' : undefined}>
+              <LayoutDashboard size={18} aria-hidden="true" />
+              <span>Weather</span>
+            </a>
+            <a href="#map" aria-label="Map" aria-current={mapView ? 'page' : undefined}>
+              <Map size={18} aria-hidden="true" />
+              <span>Map</span>
+            </a>
+            <WeatherTools>
+              <SavedLocationsPanel
+                gatewayOrigin={gatewayOrigin}
+                currentLocation={dashboard.location}
+                initialLocationExplicit={initialDashboard.location.id !== 'berlin-de'}
+                onSelect={selectLocation}
+              />
+              <AirQualityPanel gatewayOrigin={gatewayOrigin} location={dashboard.location} />
+              <WeatherComparisonPanel
+                current={dashboard}
+                gatewayOrigin={gatewayOrigin}
+                units={units}
+                onUseAsCurrent={selectLocation}
+              />
+              <WeatherHistoryPanel
+                gatewayOrigin={gatewayOrigin}
+                location={dashboard.location}
+                current={dashboard.current}
+                provider={dashboard.meta.provider}
+                stale={dashboard.meta.stale}
+                units={units}
+              />
+              <InAppAlertsPanel
+                gatewayOrigin={gatewayOrigin}
+                location={dashboard.location}
+                current={dashboard.current}
+                hourly={dashboard.hourly}
+                stale={dashboard.meta.stale}
+              />
+              <PreferencesPanel theme={theme} onThemeChange={setTheme} />
+            </WeatherTools>
+            <a
+              className="user-management-link"
+              href="/user"
+              aria-label="User management"
+              title="User management"
+            >
+              <UserRound size={18} aria-hidden="true" />
+              <span>Account</span>
+            </a>
+          </nav>
         </header>
+        <div className="dashboard-intro">
+          <p>{formatDashboardDate(dashboard.current.observedAt, dashboard.location.timezone)}</p>
+          <span>
+            <span className="status-dot" />
+            {dashboard.meta.stale ? 'Cached forecast' : 'Your daily outlook'}
+          </span>
+        </div>
+        {mapView ? (
+          <aside className="map-inspector" aria-label="Selected city weather">
+            <button
+              className="map-inspector-toggle"
+              type="button"
+              aria-expanded={mapPanelOpen}
+              aria-controls="map-inspector-tabs"
+              onClick={() => setMapPanelOpen((open) => !open)}
+            >
+              <CloudSun size={20} aria-hidden="true" />
+              <span>
+                {dashboard.location.name}
+                <small>Weather at a glance</small>
+              </span>
+              <ChevronDown size={18} aria-hidden="true" />
+            </button>
+            {mapPanelOpen ? (
+              <div
+                className="map-inspector-tabs"
+                id="map-inspector-tabs"
+                role="group"
+                aria-label="Map weather panel"
+              >
+                {[
+                  ['now', 'Now', 'current-weather'],
+                  ['forecast', '7 days', 'forecast'],
+                  ['trends', 'Trends', 'trends'],
+                  ['activities', 'Plan', 'activities'],
+                ].map(([value, label, target]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={mapPanel === value}
+                    aria-controls={target}
+                    onClick={() => setMapPanel(value!)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </aside>
+        ) : null}
         {locationStatus !== 'idle' ? (
           <p className="location-status" role="status" aria-live="polite">
             {locationStatus === 'locating' && 'Requesting your location…'}
@@ -536,41 +581,85 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
         ) : null}
 
         <section className="dashboard-grid">
-          <article className="current-card panel">
+          <article
+            className="current-card panel"
+            id="current-weather"
+            tabIndex={-1}
+            aria-labelledby="location-name"
+          >
+            <div className="current-place">
+              <div>
+                <p className="eyebrow">
+                  <MapPin size={13} aria-hidden="true" /> Current weather
+                </p>
+                <LocationHeading className="location-name" id="location-name">
+                  {dashboard.location.name}
+                </LocationHeading>
+                <p className="muted">{dashboard.location.country}</p>
+              </div>
+              <p className="weather-freshness">
+                Observed <br />
+                {formatTimestamp(dashboard.current.observedAt, dashboard.location.timezone)}
+              </p>
+            </div>
             <div className="current-summary">
+              <div className="hero-reading">
+                <p
+                  className="hero-temperature"
+                  aria-label={`${currentTemperature} degrees ${units === 'metric' ? 'Celsius' : 'Fahrenheit'}`}
+                >
+                  {currentTemperature}
+                  <span>°</span>
+                </p>
+                <p className="hero-condition">{conditionLabel(dashboard.current.condition)}</p>
+                {dashboard.daily[0] ? (
+                  <p className="hero-range">
+                    H: {temperature(dashboard.daily[0].highC, units)}°
+                    <span>L: {temperature(dashboard.daily[0].lowC, units)}°</span>
+                  </p>
+                ) : null}
+              </div>
               <div
-                className="condition-mark"
+                className={`condition-mark condition-${dashboard.current.condition}`}
                 aria-label={conditionLabel(dashboard.current.condition)}
               >
-                <WeatherIcon condition={dashboard.current.condition} size={59} />
+                <WeatherIcon condition={dashboard.current.condition} size={124} />
               </div>
-              <div>
-                <p className="location-name">{dashboard.location.name}</p>
-                <p className="muted">{dashboard.location.country}</p>
-                <p className="weather-freshness">
-                  Observed{' '}
-                  {formatTimestamp(dashboard.current.observedAt, dashboard.location.timezone)}
-                </p>
-              </div>
-              <div className="weather-stats">
-                <Stat value={`${currentTemperature} deg`} label="Temperature" />
-                <Stat value={`${dashboard.current.humidityPercent}%`} label="Humidity" />
-                <Stat
-                  value={formatWindSpeed(dashboard.current.windSpeedKph, units)}
-                  label="Wind speed"
-                />
-              </div>
+            </div>
+            <div className="weather-stats">
+              <Stat
+                value={`${temperature(dashboard.current.apparentTemperatureC, units)}°`}
+                label="Feels like"
+              />
+              <Stat
+                value={`${dashboard.current.humidityPercent}%`}
+                label="Humidity"
+                icon={<Droplets size={14} />}
+              />
+              <Stat
+                value={formatWindSpeed(dashboard.current.windSpeedKph, units)}
+                label="Wind"
+                icon={<Wind size={14} />}
+              />
+              <Stat
+                value={`${dashboard.hourly[0]?.precipitationProbability ?? '—'}%`}
+                label="Rain chance"
+              />
             </div>
             <details className="weather-extra-details">
               <summary>More conditions</summary>
               <div className="weather-extra-stats" aria-label="Additional current conditions">
                 <Stat
-                  value={`${temperature(dashboard.current.apparentTemperatureC, units)} deg`}
+                  value={`${temperature(dashboard.current.apparentTemperatureC, units)}°`}
                   label="Feels like"
                 />
                 <Stat value={`${Math.round(dashboard.current.pressureHpa)} hPa`} label="Pressure" />
               </div>
             </details>
+            <div className="hourly-heading">
+              <h2>The next 12 hours</h2>
+              <span>Local time</span>
+            </div>
             <div className="hourly-row" aria-label="Hourly forecast">
               {dashboard.hourly.map((hour, index) => (
                 <button
@@ -586,7 +675,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
                 >
                   <span>{formatHour(hour.time, dashboard.location.timezone)}</span>
                   <WeatherIcon condition={hour.condition} size={18} />
-                  <strong>{temperature(hour.temperatureC, units)} deg</strong>
+                  <strong>{temperature(hour.temperatureC, units)}°</strong>
                 </button>
               ))}
             </div>
@@ -603,7 +692,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
                 <div className="forecast-detail-stats">
                   <div>
                     <span>Temperature</span>
-                    <strong>{temperature(selectedHour.temperatureC, units)} deg</strong>
+                    <strong>{temperature(selectedHour.temperatureC, units)}°</strong>
                   </div>
                   <div>
                     <span>Precipitation chance</span>
@@ -620,13 +709,14 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
             units={units}
             onSelectLocation={selectMapLocation}
             onOpenLocation={selectLocation}
+            observatory={mapView}
           />
 
-          <article className="overview-card panel">
+          <article className="overview-card panel" id="trends" aria-labelledby="trend-title">
             <div className="card-heading">
               <div>
-                <p className="eyebrow">Live patterns</p>
-                <h2>Overview</h2>
+                <p className="eyebrow">The bigger picture</p>
+                <h2 id="trend-title">A week in view.</h2>
               </div>
               <div className="metric-tabs" role="group" aria-label="Chart metric">
                 {chartMetrics.map((metric) => (
@@ -646,13 +736,13 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
             </div>
           </article>
 
-          <article className="forecast-card panel">
+          <article className="forecast-card panel" id="forecast" aria-labelledby="forecast-title">
             <div className="card-heading">
               <div>
-                <p className="eyebrow">Next seven days</p>
-                <h2>Forecasts</h2>
+                <p className="eyebrow">Looking ahead</p>
+                <h2 id="forecast-title">The next seven days.</h2>
               </div>
-              <Gauge size={21} />
+              <span className="forecast-unit">°{units === 'metric' ? 'C' : 'F'}</span>
             </div>
             <div className="forecast-list">
               {dashboard.daily.map((day, index) => (
@@ -667,14 +757,26 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
                       setSelectedDayDate((selected) => (selected === day.date ? null : day.date))
                     }
                   >
-                    <span className="forecast-icon">
+                    <time dateTime={day.date}>
+                      {index === 0 ? 'Today' : formatForecastDate(day.date)}
+                    </time>
+                    <span className="forecast-icon" aria-label={conditionLabel(day.condition)}>
                       <WeatherIcon condition={day.condition} size={20} />
                     </span>
-                    <div>
-                      <strong>{temperature(day.highC, units)} deg</strong>
-                      <span> / {temperature(day.lowC, units)} deg</span>
-                    </div>
-                    <time>{formatForecastDate(day.date)}</time>
+                    <span className="forecast-rain">
+                      <Droplets size={11} aria-hidden="true" />
+                      {day.precipitationProbability}%
+                    </span>
+                    <span className="forecast-low">{temperature(day.lowC, units)}°</span>
+                    <span className="temperature-track" aria-hidden="true">
+                      <span
+                        style={{
+                          left: `${((day.lowC - forecastLow) / forecastRange) * 100}%`,
+                          width: `${Math.max(5, ((day.highC - day.lowC) / forecastRange) * 100)}%`,
+                        }}
+                      />
+                    </span>
+                    <strong>{temperature(day.highC, units)}°</strong>
                   </button>
                   {selectedDayDate === day.date ? (
                     <section
@@ -690,7 +792,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
                         <div>
                           <span>High / low</span>
                           <strong>
-                            {temperature(day.highC, units)} / {temperature(day.lowC, units)} deg
+                            {temperature(day.highC, units)}° / {temperature(day.lowC, units)}°
                           </strong>
                         </div>
                         <div>
@@ -707,23 +809,19 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
 
           <ActivityPlanner hourly={dashboard.hourly} location={dashboard.location} />
 
-          <aside className="attribution-card">
-            <Droplets size={25} />
-            <div>
-              <p className="eyebrow">Data honesty</p>
-              <h2>Built for the elements.</h2>
-              <p>
-                Live weather comes through the Atmos gateway from Open-Meteo, with visible
-                attribution and quota-aware caching.
-              </p>
-            </div>
-          </aside>
           {isOnline && dashboard.meta.stale ? (
             <p className="weather-stale" role="status">
               Showing cached weather while Open-Meteo is unavailable.
             </p>
           ) : null}
         </section>
+        <a className="observatory-invitation" href="#map">
+          <Map size={20} aria-hidden="true" />
+          <span>
+            There’s a bigger picture.<small>Explore radar and weather layers in Observatory.</small>
+          </span>
+          <ArrowUpRight size={22} aria-hidden="true" />
+        </a>
         <footer>
           <span>Live weather data: Open-Meteo.</span>
           <span>Maps: OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors.</span>
@@ -734,11 +832,14 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
   );
 }
 
-function Stat({ value, label }: { value: string; label: string }) {
+function Stat({ value, label, icon }: { value: string; label: string; icon?: ReactNode }) {
   return (
     <div>
       <strong>{value}</strong>
-      <span>{label}</span>
+      <span>
+        {icon}
+        {label}
+      </span>
     </div>
   );
 }

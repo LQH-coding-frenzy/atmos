@@ -339,7 +339,7 @@ export function WeatherHistoryPanel({
                   <polyline
                     points={points.map(({ x, y }) => `${x},${y}`).join(' ')}
                     fill="none"
-                    stroke="#cde8ed"
+                    stroke="var(--accent)"
                     strokeWidth="3"
                     strokeLinejoin="round"
                     strokeLinecap="round"
@@ -350,8 +350,8 @@ export function WeatherHistoryPanel({
                       cx={x}
                       cy={y}
                       r="4"
-                      fill="#cde8ed"
-                      stroke="#282c33"
+                      fill="var(--accent)"
+                      stroke="var(--raised)"
                       strokeWidth="2"
                     />
                   ))}
@@ -376,7 +376,7 @@ export function WeatherHistoryPanel({
                     return (
                       <li key={snapshot.id}>
                         <time dateTime={snapshot.observed_at}>{observedTime}</time>
-                        <strong>{temperature(snapshot.payload.temperature_c, units)} deg</strong>
+                        <strong>{temperature(snapshot.payload.temperature_c, units)}°</strong>
                         <span>{snapshot.payload.condition.replace('-', ' ')}</span>
                         <button
                           type="button"

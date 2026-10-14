@@ -1,5 +1,7 @@
 # Design Provenance
 
+The Skyglass/Observatory redesign follows the owner-selected dual composition documented in [the UI design contract](skyglass-ui.md). Its CSS, typography hierarchy, tonal surfaces, and browser glass treatments are original implementation informed by public Material 3 and Apple materials guidance. Base-vector map colors adapt to the selected theme; radar rasters and weather-marker colors retain their data meaning.
+
 The user-provided dashboard image and rough Vite design are visual references only. Their bundled avatar and map image are not shipped by the Atmos application.
 
 The production dashboard uses original CSS and Lucide icons. Its MapLibre Weather Watch map loads the OpenFreeMap Liberty public style (`https://tiles.openfreemap.org/styles/liberty`), with vector tiles derived from OpenStreetMap. OpenFreeMap's public service is free, requires no registration/API key, allows commercial use, and is provided as-is without an availability SLA. The owner approved its use on 2026-10-11. MapLibre's attribution control displays OpenFreeMap, OpenMapTiles, and OpenStreetMap attribution.

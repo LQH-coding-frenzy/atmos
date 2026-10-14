@@ -45,6 +45,7 @@ export function WeatherComparisonPanel({
   const [switchFailed, setSwitchFailed] = useState(false);
   const requestGeneration = useRef(0);
   const weatherController = useRef<AbortController | null>(null);
+  const panel = useRef<HTMLDetailsElement>(null);
 
   useEffect(
     () => () => {
@@ -153,6 +154,8 @@ export function WeatherComparisonPanel({
     setSwitching(false);
     setSwitchFailed(!switched);
     if (switched) {
+      if (panel.current) panel.current.open = false;
+      panel.current?.closest('dialog')?.close();
       setComparison(undefined);
       setQuery('');
       setResults([]);
@@ -175,7 +178,7 @@ export function WeatherComparisonPanel({
     : undefined;
 
   return (
-    <details className="weather-comparison-panel" name="dashboard-tools">
+    <details className="weather-comparison-panel" name="dashboard-tools" ref={panel}>
       <summary aria-controls="weather-comparison-content">
         <GitCompareArrows size={17} aria-hidden="true" />
         <span>Compare cities</span>
