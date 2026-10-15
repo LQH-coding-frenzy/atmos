@@ -214,23 +214,68 @@ export const currentWeatherSchema = z.object({
   windSpeedKph: z.number().nonnegative(),
   pressureHpa: z.number().positive(),
   condition: weatherConditionSchema,
+  windDirectionDegrees: z.number().min(0).max(360).nullable().optional(),
+  windGustKph: z.number().nonnegative().nullable().optional(),
+  cloudCoverPercent: z.number().min(0).max(100).nullable().optional(),
+  precipitationMm: z.number().nonnegative().nullable().optional(),
+  rainMm: z.number().nonnegative().nullable().optional(),
+  snowfallCm: z.number().nonnegative().nullable().optional(),
+  isDay: z.boolean().nullable().optional(),
+  // These variables are hourly estimates, not 15-minute current observations.
+  hourlyEstimates: z
+    .object({
+      time: z.string().datetime(),
+      visibilityM: z.number().nonnegative().nullable().optional(),
+      uvIndex: z.number().nonnegative().nullable().optional(),
+    })
+    .optional(),
 });
 export type CurrentWeather = z.infer<typeof currentWeatherSchema>;
 
 const nullablePollutantValue = z.number().nonnegative().nullable();
 
+export const airQualityPollutantsSchema = z.object({
+  pm25: nullablePollutantValue,
+  pm10: nullablePollutantValue,
+  carbonMonoxide: nullablePollutantValue,
+  nitrogenDioxide: nullablePollutantValue,
+  sulphurDioxide: nullablePollutantValue,
+  ozone: nullablePollutantValue,
+});
+
+export const airQualityHourSchema = z.object({
+  time: z.string().datetime(),
+  usAqi: nullablePollutantValue,
+  europeanAqi: nullablePollutantValue,
+  pollutants: airQualityPollutantsSchema,
+});
+export type AirQualityHour = z.infer<typeof airQualityHourSchema>;
+
+export const airQualityTimelineSchema = z
+  .object({
+    kind: z.literal('model'),
+    requestedPastDays: z.literal(7),
+    requestedForecastDays: z.literal(5),
+    hours: z.array(airQualityHourSchema).min(1).max(288),
+  })
+  .superRefine(({ hours }, context) => {
+    for (let index = 1; index < hours.length; index++) {
+      if (Date.parse(hours[index]!.time) <= Date.parse(hours[index - 1]!.time)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['hours', index, 'time'],
+          message: 'AQI timeline hours must be unique and chronological.',
+        });
+      }
+    }
+  });
+
 export const airQualitySchema = z.object({
   observedAt: z.string().datetime(),
   usAqi: z.number().nonnegative().nullable(),
   europeanAqi: z.number().nonnegative().nullable(),
-  pollutants: z.object({
-    pm25: nullablePollutantValue,
-    pm10: nullablePollutantValue,
-    carbonMonoxide: nullablePollutantValue,
-    nitrogenDioxide: nullablePollutantValue,
-    sulphurDioxide: nullablePollutantValue,
-    ozone: nullablePollutantValue,
-  }),
+  pollutants: airQualityPollutantsSchema,
+  timeline: airQualityTimelineSchema.optional(),
   meta: z.object({
     provider: z.literal('open-meteo'),
     cached: z.boolean(),
@@ -243,6 +288,7 @@ export type AirQuality = z.infer<typeof airQualitySchema>;
 export const airQualityInputSchema = z.object({
   latitude: z.number().gte(-90).lte(90),
   longitude: z.number().gte(-180).lte(180),
+  includeTimeline: z.boolean().optional(),
 });
 export type AirQualityInput = z.infer<typeof airQualityInputSchema>;
 
@@ -294,6 +340,19 @@ export const hourlyForecastSchema = z.object({
   temperatureC: z.number(),
   precipitationProbability: z.number().min(0).max(100),
   condition: weatherConditionSchema,
+  apparentTemperatureC: z.number().nullable().optional(),
+  humidityPercent: z.number().min(0).max(100).nullable().optional(),
+  pressureHpa: z.number().positive().nullable().optional(),
+  windSpeedKph: z.number().nonnegative().nullable().optional(),
+  windDirectionDegrees: z.number().min(0).max(360).nullable().optional(),
+  windGustKph: z.number().nonnegative().nullable().optional(),
+  cloudCoverPercent: z.number().min(0).max(100).nullable().optional(),
+  precipitationMm: z.number().nonnegative().nullable().optional(),
+  rainMm: z.number().nonnegative().nullable().optional(),
+  snowfallCm: z.number().nonnegative().nullable().optional(),
+  visibilityM: z.number().nonnegative().nullable().optional(),
+  uvIndex: z.number().nonnegative().nullable().optional(),
+  isDay: z.boolean().nullable().optional(),
 });
 export type HourlyForecast = z.infer<typeof hourlyForecastSchema>;
 
@@ -303,14 +362,31 @@ export const dailyForecastSchema = z.object({
   lowC: z.number(),
   precipitationProbability: z.number().min(0).max(100),
   condition: weatherConditionSchema,
+  sunrise: z.string().datetime().nullable().optional(),
+  sunset: z.string().datetime().nullable().optional(),
+  daylightSeconds: z.number().min(0).max(86400).nullable().optional(),
+  precipitationMm: z.number().nonnegative().nullable().optional(),
+  rainMm: z.number().nonnegative().nullable().optional(),
+  snowfallCm: z.number().nonnegative().nullable().optional(),
+  uvIndexMax: z.number().nonnegative().nullable().optional(),
+  windSpeedMaxKph: z.number().nonnegative().nullable().optional(),
+  windGustMaxKph: z.number().nonnegative().nullable().optional(),
 });
 export type DailyForecast = z.infer<typeof dailyForecastSchema>;
+
+// Long-range model runs can lack rain probability. Preserve the legacy seven-day
+// contract and expose this separately for compatible mixed-version rollouts.
+export const extendedDailyForecastSchema = dailyForecastSchema.extend({
+  precipitationProbability: z.number().min(0).max(100).nullable(),
+});
+export type ExtendedDailyForecast = z.infer<typeof extendedDailyForecastSchema>;
 
 export const dashboardSchema = z.object({
   location: locationSchema,
   current: currentWeatherSchema,
   hourly: z.array(hourlyForecastSchema).min(1),
   daily: z.array(dailyForecastSchema).min(1),
+  extendedDaily: z.array(extendedDailyForecastSchema).min(1).max(16).optional(),
   meta: z.object({
     provider: z.string().min(1),
     cached: z.boolean(),

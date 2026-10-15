@@ -53,6 +53,184 @@ test('keeps secondary current-condition metrics behind an accessible disclosure'
   await expect(details).toContainText('Pressure');
 });
 
+test('shows expanded model measurements and a compatible extended outlook without refetching', async ({
+  page,
+}) => {
+  let requests = 0;
+  const extendedDaily = Array.from({ length: 16 }, (_, index) => ({
+    date: `2026-09-${String(index + 1).padStart(2, '0')}`,
+    highC: 23,
+    lowC: 14,
+    precipitationProbability: index < 10 ? 15 : null,
+    condition: 'partly-cloudy',
+    sunrise: `2026-09-${String(index + 1).padStart(2, '0')}T05:00:00.000Z`,
+    sunset: `2026-09-${String(index + 1).padStart(2, '0')}T18:00:00.000Z`,
+    daylightSeconds: 46800,
+    precipitationMm: 25.4,
+    rainMm: 25.4,
+    snowfallCm: 0,
+    uvIndexMax: 5,
+    windSpeedMaxKph: 30,
+    windGustMaxKph: 40,
+  }));
+  const response = {
+    location: {
+      id: 'berlin-de',
+      name: 'Berlin',
+      country: 'Germany',
+      latitude: 52.52,
+      longitude: 13.405,
+      timezone: 'Europe/Berlin',
+    },
+    current: {
+      observedAt: '2026-09-01T10:15:00.000Z',
+      temperatureC: 20,
+      apparentTemperatureC: 19,
+      humidityPercent: 64,
+      windSpeedKph: 13,
+      pressureHpa: 1017,
+      condition: 'partly-cloudy',
+      windDirectionDegrees: 225,
+      windGustKph: 32,
+      cloudCoverPercent: 45,
+      precipitationMm: 25.4,
+      rainMm: 25.4,
+      snowfallCm: 2.54,
+      hourlyEstimates: { time: '2026-09-01T10:00:00.000Z', visibilityM: 1609.344, uvIndex: 3 },
+    },
+    hourly: [
+      {
+        time: '2026-09-01T11:00:00.000Z',
+        temperatureC: 21,
+        precipitationProbability: 15,
+        condition: 'partly-cloudy',
+        apparentTemperatureC: 20,
+        humidityPercent: 60,
+        windSpeedKph: 15,
+        windGustKph: 30,
+        windDirectionDegrees: 225,
+        pressureHpa: 1017,
+        cloudCoverPercent: 45,
+        precipitationMm: 25.4,
+        rainMm: 20,
+        snowfallCm: 2.54,
+        visibilityM: 10000,
+        uvIndex: 4,
+      },
+    ],
+    daily: extendedDaily.slice(0, 7),
+    extendedDaily,
+    meta: {
+      provider: 'open-meteo',
+      cached: false,
+      stale: false,
+      updatedAt: '2026-09-01T10:15:00.000Z',
+    },
+  };
+  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+    requests++;
+    await route.fulfill({ json: response });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Refresh weather' }).click();
+  await expect(page.locator('.hero-temperature')).toContainText('20');
+  const details = page.locator('.weather-extra-details');
+  await details.locator('summary').click();
+  await expect(details).toContainText('SW · 225°');
+  await expect(details).toContainText('32 km/h');
+  await expect(details).toContainText('13h 00m');
+  await expect(details).toContainText('7:00 AM');
+  await expect(details).toContainText('hourly model estimates for 12:00 PM');
+  await page.getByRole('button', { name: 'Fahrenheit' }).click();
+  await expect(details).toContainText('1 in');
+  await expect(details).toContainText('1 mi');
+  await expect(details).toContainText('66°F');
+  await expect(page.locator('.forecast-row')).toHaveCount(7);
+  const horizon = page.getByRole('group', { name: 'Forecast horizon' });
+  await horizon.getByRole('button', { name: 'Up to 16 days' }).click();
+  await expect(page.locator('.forecast-row')).toHaveCount(16);
+  const lastDay = page.locator('.forecast-row').last();
+  await expect(lastDay.getByLabel('Rain probability unavailable')).toBeVisible();
+  await lastDay.click();
+  const dailyDetails = page.getByRole('region', { name: /Daily forecast details/ });
+  await expect(dailyDetails).toContainText('Unavailable');
+  await expect(dailyDetails).toContainText('Total precipitation');
+  await expect(dailyDetails).toContainText('1 in');
+  await page.setViewportSize({ width: 320, height: 740 });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    )
+    .toBe(true);
+  await horizon.getByRole('button', { name: '7 days', exact: true }).click();
+  await expect(page.locator('.forecast-row')).toHaveCount(7);
+  expect(requests).toBe(1);
+});
+
+test('keeps older weather responses readable without inventing missing observations', async ({
+  page,
+}) => {
+  await page.route('**/api/v1/weather/dashboard?**', async (route) =>
+    route.fulfill({
+      json: {
+        location: {
+          id: 'berlin-de',
+          name: 'Berlin',
+          country: 'Germany',
+          latitude: 52.52,
+          longitude: 13.405,
+          timezone: 'Europe/Berlin',
+        },
+        current: {
+          observedAt: '2026-09-01T10:00:00.000Z',
+          temperatureC: 20,
+          apparentTemperatureC: 19,
+          humidityPercent: 64,
+          windSpeedKph: 13,
+          pressureHpa: 1017,
+          condition: 'clear',
+        },
+        hourly: [
+          {
+            time: '2026-09-01T11:00:00.000Z',
+            temperatureC: 21,
+            precipitationProbability: 15,
+            condition: 'clear',
+          },
+        ],
+        daily: [
+          {
+            date: '2026-09-01',
+            highC: 23,
+            lowC: 14,
+            precipitationProbability: 15,
+            condition: 'clear',
+          },
+        ],
+        meta: {
+          provider: 'open-meteo',
+          cached: false,
+          stale: false,
+          updatedAt: '2026-09-01T10:00:00.000Z',
+        },
+      },
+    }),
+  );
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Refresh weather' }).click();
+  await expect(page.locator('.hero-temperature')).toContainText('20');
+  await page.locator('.weather-extra-details > summary').click();
+  const visibility = page.locator('.weather-extra-details dt').filter({ hasText: /^Visibility$/ });
+  await expect(visibility.locator('..')).toContainText('Unavailable');
+  await expect(
+    page
+      .getByRole('group', { name: 'Forecast horizon' })
+      .getByRole('button', { name: 'Up to 16 days' }),
+  ).toBeDisabled();
+});
+
 test('expands hourly and daily forecast metadata with keyboard controls', async ({ page }) => {
   await page.goto('/');
 
@@ -619,7 +797,10 @@ test('opens mobile Observatory directly with a viewport-anchored dock and a coll
 
   await inspector.click();
   await expect(page.locator('.current-card')).toBeVisible();
-  await page.getByRole('button', { name: '7 days', exact: true }).click();
+  await page
+    .getByRole('group', { name: 'Map weather panel' })
+    .getByRole('button', { name: '7 days', exact: true })
+    .click();
   await expect(page.locator('.forecast-card')).toBeVisible();
   await expect(page.locator('.current-card')).not.toBeVisible();
   await openWeatherTool(page, 'Settings');

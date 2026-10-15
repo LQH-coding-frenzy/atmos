@@ -47,6 +47,7 @@ import {
 import { locationFromShareUrl } from '../lib/location-url';
 import { LegalLinks } from './legal-links';
 import { WeatherTools } from './weather-tools';
+import { CurrentMeasurements, HourlyMeasurements, DailyMeasurements } from './weather-measurements';
 
 type DashboardProps = {
   initialDashboard: DashboardData;
@@ -123,6 +124,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
   const [activeMetric, setActiveMetric] = useState<ForecastTrendMetric>('temperature');
   const [selectedHourTime, setSelectedHourTime] = useState<string | null>(null);
   const [selectedDayDate, setSelectedDayDate] = useState<string | null>(null);
+  const [forecastDays, setForecastDays] = useState<7 | 16>(7);
   const [locationStatus, setLocationStatus] = useState<
     'idle' | 'locating' | 'success' | 'permission-denied' | 'unavailable' | 'weather-failed'
   >('idle');
@@ -144,13 +146,12 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
   const currentTemperature = temperature(dashboard.current.temperatureC, units);
   const LocationHeading = mapView ? 'h2' : 'h1';
   currentLocationRef.current = dashboard.location;
-  const forecastLow = Math.min(...dashboard.daily.map((day) => day.lowC));
-  const forecastRange = Math.max(
-    1,
-    Math.max(...dashboard.daily.map((day) => day.highC)) - forecastLow,
-  );
+  const outlook = dashboard.extendedDaily ?? dashboard.daily;
+  const forecastLow = Math.min(...outlook.map((day) => day.lowC));
+  const forecastRange = Math.max(1, Math.max(...outlook.map((day) => day.highC)) - forecastLow);
   const selectedHourIndex = dashboard.hourly.findIndex((hour) => hour.time === selectedHourTime);
   const selectedHour = selectedHourIndex >= 0 ? dashboard.hourly[selectedHourIndex] : undefined;
+  const visibleDays = outlook.slice(0, forecastDays);
 
   useEffect(() => {
     setSelectedHourTime(null);
@@ -648,13 +649,12 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
             </div>
             <details className="weather-extra-details">
               <summary>More conditions</summary>
-              <div className="weather-extra-stats" aria-label="Additional current conditions">
-                <Stat
-                  value={`${temperature(dashboard.current.apparentTemperatureC, units)}°`}
-                  label="Feels like"
-                />
-                <Stat value={`${Math.round(dashboard.current.pressureHpa)} hPa`} label="Pressure" />
-              </div>
+              <CurrentMeasurements
+                current={dashboard.current}
+                day={dashboard.daily[0]}
+                timezone={dashboard.location.timezone}
+                units={units}
+              />
             </details>
             <div className="hourly-heading">
               <h2>The next 12 hours</h2>
@@ -699,6 +699,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
                     <strong>{selectedHour.precipitationProbability}%</strong>
                   </div>
                 </div>
+                <HourlyMeasurements hour={selectedHour} units={units} />
               </section>
             ) : null}
           </article>
@@ -740,12 +741,48 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
             <div className="card-heading">
               <div>
                 <p className="eyebrow">Looking ahead</p>
-                <h2 id="forecast-title">The next seven days.</h2>
+                <h2 id="forecast-title">
+                  {forecastDays === 7
+                    ? 'The next seven days.'
+                    : `The next ${Math.min(16, outlook.length)} days.`}
+                </h2>
               </div>
               <span className="forecast-unit">°{units === 'metric' ? 'C' : 'F'}</span>
             </div>
+            <div
+              className="forecast-horizon metric-tabs"
+              role="group"
+              aria-label="Forecast horizon"
+            >
+              <button
+                type="button"
+                aria-pressed={forecastDays === 7}
+                className={forecastDays === 7 ? 'active' : ''}
+                onClick={() => {
+                  setForecastDays(7);
+                  setSelectedDayDate(null);
+                }}
+              >
+                7 days
+              </button>
+              <button
+                type="button"
+                aria-pressed={forecastDays === 16}
+                className={forecastDays === 16 ? 'active' : ''}
+                disabled={outlook.length <= 7}
+                onClick={() => setForecastDays(16)}
+              >
+                Up to 16 days
+              </button>
+            </div>
+            {forecastDays === 16 ? (
+              <p className="measurement-note">
+                Longer-range forecasts have greater uncertainty. Showing the days available from the
+                provider.
+              </p>
+            ) : null}
             <div className="forecast-list">
-              {dashboard.daily.map((day, index) => (
+              {visibleDays.map((day, index) => (
                 <div className="forecast-day" key={day.date}>
                   <button
                     className="forecast-row"
@@ -765,7 +802,11 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
                     </span>
                     <span className="forecast-rain">
                       <Droplets size={11} aria-hidden="true" />
-                      {day.precipitationProbability}%
+                      {day.precipitationProbability === null ? (
+                        <span aria-label="Rain probability unavailable">—</span>
+                      ) : (
+                        `${day.precipitationProbability}%`
+                      )}
                     </span>
                     <span className="forecast-low">{temperature(day.lowC, units)}°</span>
                     <span className="temperature-track" aria-hidden="true">
@@ -797,9 +838,18 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
                         </div>
                         <div>
                           <span>Precipitation chance</span>
-                          <strong>{day.precipitationProbability}%</strong>
+                          <strong>
+                            {day.precipitationProbability === null
+                              ? 'Unavailable'
+                              : `${day.precipitationProbability}%`}
+                          </strong>
                         </div>
                       </div>
+                      <DailyMeasurements
+                        day={day}
+                        units={units}
+                        timezone={dashboard.location.timezone}
+                      />
                     </section>
                   ) : null}
                 </div>

@@ -20,6 +20,25 @@ No task may silently upgrade a paid plan. Azure credit exhaustion blocks Azure w
 
 The dashboard AQI panel calls Open-Meteo only when expanded. Its Worker route shares the provider quota guard, coalesces concurrent misses, caches for five minutes, and retains a one-hour stale response. The quota guard is isolate-local, not a distributed counter; the free-tier limits remain the hard service boundary.
 
+`FEAT-WX-002` expands dashboard forecast selections to 16 days with 42 requested
+variables counted conservatively across the current/hourly/daily groups. It reserves
+**5 weighted call units** per upstream dashboard request, rounded up from
+`(42 / 10) × (16 / 14)`, rather than counting each HTTP fetch as one call.
+This follows the [provider's weighting guidance](https://open-meteo.com/en/pricing)
+for requests above ten variables or two weeks. Cache hits do not reserve new upstream
+units. This remains conservative isolate-local accounting, not a guarantee about
+aggregate vendor usage or provider billing. Geocoding and the existing eight-variable
+current-AQI query continue to reserve one unit. Do not use load tests that bypass the
+weather cache to measure CPU against the live provider.
+
+`FEAT-AQI-TIMELINE-001` adds an explicit `view=timeline` AQI mode. Only the user's
+forecast/history action requests it. The eight hourly variables plus eight current
+variables over seven past-model days and five forecast days reserve **2 weighted units**
+conservatively. Range and measurement changes reuse the downloaded timeline. Current
+and timeline responses use separate canonical cache/in-flight keys, five-minute fresh
+TTLs and one-hour stale retention. Requests cannot select unbounded date ranges. This
+does not enable automatic history collection or persist user observations.
+
 Grafana Cloud limits tracked for Atmos are 10,000 active metric series, 50 GB/month each for logs and traces, 100,000 API synthetic executions/month, and 10,000 browser synthetic executions/month.
 
 SLO-001 uses four API checks, one Singapore public probe per check, and a 15-minute frequency. Grafana's 31-day monthly calculator projects 11,904 executions, or 11.904 percent of the API synthetic allowance.

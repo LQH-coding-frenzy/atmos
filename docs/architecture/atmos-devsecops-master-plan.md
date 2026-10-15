@@ -3276,6 +3276,7 @@ DONE
 | WX-002 | MockWeatherProvider | WX-001 | deterministic tests |
 | WX-003 | OpenMeteoProvider | WX-001 | live adapter |
 | WX-004 | Open-Meteo usage/attribution/quota guard | WX-003, GOV-003 | licence + provider-budget evidence |
+| FEAT-WX-002 | Additive full weather readings and 7–16-day outlook (owner-selected group A) | WX-004, WEB-012, CACHE-001 | normalized data and compatible dashboard disclosures |
 | WEB-001 | Next.js shell | REPO-001 | apps/web |
 | WEB-002 | dashboard core | WEB-001, WX-002 | UI baseline |
 | WEB-003 | dashboard UX recovery, local preferences, history export, visual refresh, and Weather Watch city previews | WEB-002, FEAT-LOC-UI-001, FEAT-MAP-001, FEAT-AQI-LIVE-001, FEAT-PLAN-001, HIST-CAP-001, HIST-MGMT-001, WX-004 | dashboard/map experience |
@@ -3310,6 +3311,7 @@ DONE
 | FEAT-CHART-001 | charts | WEB-002 | feature |
 | FEAT-AQI-001 | AQI | WX-003, WEB-002 | feature |
 | FEAT-AQI-LIVE-001 | on-demand Open-Meteo air-quality experience | CACHE-001, EDGE-004, FEAT-AQI-001, PERF-001, WEB-002, WX-003, WX-004 | feature |
+| FEAT-AQI-TIMELINE-001 | on-demand AQI forecast and past-model timeline (owner-selected group E) | FEAT-AQI-LIVE-001, WX-004, WEB-012, CACHE-001, PERF-001 | compatible public timeline and accessible charts |
 | FEAT-MAP-001 | map | WEB-002 | feature |
 | HIST-CAP-001 | authenticated user-captured weather history | FEAT-LOC-UI-001, FUNC-002, HIST-001, ROUTE-001, WEB-002 | feature |
 | HIST-MGMT-001 | delete own weather history observations | EDGE-003, FEAT-LOC-UI-001, HIST-CAP-001, RLS-002, ROUTE-001, WEB-002 | feature |

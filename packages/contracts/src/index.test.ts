@@ -14,7 +14,68 @@ import {
   weatherSnapshotResponseSchema,
   weatherSnapshotsResponseSchema,
   updateAlertRuleRequestSchema,
+  currentWeatherSchema,
+  dailyForecastSchema,
+  hourlyForecastSchema,
+  extendedDailyForecastSchema,
 } from './index';
+
+describe('additive full weather contract', () => {
+  const current = {
+    observedAt: '2026-09-01T10:00:00.000Z',
+    temperatureC: 20,
+    apparentTemperatureC: 19,
+    humidityPercent: 64,
+    windSpeedKph: 13,
+    pressureHpa: 1017,
+    condition: 'clear',
+  };
+  const day = {
+    date: '2026-09-01',
+    highC: 23,
+    lowC: 14,
+    precipitationProbability: 5,
+    condition: 'clear',
+  };
+  it('accepts legacy cached responses, missing extensions and nullable model values', () => {
+    expect(currentWeatherSchema.parse(current)).toEqual(current);
+    expect(
+      currentWeatherSchema.parse({ ...current, cloudCoverPercent: null }).cloudCoverPercent,
+    ).toBeNull();
+    expect(
+      dailyForecastSchema.parse({ ...day, sunrise: null, sunset: null, daylightSeconds: 86400 })
+        .sunrise,
+    ).toBeNull();
+    expect(
+      hourlyForecastSchema.parse({
+        time: current.observedAt,
+        temperatureC: 20,
+        precipitationProbability: 5,
+        condition: 'clear',
+        uvIndex: null,
+      }).uvIndex,
+    ).toBeNull();
+  });
+  it('rejects impossible units/ranges and invalid estimate timestamps', () => {
+    for (const extension of [
+      { windDirectionDegrees: 361 },
+      { windGustKph: -1 },
+      { cloudCoverPercent: 101 },
+      { precipitationMm: -1 },
+      { hourlyEstimates: { time: 'now', uvIndex: 2 } },
+    ]) {
+      expect(currentWeatherSchema.safeParse({ ...current, ...extension }).success).toBe(false);
+    }
+    expect(dailyForecastSchema.safeParse({ ...day, daylightSeconds: 86401 }).success).toBe(false);
+    expect(dailyForecastSchema.safeParse({ ...day, precipitationProbability: null }).success).toBe(
+      false,
+    );
+    expect(
+      extendedDailyForecastSchema.parse({ ...day, precipitationProbability: null })
+        .precipitationProbability,
+    ).toBeNull();
+  });
+});
 
 describe('locationInputSchema', () => {
   it('rejects coordinates outside the valid range', () => {

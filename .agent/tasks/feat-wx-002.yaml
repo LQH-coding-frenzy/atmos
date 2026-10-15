@@ -1,0 +1,85 @@
+task:
+  id: FEAT-WX-002
+  title: Complete normalized weather measurements and extended outlook
+  status: REVIEW
+  objective: Add the missing group A measurements and 16-day outlook to the existing Skyglass weather journey without breaking legacy responses.
+  depends_on: [WX-004, WEB-012, CACHE-001]
+  external_policy_checks:
+    - Open-Meteo public forecast API and pricing reviewed; remain non-commercial and retain attribution.
+    - Expanded variable/time selections consume multiple weighted provider calls; account conservatively per isolate, not as a distributed quota guarantee.
+  runtime_placement:
+    allowed: [vercel-nextjs, cloudflare-worker]
+    selected: vercel-nextjs
+    reason: Browser presentation consumes normalized fields; the existing gateway provider path only fetches and normalizes bounded public weather.
+  scope:
+    include:
+      - .gitignore
+      - packages/contracts
+      - packages/provider-openmeteo
+      - apps/web/components/dashboard.tsx
+      - apps/web/components/weather-measurements.tsx
+      - apps/web/lib/weather-measurements.ts
+      - apps/web/app/globals.css
+      - tests/e2e/dashboard.spec.ts
+      - docs/design/feature-completion-roadmap.md
+      - docs/cost/quota-budget.md
+      - docs/evidence/feat-wx-002
+      - .agent
+      - docs/architecture/atmos-devsecops-master-plan.md
+    exclude:
+      [
+        database changes,
+        remote releases,
+        new providers,
+        AQI/history backfill,
+        cron,
+        queues,
+        secrets,
+        paid resources,
+      ]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files:
+      [
+        packages/contracts/src/index.ts,
+        packages/provider-openmeteo/src/index.ts,
+        apps/web/components/weather-measurements.tsx,
+      ]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web, gateway on a separately approved release]
+  compatibility:
+    requires_expand_contract: true
+    stable_version_compatible: true
+    rollback_window: Keep optional additive fields and legacy parsing throughout the previous release rollback window.
+  validation:
+    commands:
+      - corepack pnpm exec vitest run packages/contracts packages/provider-openmeteo apps/web/lib workers/gateway/src/index.test.ts
+      - corepack pnpm typecheck
+      - corepack pnpm exec eslint packages/contracts packages/provider-openmeteo apps/web tests/e2e/dashboard.spec.ts --max-warnings=0
+      - corepack pnpm --filter @atmos/gateway build
+      - corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts --workers=1
+      - corepack pnpm --filter @atmos/web build
+    expected:
+      - Legacy/offline data still parses; optional unknown measurements remain unavailable rather than zero.
+      - UV/visibility hourly estimates retain their own valid timestamp; polar sunlight events remain nullable.
+      - Correct metric/imperial values, horizon selection, local sun times, and responsive disclosures.
+      - Provider budgets count conservative weighted calls; malformed data is rejected or omitted without fabricated readings.
+  security_checks:
+    [gitleaks, codeql_or_semgrep, trivy_if_applicable, no new secret or private-data logging]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [existing bounded weather_dashboard telemetry; no new high-cardinality labels]
+    logs: [existing sanitized failures only]
+    traces: [existing correlation only]
+  evidence: [docs/evidence/feat-wx-002/implementation.md, local tests and visual checks]
+  rollback:
+    strategy: Revert web/provider changes together; old clients ignore additive fields and new clients tolerate old cached responses. No persisted schema or remote resources change.
+  human_approval:
+    required: true
+    reason: Implementation selected by the owner; production release and live Worker CPU measurement remain separate approval gates.

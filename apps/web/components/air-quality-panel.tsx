@@ -5,6 +5,7 @@ import { Wind } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { classifyEuropeanAqi, classifyUsAqi, formatAqiValue } from '../lib/air-quality';
 import { versionAffinityHeaders } from '../lib/version-affinity';
+import { AirQualityTimeline } from './air-quality-timeline';
 
 type AirQualityPanelProps = {
   gatewayOrigin: string;
@@ -30,6 +31,7 @@ export function AirQualityPanel({ gatewayOrigin, location }: AirQualityPanelProp
   const [airQuality, setAirQuality] = useState<AirQuality | null>(null);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [showTimeline, setShowTimeline] = useState(false);
 
   useEffect(() => {
     if (!expanded) return;
@@ -51,6 +53,7 @@ export function AirQualityPanel({ gatewayOrigin, location }: AirQualityPanelProp
       .then(async (response) => {
         const parsed = airQualitySchema.safeParse(await response.json().catch(() => undefined));
         if (!response.ok || !parsed.success) throw new Error('Air quality is unavailable');
+        if (controller.signal.aborted) return;
         setAirQuality(parsed.data);
       })
       .catch(() => {
@@ -69,7 +72,10 @@ export function AirQualityPanel({ gatewayOrigin, location }: AirQualityPanelProp
     <details
       className="air-quality-panel"
       name="dashboard-tools"
-      onToggle={(event) => setExpanded(event.currentTarget.open)}
+      onToggle={(event) => {
+        setExpanded(event.currentTarget.open);
+        if (!event.currentTarget.open) setShowTimeline(false);
+      }}
     >
       <summary>
         <Wind size={17} aria-hidden="true" />
@@ -133,6 +139,20 @@ export function AirQualityPanel({ gatewayOrigin, location }: AirQualityPanelProp
                 <dd>{formatPollutant(airQuality.pollutants.carbonMonoxide)}</dd>
               </div>
             </dl>
+            <button
+              type="button"
+              className="aqi-timeline-trigger"
+              aria-expanded={showTimeline}
+              onClick={() => setShowTimeline((value) => !value)}
+            >
+              {showTimeline ? 'Hide forecast and history' : 'Explore AQI forecast and history'}
+            </button>
+            <AirQualityTimeline
+              active={expanded && showTimeline}
+              key={`${location.latitude}:${location.longitude}`}
+              gatewayOrigin={gatewayOrigin}
+              location={location}
+            />
             <p className="air-quality-attribution">
               Model estimate (not a ground-station reading) from{' '}
               <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
@@ -142,7 +162,7 @@ export function AirQualityPanel({ gatewayOrigin, location }: AirQualityPanelProp
               <a href="https://atmosphere.copernicus.eu/" target="_blank" rel="noreferrer">
                 CAMS ENSEMBLE
               </a>{' '}
-              data, under{' '}
+              (European) / CAMS global model data, selected by provider coverage, under{' '}
               <a
                 href="https://creativecommons.org/licenses/by/4.0/"
                 target="_blank"
@@ -150,7 +170,7 @@ export function AirQualityPanel({ gatewayOrigin, location }: AirQualityPanelProp
               >
                 CC BY 4.0
               </a>
-              . Model resolution is regional (approximately 11–45 km).
+              . Model resolution is approximately 11–45 km, depending on coverage.
             </p>
           </>
         ) : null}
