@@ -278,6 +278,37 @@ function forecastDate(firstDate: string, index: number) {
   return date.toISOString().slice(0, 10);
 }
 
+function dailyHourlyMeans(
+  times: readonly number[],
+  fromIndex: number,
+  timezone: string,
+  series: Readonly<Record<string, readonly (number | null)[] | undefined>>,
+) {
+  const samples = new Map<
+    string,
+    Record<string, { sum: number; count: number; maximum: number }>
+  >();
+  for (let index = fromIndex; index < times.length; index++) {
+    const date = localDate(times[index]!, timezone);
+    const values = samples.get(date) ?? {};
+    for (const [name, array] of Object.entries(series)) {
+      const value = array?.[index];
+      if (value === null || value === undefined) continue;
+      const aggregate = values[name] ?? { sum: 0, count: 0, maximum: -Infinity };
+      aggregate.sum += value;
+      aggregate.count++;
+      aggregate.maximum = Math.max(aggregate.maximum, value);
+      values[name] = aggregate;
+    }
+    samples.set(date, values);
+  }
+  return samples;
+}
+
+function aggregateMean(value: { sum: number; count: number; maximum: number } | undefined) {
+  return value?.count ? value.sum / value.count : null;
+}
+
 function isNumberArray(value: unknown): value is number[] {
   return (
     Array.isArray(value) && value.every((item) => typeof item === 'number' && Number.isFinite(item))
@@ -462,24 +493,41 @@ export class OpenMeteoProvider
             visibilityM: data.hourly.visibility?.[currentHour],
             uvIndex: data.hourly.uv_index?.[currentHour],
           };
+    const hourlyByLocalDate = dailyHourlyMeans(data.hourly.time, firstForecastHour, data.timezone, {
+      apparentTemperature: data.hourly.apparent_temperature,
+      humidity: data.hourly.relative_humidity_2m,
+      pressure: data.hourly.surface_pressure,
+      clouds: data.hourly.cloud_cover,
+      visibility: data.hourly.visibility,
+    });
     const firstForecastDate = localDate(data.daily.time[0]!, data.timezone);
-    const days = Array.from(data.daily.time.keys(), (index) => ({
-      date: forecastDate(firstForecastDate, index),
-      highC: data.daily.temperature_2m_max[index],
-      lowC: data.daily.temperature_2m_min[index],
-      precipitationProbability: data.daily.precipitation_probability_max[index],
-      condition: conditionFromCode(data.daily.weather_code[index]!),
-      sunrise:
-        data.daily.sunrise === undefined ? undefined : sunlightTime(data.daily.sunrise[index]),
-      sunset: data.daily.sunset === undefined ? undefined : sunlightTime(data.daily.sunset[index]),
-      daylightSeconds: data.daily.daylight_duration?.[index],
-      precipitationMm: data.daily.precipitation_sum?.[index],
-      rainMm: data.daily.rain_sum?.[index],
-      snowfallCm: data.daily.snowfall_sum?.[index],
-      uvIndexMax: data.daily.uv_index_max?.[index],
-      windSpeedMaxKph: data.daily.wind_speed_10m_max?.[index],
-      windGustMaxKph: data.daily.wind_gusts_10m_max?.[index],
-    }));
+    const days = Array.from(data.daily.time.keys(), (index) => {
+      const date = forecastDate(firstForecastDate, index);
+      const aggregate = hourlyByLocalDate.get(date);
+      return {
+        date,
+        highC: data.daily.temperature_2m_max[index],
+        lowC: data.daily.temperature_2m_min[index],
+        precipitationProbability: data.daily.precipitation_probability_max[index],
+        condition: conditionFromCode(data.daily.weather_code[index]!),
+        sunrise:
+          data.daily.sunrise === undefined ? undefined : sunlightTime(data.daily.sunrise[index]),
+        sunset:
+          data.daily.sunset === undefined ? undefined : sunlightTime(data.daily.sunset[index]),
+        daylightSeconds: data.daily.daylight_duration?.[index],
+        precipitationMm: data.daily.precipitation_sum?.[index],
+        rainMm: data.daily.rain_sum?.[index],
+        snowfallCm: data.daily.snowfall_sum?.[index],
+        uvIndexMax: data.daily.uv_index_max?.[index],
+        windSpeedMaxKph: data.daily.wind_speed_10m_max?.[index],
+        windGustMaxKph: data.daily.wind_gusts_10m_max?.[index],
+        apparentTemperatureMaxC: aggregate?.apparentTemperature?.maximum ?? null,
+        humidityMeanPercent: aggregateMean(aggregate?.humidity),
+        pressureMeanHpa: aggregateMean(aggregate?.pressure),
+        cloudCoverMeanPercent: aggregateMean(aggregate?.clouds),
+        visibilityMeanM: aggregateMean(aggregate?.visibility),
+      };
+    });
     const dashboard = {
       location: {
         id: `${input.latitude}:${input.longitude}`,

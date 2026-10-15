@@ -689,7 +689,7 @@ test('supports full map view, city previews, and the user management page', asyn
   expect(fullMapBounds?.height).toBeGreaterThanOrEqual((viewport?.height ?? 0) - 2);
   await expect(page.locator('.map-inspector')).toBeVisible();
   await page.getByRole('button', { name: 'Trends', exact: true }).click();
-  await expect(page.getByRole('img', { name: 'Daily high temperature chart' })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'Temperature, 7d weather chart' })).toBeVisible();
   await expect(page.locator('.current-card')).not.toBeVisible();
   await page.getByRole('button', { name: 'Plan', exact: true }).click();
   await page.getByRole('button', { name: 'Cycling', exact: true }).click();

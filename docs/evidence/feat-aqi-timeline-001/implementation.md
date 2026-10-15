@@ -1,6 +1,6 @@
 # FEAT-AQI-TIMELINE-001 — on-demand model AQI timelines
 
-Status: **REVIEW**, local implementation. No production, database, secret, paid-resource,
+Status: **DONE locally**, merged via [PR #309](https://github.com/LQH-coding-frenzy/atmos/pull/309) on 2026-10-15. No production, database, secret, paid-resource,
 or infrastructure change was made. Group A remains in review independently.
 
 ## Implementation and dependencies
@@ -44,6 +44,7 @@ This was a real public provider read, not a deployed production test or a statio
 
 - Focused contracts/provider/gateway/web-library tests: 114 passed across 22 files.
 - Combined dashboard and AQI-timeline Playwright suites: 31 passed.
+- PR #309 quality, database, Playwright, security scans, SBOM and Vercel preview checks: passed.
 - Full repository unit/script check: 140 Vitest tests and 78 script tests passed.
 - TypeScript, targeted ESLint, formatting, gateway bundle dry-run, and web production build passed.
 - The focused tests cover weighted reservation, mode/cache/coalescing isolation, stale
@@ -59,7 +60,7 @@ This was a real public provider read, not a deployed production test or a statio
 
 ## Release and rollback gates
 
-Protected PR security scans and production smoke remain pending. The richer response
+Protected PR security scans passed in PR #309, but no production exposure occurred. The richer response
 requires candidate Worker p95 CPU at or below 7 ms before ordinary production exposure;
 local TypeScript/bundle success is not that measurement. Backend/provider support must
 be released before enabling live timeline availability in the frontend. The new frontend

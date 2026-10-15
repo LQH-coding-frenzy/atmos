@@ -1,7 +1,7 @@
 task:
   id: FEAT-WX-002
   title: Complete normalized weather measurements and extended outlook
-  status: REVIEW
+  status: DONE
   objective: Add the missing group A measurements and 16-day outlook to the existing Skyglass weather journey without breaking legacy responses.
   depends_on: [WX-004, WEB-012, CACHE-001]
   external_policy_checks:

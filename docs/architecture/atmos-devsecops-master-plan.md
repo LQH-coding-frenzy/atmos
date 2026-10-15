@@ -3309,6 +3309,7 @@ DONE
 | FEAT-LOC-UI-001 | authenticated saved-locations dashboard UI | AUTH-001, FEAT-LOC-001, ROUTE-001, WEB-002 | feature |
 | FEAT-GEO-001 | user-controlled browser geolocation | EDGE-004, WEB-002, WX-004 | feature |
 | FEAT-CHART-001 | charts | WEB-002 | feature |
+| FEAT-CHART-002 | full weather chart series, ranges, annotations, daily/hourly zoom | FEAT-CHART-001, FEAT-WX-002, FEAT-AQI-TIMELINE-001, WEB-012 | feature |
 | FEAT-AQI-001 | AQI | WX-003, WEB-002 | feature |
 | FEAT-AQI-LIVE-001 | on-demand Open-Meteo air-quality experience | CACHE-001, EDGE-004, FEAT-AQI-001, PERF-001, WEB-002, WX-003, WX-004 | feature |
 | FEAT-AQI-TIMELINE-001 | on-demand AQI forecast and past-model timeline (owner-selected group E) | FEAT-AQI-LIVE-001, WX-004, WEB-012, CACHE-001, PERF-001 | compatible public timeline and accessible charts |

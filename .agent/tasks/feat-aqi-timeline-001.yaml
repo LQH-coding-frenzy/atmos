@@ -1,7 +1,7 @@
 task:
   id: FEAT-AQI-TIMELINE-001
   title: On-demand AQI forecast and model-history charts
-  status: REVIEW
+  status: DONE
   objective: Provide bounded past-model and forecast AQI/pollutant charts without changing the lightweight current-AQI journey or recording personal history.
   depends_on: [FEAT-AQI-LIVE-001, WX-004, WEB-012, CACHE-001, PERF-001]
   external_policy_checks:
