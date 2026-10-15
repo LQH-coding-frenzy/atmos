@@ -706,6 +706,48 @@ svg {
 .hourly-detail {
   margin-top: 10px;
 }
+.weather-measurements {
+  display: grid;
+  gap: 14px;
+  padding-block: 10px;
+}
+.measurement-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+.measurement-grid > div {
+  min-width: 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--surface-low);
+}
+.measurement-grid dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+.measurement-grid dd {
+  margin: 5px 0 0;
+  font-size: 14px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.measurement-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+.forecast-horizon {
+  width: fit-content;
+  margin-block: 16px 12px;
+}
+.forecast-horizon button {
+  min-height: 44px;
+  font-size: 12px;
+}
 .metric-tabs,
 .preference-segmented,
 .history-window-tabs {
@@ -1534,6 +1576,138 @@ body:has(.weather-tools-dialog[open]) {
   padding-top: 12px;
   border-top: 1px solid var(--line);
   font-size: 10px !important;
+}
+.aqi-timeline-trigger,
+.aqi-timeline-retry {
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-low);
+  color: var(--accent);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 550;
+}
+.aqi-timeline {
+  display: grid;
+  min-width: 0;
+  gap: 14px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.aqi-timeline-selectors {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.aqi-timeline-selectors > div {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.aqi-timeline-selectors select {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-low);
+  color: var(--ink);
+  font-size: 12px;
+}
+.aqi-timeline-chart {
+  width: 100%;
+  height: 190px;
+  overflow: visible;
+}
+.aqi-timeline-chart line {
+  stroke: var(--line);
+  stroke-dasharray: 4 5;
+}
+.aqi-chart-layout {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+}
+.aqi-chart-y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-block: 21px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 14px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.aqi-timeline-chart path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+.aqi-timeline-chart circle {
+  fill: var(--accent);
+}
+.aqi-time-axis {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: -16px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.aqi-time-axis time {
+  max-width: 48%;
+}
+.aqi-time-axis time:last-child:not(:first-child) {
+  text-align: right;
+}
+.aqi-values-scroll:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+.aqi-values > summary {
+  min-height: 44px;
+  padding-block: 12px;
+  color: var(--accent);
+  font-size: 12px;
+}
+.aqi-values-scroll {
+  max-height: 280px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.aqi-values table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.aqi-values caption {
+  padding: 12px;
+  color: var(--muted);
+  text-align: left;
+}
+.aqi-values th,
+.aqi-values td {
+  padding: 10px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+}
+.aqi-values tbody th {
+  color: var(--muted);
+  font-weight: 400;
+}
+.aqi-values td {
+  text-align: right;
 }
 .air-quality-stale,
 .alert-stale,

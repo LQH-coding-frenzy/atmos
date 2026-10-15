@@ -130,6 +130,8 @@ function weatherCacheKeys(url: string, input: ReturnType<typeof weatherInput>) {
 function airQualityInput(context: { req: { query: (name: string) => string | undefined } }) {
   const latitudeValue = context.req.query('lat');
   const longitudeValue = context.req.query('lon');
+  const view = context.req.query('view');
+  if (view !== undefined && view !== 'current' && view !== 'timeline') return undefined;
   if (!latitudeValue?.trim() || !longitudeValue?.trim()) return undefined;
   const latitude = Number(latitudeValue);
   const longitude = Number(longitudeValue);
@@ -143,7 +145,11 @@ function airQualityInput(context: { req: { query: (name: string) => string | und
   ) {
     return undefined;
   }
-  return { latitude, longitude } as const;
+  return {
+    latitude,
+    longitude,
+    ...(view === 'timeline' ? { includeTimeline: true } : {}),
+  } as const;
 }
 
 function airQualityCacheKeys(url: string, input: NonNullable<ReturnType<typeof airQualityInput>>) {
@@ -152,6 +158,7 @@ function airQualityCacheKeys(url: string, input: NonNullable<ReturnType<typeof a
     lat: String(input.latitude),
     lon: String(input.longitude),
   }).toString();
+  if (input.includeTimeline) freshUrl.searchParams.set('view', 'timeline');
   const staleUrl = new URL(freshUrl);
   staleUrl.searchParams.set('__atmos_cache_tier', 'stale');
   return {
@@ -552,7 +559,7 @@ export function createApp(
       );
     }
 
-    const key = `${input.latitude}:${input.longitude}`;
+    const key = `${input.latitude}:${input.longitude}:${input.includeTimeline ? 'timeline' : 'current'}`;
     const providerStartedAt = performance.now();
     context.set('analyticsProvider', 'open-meteo');
     try {
@@ -560,7 +567,9 @@ export function createApp(
         weatherProvider.getAirQuality!(input),
       );
       const parsed = airQualitySchema.safeParse(airQuality);
-      if (!parsed.success) throw new Error('Air-quality response has an invalid shape');
+      if (!parsed.success || (input.includeTimeline && !parsed.data.timeline)) {
+        throw new Error('Air-quality response has an invalid shape');
+      }
 
       const response = context.json(parsed.data);
       response.headers.set(

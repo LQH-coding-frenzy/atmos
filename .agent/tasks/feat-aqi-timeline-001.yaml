@@ -1,0 +1,88 @@
+task:
+  id: FEAT-AQI-TIMELINE-001
+  title: On-demand AQI forecast and model-history charts
+  status: REVIEW
+  objective: Provide bounded past-model and forecast AQI/pollutant charts without changing the lightweight current-AQI journey or recording personal history.
+  depends_on: [FEAT-AQI-LIVE-001, WX-004, WEB-012, CACHE-001, PERF-001]
+  external_policy_checks:
+    - Open-Meteo Air Quality API supports past_days and forecast_days with CAMS European/global coverage; requested coverage is not a completeness guarantee.
+    - Retain Open-Meteo/CAMS attribution, non-commercial use and weighted per-isolate budget accounting.
+  runtime_placement:
+    allowed: [vercel-nextjs, cloudflare-worker]
+    selected: vercel-nextjs
+    reason: Interactive charts are browser-only; existing gateway fetch/cache path normalizes a bounded public model timeline.
+  scope:
+    include:
+      [
+        packages/contracts,
+        packages/provider-openmeteo,
+        workers/gateway/src,
+        apps/web/components/air-quality-panel.tsx,
+        apps/web/components/air-quality-timeline.tsx,
+        apps/web/lib/air-quality-timeline.ts,
+        apps/web/lib/air-quality-timeline.test.ts,
+        apps/web/app/globals.css,
+        tests/e2e,
+        .agent,
+        docs/architecture/atmos-devsecops-master-plan.md,
+        docs/design/feature-completion-roadmap.md,
+        docs/cost/quota-budget.md,
+        docs/evidence/feat-aqi-timeline-001,
+      ]
+    exclude:
+      [
+        production releases,
+        database changes,
+        station observations,
+        automatic history collection,
+        provider backfill jobs,
+        new vendors,
+        secrets,
+        paid resources,
+      ]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files: [apps/web/components/air-quality-timeline.tsx, apps/web/lib/air-quality-timeline.ts]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web and gateway only on separately approved release]
+  compatibility:
+    requires_expand_contract: true
+    stable_version_compatible: true
+    rollback_window: Retain current-only API shape and optional timeline throughout the prior release rollback window.
+  validation:
+    commands:
+      - corepack pnpm exec vitest run packages/contracts packages/provider-openmeteo workers/gateway/src/index.test.ts apps/web/lib
+      - corepack pnpm typecheck
+      - corepack pnpm exec eslint packages/contracts packages/provider-openmeteo workers/gateway/src apps/web tests/e2e --max-warnings=0
+      - corepack pnpm --filter @atmos/gateway build
+      - corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts tests/e2e/air-quality-timeline.spec.ts --workers=1
+      - corepack pnpm --filter @atmos/web build
+    expected:
+      [
+        current/timeline cache and coalescing isolation,
+        bounded ordered nullable data,
+        weighted budgets,
+        lazy fetch and abort/retry behavior,
+        accessible charts and textual values,
+        no missing-data interpolation,
+        old-server compatibility,
+      ]
+  security_checks:
+    [existing sanitized errors, bounded query mode, no PII logging, protected PR scans pending]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [existing air_quality route group only]
+    logs: [existing sanitized provider/cache failures]
+    traces: [existing request correlation]
+  evidence: [docs/evidence/feat-aqi-timeline-001/implementation.md]
+  rollback:
+    strategy: Revert web/provider/gateway additions; current route remains compatible and no persisted user data changes.
+  human_approval:
+    required: true
+    reason: Owner selected E; production release and live Worker CPU-budget measurement remain separate approval gates.

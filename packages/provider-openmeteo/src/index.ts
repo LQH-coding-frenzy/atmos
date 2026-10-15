@@ -15,6 +15,74 @@ import {
 const openMeteoBaseUrl = 'https://api.open-meteo.com/v1/forecast';
 const openMeteoAirQualityBaseUrl = 'https://air-quality-api.open-meteo.com/v1/air-quality';
 const openMeteoGeocodingBaseUrl = 'https://geocoding-api.open-meteo.com/v1/search';
+const airQualityVariables = [
+  'us_aqi',
+  'european_aqi',
+  'pm2_5',
+  'pm10',
+  'carbon_monoxide',
+  'nitrogen_dioxide',
+  'sulphur_dioxide',
+  'ozone',
+] as const;
+export const openMeteoAqiTimelineCallUnits = 2;
+
+const currentVariables = [
+  'temperature_2m',
+  'apparent_temperature',
+  'relative_humidity_2m',
+  'surface_pressure',
+  'wind_speed_10m',
+  'weather_code',
+  'wind_direction_10m',
+  'wind_gusts_10m',
+  'cloud_cover',
+  'precipitation',
+  'rain',
+  'snowfall',
+  'is_day',
+] as const;
+const hourlyVariables = [
+  'temperature_2m',
+  'precipitation_probability',
+  'weather_code',
+  'apparent_temperature',
+  'relative_humidity_2m',
+  'surface_pressure',
+  'wind_speed_10m',
+  'wind_direction_10m',
+  'wind_gusts_10m',
+  'cloud_cover',
+  'precipitation',
+  'rain',
+  'snowfall',
+  'visibility',
+  'uv_index',
+  'is_day',
+] as const;
+const dailyVariables = [
+  'temperature_2m_max',
+  'temperature_2m_min',
+  'precipitation_probability_max',
+  'weather_code',
+  'sunrise',
+  'sunset',
+  'daylight_duration',
+  'precipitation_sum',
+  'rain_sum',
+  'snowfall_sum',
+  'uv_index_max',
+  'wind_speed_10m_max',
+  'wind_gusts_10m_max',
+] as const;
+export const openMeteoForecastDays = 16;
+// Conservatively count duplicates across temporal groups too. Provider calls are
+// weighted above 10 variables or 14 days; this is a per-isolate estimate, not a
+// globally enforced allowance (https://open-meteo.com/en/pricing).
+export const openMeteoDashboardCallUnits = Math.ceil(
+  ((currentVariables.length + hourlyVariables.length + dailyVariables.length) / 10) *
+    (openMeteoForecastDays / 14),
+);
 
 export const openMeteoAttribution = {
   name: 'Open-Meteo',
@@ -64,9 +132,12 @@ export class OpenMeteoUsageGuard {
     private readonly warningRatio = 0.7,
   ) {}
 
-  reserve(now = Date.now()): OpenMeteoUsageSnapshot {
+  reserve(now = Date.now(), callUnits = 1): OpenMeteoUsageSnapshot {
+    if (!Number.isInteger(callUnits) || callUnits < 1 || callUnits > 100) {
+      throw new Error('Invalid provider call weight');
+    }
     this.prune(now);
-    const nextTimestamps = [...this.requestTimestamps, now];
+    const nextTimestamps = [...this.requestTimestamps, ...Array<number>(callUnits).fill(now)];
     const requests = this.countRequests(nextTimestamps, now);
 
     for (const window of Object.keys(this.limits) as OpenMeteoQuotaWindow[]) {
@@ -124,7 +195,7 @@ export class OpenMeteoUsageGuard {
 
 type OpenMeteoResponse = {
   timezone: string;
-  current: {
+  current: Partial<Record<(typeof currentVariables)[number], number | null>> & {
     time: number;
     temperature_2m: number;
     apparent_temperature: number;
@@ -133,17 +204,17 @@ type OpenMeteoResponse = {
     wind_speed_10m: number;
     weather_code: number;
   };
-  hourly: {
+  hourly: Partial<Record<(typeof hourlyVariables)[number], Array<number | null>>> & {
     time: number[];
     temperature_2m: number[];
-    precipitation_probability: number[];
+    precipitation_probability: Array<number | null>;
     weather_code: number[];
   };
-  daily: {
+  daily: Partial<Record<(typeof dailyVariables)[number], Array<number | null>>> & {
     time: number[];
     temperature_2m_max: number[];
     temperature_2m_min: number[];
-    precipitation_probability_max: number[];
+    precipitation_probability_max: Array<number | null>;
     weather_code: number[];
   };
 };
@@ -160,6 +231,7 @@ type OpenMeteoGeocodingResponse = {
 };
 
 type OpenMeteoAirQualityResponse = {
+  hourly?: unknown;
   current: {
     time: number;
     us_aqi: number | null;
@@ -197,6 +269,15 @@ function localDate(time: number, timezone: string): string {
   return `${byType.year}-${byType.month}-${byType.day}`;
 }
 
+function forecastDate(firstDate: string, index: number) {
+  // Daily Unix values are spaced at 86400 seconds using the run's initial
+  // offset. Reapplying DST to every entry duplicates/skips calendar dates.
+  // Anchor the first local date, then advance calendar days (not local instants).
+  const date = new Date(`${firstDate}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + index);
+  return date.toISOString().slice(0, 10);
+}
+
 function isNumberArray(value: unknown): value is number[] {
   return (
     Array.isArray(value) && value.every((item) => typeof item === 'number' && Number.isFinite(item))
@@ -221,22 +302,52 @@ function isOpenMeteoResponse(value: unknown): value is OpenMeteoResponse {
       current.weather_code,
     ].every((item) => typeof item === 'number' && Number.isFinite(item)) &&
     isNumberArray(hourly?.time) &&
+    hourly.time.length > 0 &&
+    hourly.time.length <= 400 &&
     isNumberArray(hourly.temperature_2m) &&
-    isNumberArray(hourly.precipitation_probability) &&
+    validOptionalSeries(hourly.precipitation_probability, hourly.time.length) &&
+    Array.isArray(hourly.precipitation_probability) &&
     isNumberArray(hourly.weather_code) &&
     hourly.time.length === hourly.temperature_2m.length &&
     hourly.time.length === hourly.precipitation_probability.length &&
     hourly.time.length === hourly.weather_code.length &&
     isNumberArray(daily?.time) &&
+    daily.time.length > 0 &&
+    daily.time.length <= openMeteoForecastDays &&
     isNumberArray(daily.temperature_2m_max) &&
     isNumberArray(daily.temperature_2m_min) &&
-    isNumberArray(daily.precipitation_probability_max) &&
+    validOptionalSeries(daily.precipitation_probability_max, daily.time.length) &&
+    Array.isArray(daily.precipitation_probability_max) &&
     isNumberArray(daily.weather_code) &&
     daily.time.length === daily.temperature_2m_max.length &&
     daily.time.length === daily.temperature_2m_min.length &&
     daily.time.length === daily.precipitation_probability_max.length &&
-    daily.time.length === daily.weather_code.length
+    daily.time.length === daily.weather_code.length &&
+    currentVariables.every(
+      (key) => current[key] === undefined || isAirQualityValue(current[key]),
+    ) &&
+    hourlyVariables.every((key) => validOptionalSeries(hourly[key], hourly.time.length)) &&
+    dailyVariables.every((key) => validOptionalSeries(daily[key], daily.time.length))
   );
+}
+
+function validOptionalSeries(value: unknown, length: number) {
+  return (
+    value === undefined ||
+    (Array.isArray(value) && value.length === length && value.every(isAirQualityValue))
+  );
+}
+
+function sunlightTime(value: number | null | undefined) {
+  // Polar-night/day feeds can omit events or use zero; never render 1970 as sunrise.
+  return typeof value === 'number' && value > 0 ? toIso(value) : null;
+}
+
+function dayFlag(value: number | null | undefined) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (value !== 0 && value !== 1) throw new Error('Invalid provider day flag');
+  return value === 1;
 }
 
 function isAirQualityValue(value: unknown): value is number | null {
@@ -262,6 +373,44 @@ function isOpenMeteoAirQualityResponse(value: unknown): value is OpenMeteoAirQua
   );
 }
 
+function normalizeAirQualityTimeline(value: unknown) {
+  if (!value || typeof value !== 'object') throw new Error('Air-quality timeline is unavailable');
+  const series = value as Record<string, unknown>;
+  const times = series.time;
+  if (
+    !isNumberArray(times) ||
+    !times.length ||
+    times.length > 288 ||
+    !airQualityVariables.every(
+      (key) =>
+        Array.isArray(series[key]) &&
+        series[key].length === times.length &&
+        series[key].every(isAirQualityValue),
+    )
+  ) {
+    throw new Error('Air-quality timeline has an invalid shape');
+  }
+  const values = series as Record<(typeof airQualityVariables)[number], Array<number | null>>;
+  return {
+    kind: 'model' as const,
+    requestedPastDays: 7 as const,
+    requestedForecastDays: 5 as const,
+    hours: times.map((time, index) => ({
+      time: toIso(time),
+      usAqi: values.us_aqi[index],
+      europeanAqi: values.european_aqi[index],
+      pollutants: {
+        pm25: values.pm2_5[index],
+        pm10: values.pm10[index],
+        carbonMonoxide: values.carbon_monoxide[index],
+        nitrogenDioxide: values.nitrogen_dioxide[index],
+        sulphurDioxide: values.sulphur_dioxide[index],
+        ozone: values.ozone[index],
+      },
+    })),
+  };
+}
+
 export class OpenMeteoProvider
   implements WeatherProvider, LocationSearchProvider, AirQualityProvider
 {
@@ -271,22 +420,19 @@ export class OpenMeteoProvider
   ) {}
 
   async getDashboard(input: LocationInput): Promise<Dashboard> {
-    this.usageGuard.reserve();
+    this.usageGuard.reserve(Date.now(), openMeteoDashboardCallUnits);
     const url = new URL(openMeteoBaseUrl);
     url.searchParams.set('latitude', String(input.latitude));
     url.searchParams.set('longitude', String(input.longitude));
     url.searchParams.set('timezone', input.timezone);
     url.searchParams.set('timeformat', 'unixtime');
-    url.searchParams.set(
-      'current',
-      'temperature_2m,apparent_temperature,relative_humidity_2m,surface_pressure,wind_speed_10m,weather_code',
-    );
-    url.searchParams.set('hourly', 'temperature_2m,precipitation_probability,weather_code');
-    url.searchParams.set(
-      'daily',
-      'temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code',
-    );
-    url.searchParams.set('forecast_days', '7');
+    url.searchParams.set('current', currentVariables.join(','));
+    url.searchParams.set('hourly', hourlyVariables.join(','));
+    url.searchParams.set('daily', dailyVariables.join(','));
+    url.searchParams.set('forecast_days', String(openMeteoForecastDays));
+    url.searchParams.set('temperature_unit', 'celsius');
+    url.searchParams.set('wind_speed_unit', 'kmh');
+    url.searchParams.set('precipitation_unit', 'mm');
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -305,6 +451,35 @@ export class OpenMeteoProvider
     const firstForecastHour = data.hourly.time.findIndex((time) => time >= data.current.time);
     if (firstForecastHour < 0) throw new Error('Open-Meteo response has no future hourly forecast');
     const locationName = `${input.latitude.toFixed(2)}, ${input.longitude.toFixed(2)}`;
+    const currentHour = data.hourly.time.findIndex(
+      (time) => time <= data.current.time && data.current.time < time + 3600,
+    );
+    const currentHourlyEstimates =
+      currentHour < 0
+        ? undefined
+        : {
+            time: toIso(data.hourly.time[currentHour]!),
+            visibilityM: data.hourly.visibility?.[currentHour],
+            uvIndex: data.hourly.uv_index?.[currentHour],
+          };
+    const firstForecastDate = localDate(data.daily.time[0]!, data.timezone);
+    const days = Array.from(data.daily.time.keys(), (index) => ({
+      date: forecastDate(firstForecastDate, index),
+      highC: data.daily.temperature_2m_max[index],
+      lowC: data.daily.temperature_2m_min[index],
+      precipitationProbability: data.daily.precipitation_probability_max[index],
+      condition: conditionFromCode(data.daily.weather_code[index]!),
+      sunrise:
+        data.daily.sunrise === undefined ? undefined : sunlightTime(data.daily.sunrise[index]),
+      sunset: data.daily.sunset === undefined ? undefined : sunlightTime(data.daily.sunset[index]),
+      daylightSeconds: data.daily.daylight_duration?.[index],
+      precipitationMm: data.daily.precipitation_sum?.[index],
+      rainMm: data.daily.rain_sum?.[index],
+      snowfallCm: data.daily.snowfall_sum?.[index],
+      uvIndexMax: data.daily.uv_index_max?.[index],
+      windSpeedMaxKph: data.daily.wind_speed_10m_max?.[index],
+      windGustMaxKph: data.daily.wind_gusts_10m_max?.[index],
+    }));
     const dashboard = {
       location: {
         id: `${input.latitude}:${input.longitude}`,
@@ -322,6 +497,14 @@ export class OpenMeteoProvider
         windSpeedKph: data.current.wind_speed_10m,
         pressureHpa: data.current.surface_pressure,
         condition: conditionFromCode(data.current.weather_code),
+        windDirectionDegrees: data.current.wind_direction_10m,
+        windGustKph: data.current.wind_gusts_10m,
+        cloudCoverPercent: data.current.cloud_cover,
+        precipitationMm: data.current.precipitation,
+        rainMm: data.current.rain,
+        snowfallCm: data.current.snowfall,
+        isDay: dayFlag(data.current.is_day),
+        hourlyEstimates: currentHourlyEstimates,
       },
       hourly: data.hourly.time
         .slice(firstForecastHour, firstForecastHour + 12)
@@ -332,15 +515,23 @@ export class OpenMeteoProvider
             temperatureC: data.hourly.temperature_2m[sourceIndex],
             precipitationProbability: data.hourly.precipitation_probability[sourceIndex],
             condition: conditionFromCode(data.hourly.weather_code[sourceIndex]!),
+            apparentTemperatureC: data.hourly.apparent_temperature?.[sourceIndex],
+            humidityPercent: data.hourly.relative_humidity_2m?.[sourceIndex],
+            pressureHpa: data.hourly.surface_pressure?.[sourceIndex],
+            windSpeedKph: data.hourly.wind_speed_10m?.[sourceIndex],
+            windDirectionDegrees: data.hourly.wind_direction_10m?.[sourceIndex],
+            windGustKph: data.hourly.wind_gusts_10m?.[sourceIndex],
+            cloudCoverPercent: data.hourly.cloud_cover?.[sourceIndex],
+            precipitationMm: data.hourly.precipitation?.[sourceIndex],
+            rainMm: data.hourly.rain?.[sourceIndex],
+            snowfallCm: data.hourly.snowfall?.[sourceIndex],
+            visibilityM: data.hourly.visibility?.[sourceIndex],
+            uvIndex: data.hourly.uv_index?.[sourceIndex],
+            isDay: dayFlag(data.hourly.is_day?.[sourceIndex]),
           };
         }),
-      daily: data.daily.time.map((time, index) => ({
-        date: localDate(time, data.timezone),
-        highC: data.daily.temperature_2m_max[index] ?? 0,
-        lowC: data.daily.temperature_2m_min[index] ?? 0,
-        precipitationProbability: data.daily.precipitation_probability_max[index] ?? 0,
-        condition: conditionFromCode(data.daily.weather_code[index]!),
-      })),
+      daily: days.slice(0, 7),
+      extendedDaily: days,
       meta: {
         provider: 'open-meteo',
         cached: false,
@@ -353,15 +544,18 @@ export class OpenMeteoProvider
   }
 
   async getAirQuality(input: AirQualityInput): Promise<AirQuality> {
-    this.usageGuard.reserve();
+    this.usageGuard.reserve(Date.now(), input.includeTimeline ? openMeteoAqiTimelineCallUnits : 1);
     const url = new URL(openMeteoAirQualityBaseUrl);
     url.searchParams.set('latitude', String(input.latitude));
     url.searchParams.set('longitude', String(input.longitude));
-    url.searchParams.set(
-      'current',
-      'us_aqi,european_aqi,pm2_5,pm10,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone',
-    );
+    url.searchParams.set('current', airQualityVariables.join(','));
     url.searchParams.set('timeformat', 'unixtime');
+    if (input.includeTimeline) {
+      url.searchParams.set('hourly', airQualityVariables.join(','));
+      url.searchParams.set('past_days', '7');
+      url.searchParams.set('forecast_days', '5');
+      url.searchParams.set('timezone', 'UTC');
+    }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
@@ -383,6 +577,7 @@ export class OpenMeteoProvider
       observedAt: toIso(data.current.time),
       usAqi: data.current.us_aqi,
       europeanAqi: data.current.european_aqi,
+      timeline: input.includeTimeline ? normalizeAirQualityTimeline(data.hourly) : undefined,
       pollutants: {
         pm25: data.current.pm2_5,
         pm10: data.current.pm10,
