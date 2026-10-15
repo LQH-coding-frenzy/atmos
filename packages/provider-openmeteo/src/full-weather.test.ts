@@ -101,7 +101,7 @@ describe('full normalized Open-Meteo weather', () => {
     });
     expect(result.daily).toHaveLength(7);
     expect(result.extendedDaily).toHaveLength(16);
-    expect(result.daily[0]).toMatchObject({
+    expect(result.extendedDaily?.[0]).toMatchObject({
       sunrise: '2026-09-01T06:00:00.000Z',
       sunset: '2026-09-01T18:00:00.000Z',
       daylightSeconds: 43200,
@@ -109,6 +109,11 @@ describe('full normalized Open-Meteo weather', () => {
       snowfallCm: 2.54,
       uvIndexMax: 4,
       windGustMaxKph: 45,
+      apparentTemperatureMaxC: 19,
+      humidityMeanPercent: 64,
+      pressureMeanHpa: 1017,
+      cloudCoverMeanPercent: 45,
+      visibilityMeanM: 10000,
     });
     expect(result.extendedDaily?.[15]?.date).toBe('2026-09-16');
     expect(guard.snapshot().requests.minute).toBe(openMeteoDashboardCallUnits);

@@ -37,7 +37,13 @@ import { AirQualityPanel } from './air-quality-panel';
 import { InAppAlertsPanel } from './in-app-alerts-panel';
 import { PreferencesPanel, type ThemePreference } from './preferences-panel';
 import { WeatherComparisonPanel } from './weather-comparison-panel';
-import type { ForecastTrendMetric } from '../lib/forecast-trend';
+import {
+  forecastTrendAvailable,
+  forecastTrendMetricLabels,
+  forecastTrendMetrics,
+  type ForecastTrendMetric,
+  type ForecastTrendRange,
+} from '../lib/forecast-trend';
 import { versionAffinityHeaders } from '../lib/version-affinity';
 import {
   asOfflineDashboard,
@@ -55,11 +61,6 @@ type DashboardProps = {
 };
 
 type LocationUrlBehavior = 'push' | 'clear' | 'preserve';
-
-const chartMetrics: Array<{ label: string; value: ForecastTrendMetric }> = [
-  { label: 'Temperature', value: 'temperature' },
-  { label: 'Rain chance', value: 'rain-chance' },
-];
 
 function WeatherIcon({ condition, size = 22 }: { condition: WeatherCondition; size?: number }) {
   const iconProps = { size, strokeWidth: 1.6, 'aria-hidden': true };
@@ -122,6 +123,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
   const [mapPanelOpen, setMapPanelOpen] = useState(true);
   const [mapPanel, setMapPanel] = useState('now');
   const [activeMetric, setActiveMetric] = useState<ForecastTrendMetric>('temperature');
+  const [chartRange, setChartRange] = useState<ForecastTrendRange>('7d');
   const [selectedHourTime, setSelectedHourTime] = useState<string | null>(null);
   const [selectedDayDate, setSelectedDayDate] = useState<string | null>(null);
   const [forecastDays, setForecastDays] = useState<7 | 16>(7);
@@ -717,23 +719,78 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
             <div className="card-heading">
               <div>
                 <p className="eyebrow">The bigger picture</p>
-                <h2 id="trend-title">A week in view.</h2>
+                <h2 id="trend-title">
+                  {chartRange === '12h'
+                    ? 'The hours ahead.'
+                    : chartRange === '7d'
+                      ? 'A week in view.'
+                      : 'The next sixteen days.'}
+                </h2>
               </div>
-              <div className="metric-tabs" role="group" aria-label="Chart metric">
-                {chartMetrics.map((metric) => (
-                  <button
-                    key={metric.value}
-                    className={activeMetric === metric.value ? 'active' : ''}
-                    onClick={() => setActiveMetric(metric.value)}
-                    aria-pressed={activeMetric === metric.value}
-                  >
-                    {metric.label}
-                  </button>
-                ))}
-              </div>
+              <label className="chart-series-picker" htmlFor="forecast-chart-series">
+                Measure
+                <select
+                  id="forecast-chart-series"
+                  aria-label="Chart metric"
+                  value={activeMetric}
+                  onChange={(event) => {
+                    const metric = event.target.value as ForecastTrendMetric;
+                    if (forecastTrendAvailable(metric, chartRange, dashboard.hourly))
+                      setActiveMetric(metric);
+                  }}
+                >
+                  {forecastTrendMetrics.map((metric) => (
+                    <option
+                      key={metric}
+                      value={metric}
+                      disabled={!forecastTrendAvailable(metric, chartRange, dashboard.hourly)}
+                    >
+                      {forecastTrendMetricLabels[metric]}
+                      {!forecastTrendAvailable(metric, chartRange, dashboard.hourly)
+                        ? ' · unavailable'
+                        : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div
+              className="chart-range-picker metric-tabs"
+              role="group"
+              aria-label="Chart time range"
+            >
+              {(
+                [
+                  ['12h', 'Next 12 hours'],
+                  ['7d', '7 days'],
+                  ['16d', '16 days'],
+                ] as const
+              ).map(([range, label]) => (
+                <button
+                  key={range}
+                  type="button"
+                  aria-pressed={chartRange === range}
+                  className={chartRange === range ? 'active' : ''}
+                  disabled={range === '16d' && outlook.length <= 7}
+                  onClick={() => {
+                    setChartRange(range);
+                    if (!forecastTrendAvailable(activeMetric, range, dashboard.hourly))
+                      setActiveMetric('temperature');
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
             <div className="chart-wrap">
-              <ForecastTrendChart daily={dashboard.daily} metric={activeMetric} units={units} />
+              <ForecastTrendChart
+                daily={outlook}
+                hourly={dashboard.hourly}
+                metric={activeMetric}
+                range={chartRange}
+                units={units}
+                timezone={dashboard.location.timezone}
+              />
             </div>
           </article>
 

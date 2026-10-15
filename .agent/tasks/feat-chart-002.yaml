@@ -1,0 +1,81 @@
+task:
+  id: FEAT-CHART-002
+  title: Complete weather analytics charts
+  status: REVIEW
+  objective: Complete group B's daily and near-term hourly weather chart series, ranges, crosshair, summaries, and accessible data gaps on Skyglass.
+  depends_on: [FEAT-CHART-001, FEAT-WX-002, FEAT-AQI-TIMELINE-001, WEB-012]
+  external_policy_checks:
+    [uses existing Open-Meteo CC-BY data and gateway; no provider calls or paid resources are added]
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: chart aggregation/presentation uses the normalized dashboard already loaded in the browser.
+  scope:
+    include:
+      [
+        packages/contracts,
+        packages/provider-openmeteo,
+        apps/web/lib/forecast-trend.ts,
+        apps/web/lib/forecast-trend.test.ts,
+        apps/web/components/forecast-trend-chart.tsx,
+        apps/web/components/dashboard.tsx,
+        apps/web/app/globals.css,
+        tests/e2e/dashboard.spec.ts,
+        .agent,
+        docs/architecture/atmos-devsecops-master-plan.md,
+        docs/design/feature-completion-roadmap.md,
+        docs/evidence/feat-chart-002,
+      ]
+    exclude:
+      [
+        new provider requests,
+        database changes,
+        AQI chart duplication,
+        historical chart ranges,
+        production release,
+        paid services,
+      ]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files: [apps/web/components/forecast-trend-chart.tsx, apps/web/lib/forecast-trend.ts]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web]
+  compatibility:
+    requires_expand_contract: true
+    stable_version_compatible: true
+    rollback_window: Retain A's optional daily summaries through the previous Vercel release rollback window.
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run apps/web/lib/forecast-trend.test.ts,
+        corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts --workers=1,
+        corepack pnpm typecheck,
+        corepack pnpm --filter @atmos/web build,
+      ]
+    expected:
+      [
+        all planned weather series map only truthful normalized values,
+        hourly and daily ranges operate without fetching,
+        missing values leave chart gaps,
+        tooltip/crosshair and accessible summary identify units and time basis,
+        320px layout remains usable,
+      ]
+  security_checks:
+    [no provider/raw response in browser, no high-cardinality telemetry, existing PR security suite]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [none; chart is browser-only]
+    logs: [none; no measurements or user data logged]
+    traces: [none; no request path introduced]
+  evidence: [docs/evidence/feat-chart-002/implementation.md]
+  rollback:
+    strategy: Revert chart option and UI changes; old A response remains valid and no persistent state is written.
+  human_approval:
+    required: false
+    reason: Owner selected group B; scope adds no vendor, infrastructure, data write, or production mutation.

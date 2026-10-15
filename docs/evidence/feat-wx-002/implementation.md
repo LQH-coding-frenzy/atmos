@@ -1,6 +1,6 @@
 # FEAT-WX-002 — full weather readings and extended outlook
 
-Status: **REVIEW**, local implementation verified on 2026-10-15. No production release,
+Status: **DONE locally**, merged via [PR #309](https://github.com/LQH-coding-frenzy/atmos/pull/309) on 2026-10-15. No production release,
 database mutation, new secret, paid service, or warning-feed integration was performed.
 
 ## Scope and compatibility
@@ -44,15 +44,16 @@ Provider responses were not committed.
 
 ## Validation
 
-| Check                                                | Result                                      |
-| ---------------------------------------------------- | ------------------------------------------- |
-| Focused contracts/provider/web helpers/gateway tests | 101 passed in 18 files                      |
-| Full `corepack pnpm test`                            | 130 Vitest tests and 78 script tests passed |
-| `corepack pnpm typecheck`                            | Passed                                      |
-| Targeted ESLint                                      | Passed                                      |
-| Gateway build (`wrangler deploy --dry-run`)          | Passed; no upload/deployment                |
-| Dashboard Playwright suite                           | All 26 tests passed                         |
-| Web production build                                 | Passed                                      |
+| Check                                                                          | Result                                      |
+| ------------------------------------------------------------------------------ | ------------------------------------------- |
+| Focused contracts/provider/web helpers/gateway tests                           | 101 passed in 18 files                      |
+| Full `corepack pnpm test`                                                      | 130 Vitest tests and 78 script tests passed |
+| `corepack pnpm typecheck`                                                      | Passed                                      |
+| Targeted ESLint                                                                | Passed                                      |
+| Gateway build (`wrangler deploy --dry-run`)                                    | Passed; no upload/deployment                |
+| Dashboard Playwright suite                                                     | All 26 tests passed                         |
+| Web production build                                                           | Passed                                      |
+| PR #309 quality, database, Playwright, security scans, SBOM and Vercel preview | Passed                                      |
 
 Tests cover old responses, range rejection, null long-range probabilities, aligned
 array sizes, canonical units, atomic quota reservation, polar events, both DST clock
@@ -67,7 +68,7 @@ development eval; CSP was not weakened. This is not a clean production-console c
 
 ## Remaining review and release gates
 
-- Protected PR security scans and review remain pending; do not represent them as run.
+- Protected PR scans passed and PR #309 is merged. Production remains unchanged.
 - Measure candidate Worker **p95 CPU ≤7 ms** before production exposure. Local build
   success and Node timings are not a Cloudflare CPU measurement. If the budget fails,
   move richer normalization off the Worker rather than raising the threshold.

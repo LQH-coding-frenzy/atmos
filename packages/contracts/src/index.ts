@@ -378,6 +378,11 @@ export type DailyForecast = z.infer<typeof dailyForecastSchema>;
 // contract and expose this separately for compatible mixed-version rollouts.
 export const extendedDailyForecastSchema = dailyForecastSchema.extend({
   precipitationProbability: z.number().min(0).max(100).nullable(),
+  apparentTemperatureMaxC: z.number().nullable().optional(),
+  humidityMeanPercent: z.number().min(0).max(100).nullable().optional(),
+  pressureMeanHpa: z.number().positive().nullable().optional(),
+  cloudCoverMeanPercent: z.number().min(0).max(100).nullable().optional(),
+  visibilityMeanM: z.number().nonnegative().nullable().optional(),
 });
 export type ExtendedDailyForecast = z.infer<typeof extendedDailyForecastSchema>;
 

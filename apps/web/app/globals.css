@@ -790,10 +790,100 @@ svg {
 }
 .forecast-trend-chart {
   width: 100%;
-  height: 250px;
+  height: 270px;
   color: var(--accent);
   border-color: var(--line);
   background-color: var(--raised);
+}
+.chart-series-picker {
+  display: grid;
+  min-width: 148px;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.chart-series-picker select {
+  min-height: 42px;
+  max-width: min(230px, 45vw);
+  padding: 8px 30px 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-low);
+  color: var(--ink);
+  font-size: 11px;
+}
+.chart-range-picker {
+  width: fit-content;
+  margin-top: 14px;
+}
+.chart-range-picker button {
+  min-height: 40px;
+  font-size: 11px;
+}
+.forecast-chart-content {
+  min-width: 0;
+}
+.forecast-chart-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 5px 12px;
+  margin-top: 14px;
+  color: var(--ink);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.forecast-chart-summary span {
+  color: var(--muted);
+}
+.forecast-chart-empty {
+  display: grid;
+  min-height: 210px;
+  place-items: center;
+  margin: 0;
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+}
+.forecast-chart-data {
+  margin-top: 12px;
+}
+.forecast-chart-data > summary {
+  min-height: 44px;
+  padding-block: 12px;
+  color: var(--accent);
+  font-size: 11px;
+}
+.forecast-chart-data-scroll {
+  max-height: 260px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.forecast-chart-data table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.forecast-chart-data caption {
+  padding: 12px;
+  color: var(--muted);
+  text-align: left;
+}
+.forecast-chart-data th,
+.forecast-chart-data td {
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  text-align: left;
+}
+.forecast-chart-data tbody th {
+  color: var(--muted);
+  font-weight: 400;
+}
+.forecast-chart-data td {
+  text-align: right;
 }
 .planner-card .card-heading {
   display: grid;
