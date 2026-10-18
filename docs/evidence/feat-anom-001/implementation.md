@@ -1,6 +1,6 @@
 # FEAT-ANOM-001 — deterministic insights from recorded weather
 
-Status: **REVIEW**. This task adds only browser-side calculations over the existing
+Status: **DONE locally**, merged in [PR #316](https://github.com/LQH-coding-frenzy/atmos/pull/316). This task adds only browser-side calculations over the existing
 RLS-returned user snapshots and fresh dashboard observation. It does not request history
 from a provider, backfill prior weather, write additional history, or change production.
 
@@ -29,5 +29,6 @@ from a provider, backfill prior weather, write additional history, or change pro
 
 ## Remaining gates
 
-Protected PR security/quality checks and review are pending. No production release or
-backfill is part of FEAT-ANOM-001.
+PR #316 quality, database, Playwright, CodeQL, Semgrep, secret-scan, Trivy, SBOM and Vercel
+preview checks passed. No production release or provider backfill is part of
+FEAT-ANOM-001.

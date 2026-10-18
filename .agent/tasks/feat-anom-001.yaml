@@ -1,7 +1,7 @@
 task:
   id: FEAT-ANOM-001
   title: Add deterministic anomalies against recorded baselines
-  status: REVIEW
+  status: DONE
   objective: Compare fresh current weather with the user's own recorded observations and surface deterministic anomalies only when sample count and date coverage meet explicit minimums.
   depends_on: [HIST-ANALYTICS-001, HIST-CAP-001, HIST-MGMT-001, FEAT-WX-002, AUTH-002, WEB-012]
   external_policy_checks: [none; no provider history/backfill or new source]
