@@ -1,0 +1,79 @@
+task:
+  id: FEAT-WARN-001
+  title: Research official severe-warning coverage
+  status: REVIEW
+  objective: Compare free official severe-warning feeds and document verifiable regional coverage, access terms, quotas, attribution, failure behavior, and unsupported regions before choosing any integration.
+  depends_on: [WX-004, EDGE-004, CACHE-001, PERF-001, WEB-012]
+  external_policy_checks:
+    [
+      official source ownership,
+      free-tier/usage terms,
+      attribution,
+      API-key requirements,
+      quotas/rate limits,
+      coverage and redistribution terms,
+    ]
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Research and coverage evidence only; no runtime integration or network mutation.
+  scope:
+    include:
+      [
+        .agent/status.yaml,
+        .agent/tasks/feat-warn-001.yaml,
+        docs/architecture/atmos-devsecops-master-plan.md,
+        docs/design/feature-completion-roadmap.md,
+        docs/design/provenance.md,
+        docs/evidence/feat-warn-001/research.md,
+      ]
+    exclude:
+      [
+        provider integration,
+        API calls from the application,
+        new secrets/credentials,
+        paid service,
+        production changes,
+        unsupported-region inference,
+      ]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files: [docs/evidence/feat-warn-001/research.md, docs/design/provenance.md]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [none]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert research documentation only; application runtime is unchanged.
+  validation:
+    commands:
+      [
+        manual audit of official provider documentation and coverage/terms sources,
+        corepack pnpm exec prettier --check docs/evidence/feat-warn-001/research.md docs/design/provenance.md,
+      ]
+    expected:
+      [
+        coverage claims linked to official sources,
+        unsupported regions stated explicitly,
+        paid/key-dependent sources excluded or marked for owner approval,
+        no provider integration performed,
+      ]
+  security_checks:
+    [no credentials acquired, no external requests from application, no raw personal data]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [none]
+    logs: [none]
+    traces: [none]
+  evidence: [docs/evidence/feat-warn-001/research.md, official source links and coverage matrix]
+  rollback:
+    strategy: Revert research notes; keep the warning center unimplemented until a separate integration task is approved.
+  human_approval:
+    required: false
+    reason: Research-only task; any new provider/credential integration is a separate approval gate.
