@@ -2,7 +2,7 @@
 document: Atmos DevSecOps Master Plan
 version: 2.1.0
 status: cv-showcase-scope
-last_updated: 2026-10-18
+last_updated: 2026-10-19
 validation:
   last_validated: 2026-08-31
   result: GO
