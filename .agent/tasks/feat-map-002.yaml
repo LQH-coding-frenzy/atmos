@@ -1,7 +1,7 @@
 task:
   id: FEAT-MAP-002
   title: Saved-place, coordinate and bounded AQI map layers
-  status: REVIEW
+  status: DONE
   objective: Add saved-place markers, confirm-before-open arbitrary coordinate previews, bounded sampled AQI map points and accurate quantitative weather-map legends.
   depends_on: [FEAT-MAP-001, FEAT-AQI-LIVE-001, FEAT-LOC-002, WX-004, PERF-001]
   external_policy_checks:

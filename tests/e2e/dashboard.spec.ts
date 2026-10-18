@@ -256,10 +256,8 @@ test('expands hourly and daily forecast metadata with keyboard controls', async 
 
 test('explains ranked activity windows with local start and end times', async ({ page }) => {
   await page.goto('/');
-  const activities = page.getByRole('group', { name: 'Activity' });
-  const cycling = activities.getByRole('button', { name: 'Cycling' });
-  await cycling.click();
-  await expect(cycling).toHaveAttribute('aria-pressed', 'true');
+  const activityPicker = page.getByRole('combobox', { name: 'Activity profile' });
+  await activityPicker.selectOption('cycling');
 
   const windows = page.getByRole('list', { name: 'Ranked cycling weather windows' });
   const firstWindow = windows.locator('li').first();
@@ -692,16 +690,12 @@ test('supports full map view, city previews, and the user management page', asyn
   await expect(page.getByRole('img', { name: 'Temperature, 7d weather chart' })).toBeVisible();
   await expect(page.locator('.current-card')).not.toBeVisible();
   await page.getByRole('button', { name: 'Plan', exact: true }).click();
-  await page.getByRole('button', { name: 'Cycling', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Activity profile' }).selectOption('cycling');
   await expect(page.getByRole('list', { name: 'Ranked cycling weather windows' })).toBeVisible();
   await page.getByRole('link', { name: 'Close full map view' }).click();
   await expect(page).toHaveURL(/#dashboard$/);
   await expect(mapCard).toHaveCSS('position', 'relative');
   expect(previewWeatherRequests).toBe(requestsBeforeViewSwitch);
-  await expect(page.getByRole('button', { name: 'Cycling', exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'true',
-  );
   expect(mapWorkerRequests).toBe(1);
 
   const radarSlider = page.getByRole('slider', { name: 'Radar frame time' });

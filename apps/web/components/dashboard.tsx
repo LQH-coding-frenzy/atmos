@@ -918,7 +918,13 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
             </div>
           </article>
 
-          <ActivityPlanner hourly={dashboard.hourly} location={dashboard.location} />
+          <ActivityPlanner
+            key={`${dashboard.location.id}:${dashboard.location.latitude}:${dashboard.location.longitude}`}
+            gatewayOrigin={gatewayOrigin}
+            units={units}
+            hourly={dashboard.hourly}
+            location={dashboard.location}
+          />
 
           {isOnline && dashboard.meta.stale ? (
             <p className="weather-stale" role="status">

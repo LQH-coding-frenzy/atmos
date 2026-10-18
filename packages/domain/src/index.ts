@@ -1,4 +1,4 @@
-import type { CurrentWeather, HourlyForecast, UnitSystem } from '@atmos/contracts';
+import type { AirQualityHour, CurrentWeather, HourlyForecast, UnitSystem } from '@atmos/contracts';
 
 export const plannerActivityKinds = [
   'running',
@@ -16,14 +16,176 @@ export type PlannerActivityKind = (typeof plannerActivityKinds)[number];
 export type PlannerActivity =
   { kind: PlannerActivityKind; name?: never } | { kind: 'custom'; name: string };
 
+export const plannerActivityLabels: Record<PlannerActivityKind, string> = {
+  running: 'Running',
+  cycling: 'Cycling',
+  hiking: 'Hiking',
+  football: 'Football',
+  photography: 'Photography',
+  beach: 'Beach day',
+  commuting: 'Commuting',
+  sightseeing: 'Sightseeing',
+  picnic: 'Picnic',
+};
+
+export type PlannerThresholds = {
+  temperatureMinC: number;
+  temperatureMaxC: number;
+  feelsLikeMinC: number;
+  feelsLikeMaxC: number;
+  humidityMaxPercent: number;
+  rainProbabilityMax: number;
+  precipitationMmMax: number;
+  windSpeedKphMax: number;
+  windGustKphMax: number;
+  uvIndexMax: number;
+  usAqiMax: number;
+};
+
+export const defaultCustomPlannerThresholds: PlannerThresholds = {
+  temperatureMinC: 10,
+  temperatureMaxC: 28,
+  feelsLikeMinC: 8,
+  feelsLikeMaxC: 30,
+  humidityMaxPercent: 80,
+  rainProbabilityMax: 25,
+  precipitationMmMax: 1,
+  windSpeedKphMax: 30,
+  windGustKphMax: 45,
+  uvIndexMax: 7,
+  usAqiMax: 100,
+};
+
+export const plannerActivityProfiles: Record<PlannerActivityKind, PlannerThresholds> = {
+  running: {
+    temperatureMinC: 5,
+    temperatureMaxC: 24,
+    feelsLikeMinC: 3,
+    feelsLikeMaxC: 26,
+    humidityMaxPercent: 80,
+    rainProbabilityMax: 20,
+    precipitationMmMax: 0.8,
+    windSpeedKphMax: 30,
+    windGustKphMax: 45,
+    uvIndexMax: 7,
+    usAqiMax: 100,
+  },
+  cycling: {
+    temperatureMinC: 8,
+    temperatureMaxC: 26,
+    feelsLikeMinC: 6,
+    feelsLikeMaxC: 28,
+    humidityMaxPercent: 78,
+    rainProbabilityMax: 15,
+    precipitationMmMax: 0.5,
+    windSpeedKphMax: 24,
+    windGustKphMax: 38,
+    uvIndexMax: 7,
+    usAqiMax: 100,
+  },
+  hiking: {
+    temperatureMinC: 4,
+    temperatureMaxC: 23,
+    feelsLikeMinC: 2,
+    feelsLikeMaxC: 26,
+    humidityMaxPercent: 85,
+    rainProbabilityMax: 25,
+    precipitationMmMax: 1,
+    windSpeedKphMax: 35,
+    windGustKphMax: 50,
+    uvIndexMax: 7,
+    usAqiMax: 100,
+  },
+  football: {
+    temperatureMinC: 8,
+    temperatureMaxC: 25,
+    feelsLikeMinC: 6,
+    feelsLikeMaxC: 27,
+    humidityMaxPercent: 80,
+    rainProbabilityMax: 15,
+    precipitationMmMax: 0.5,
+    windSpeedKphMax: 28,
+    windGustKphMax: 40,
+    uvIndexMax: 6,
+    usAqiMax: 100,
+  },
+  photography: {
+    temperatureMinC: 6,
+    temperatureMaxC: 29,
+    feelsLikeMinC: 4,
+    feelsLikeMaxC: 31,
+    humidityMaxPercent: 90,
+    rainProbabilityMax: 35,
+    precipitationMmMax: 1.5,
+    windSpeedKphMax: 35,
+    windGustKphMax: 50,
+    uvIndexMax: 9,
+    usAqiMax: 150,
+  },
+  beach: {
+    temperatureMinC: 23,
+    temperatureMaxC: 36,
+    feelsLikeMinC: 22,
+    feelsLikeMaxC: 38,
+    humidityMaxPercent: 85,
+    rainProbabilityMax: 15,
+    precipitationMmMax: 0.3,
+    windSpeedKphMax: 25,
+    windGustKphMax: 38,
+    uvIndexMax: 8,
+    usAqiMax: 100,
+  },
+  commuting: {
+    temperatureMinC: -5,
+    temperatureMaxC: 30,
+    feelsLikeMinC: -10,
+    feelsLikeMaxC: 33,
+    humidityMaxPercent: 95,
+    rainProbabilityMax: 55,
+    precipitationMmMax: 2.5,
+    windSpeedKphMax: 45,
+    windGustKphMax: 65,
+    uvIndexMax: 10,
+    usAqiMax: 150,
+  },
+  sightseeing: {
+    temperatureMinC: 10,
+    temperatureMaxC: 30,
+    feelsLikeMinC: 8,
+    feelsLikeMaxC: 32,
+    humidityMaxPercent: 82,
+    rainProbabilityMax: 25,
+    precipitationMmMax: 1,
+    windSpeedKphMax: 35,
+    windGustKphMax: 50,
+    uvIndexMax: 7,
+    usAqiMax: 100,
+  },
+  picnic: {
+    temperatureMinC: 17,
+    temperatureMaxC: 29,
+    feelsLikeMinC: 16,
+    feelsLikeMaxC: 31,
+    humidityMaxPercent: 76,
+    rainProbabilityMax: 15,
+    precipitationMmMax: 0.4,
+    windSpeedKphMax: 20,
+    windGustKphMax: 32,
+    uvIndexMax: 6,
+    usAqiMax: 100,
+  },
+};
+
 export const plannerDimensions = [
   'temperature',
   'feels-like',
   'humidity',
   'rain',
+  'precipitation',
   'wind',
   'uv',
   'aqi',
+  'conditions',
 ] as const;
 export type PlannerDimension = (typeof plannerDimensions)[number];
 
@@ -37,85 +199,272 @@ export interface PlannerTimeWindow {
   startsAt: string;
   endsAt: string;
   score: number;
+  coveragePercent: number;
+  missingDimensions: readonly PlannerDimension[];
   factors: readonly PlannerFactor[];
 }
 
 export interface PlannerResult {
   activity: PlannerActivity;
   score: number;
+  coveragePercent: number;
+  missingDimensions: readonly PlannerDimension[];
   rankedWindows: readonly PlannerTimeWindow[];
   factors: readonly PlannerFactor[];
 }
 
-export const supportedPlannerActivities = ['running', 'cycling', 'hiking', 'photography'] as const;
-export type SupportedPlannerActivity = (typeof supportedPlannerActivities)[number];
+export const supportedPlannerActivities = plannerActivityKinds;
+export type SupportedPlannerActivity = PlannerActivityKind;
+
+export type PlannerOptions = {
+  customThresholds?: PlannerThresholds;
+  aqiHours?: readonly Pick<AirQualityHour, 'time' | 'usAqi'>[];
+};
+
+const plannerDimensionWeights: Record<PlannerDimension, number> = {
+  temperature: 1.1,
+  'feels-like': 1,
+  humidity: 0.8,
+  rain: 1.4,
+  precipitation: 0.8,
+  wind: 1.1,
+  uv: 0.8,
+  aqi: 1.2,
+  conditions: 1.2,
+};
+const totalPlannerWeight = plannerDimensions.reduce(
+  (sum, dimension) => sum + plannerDimensionWeights[dimension],
+  0,
+);
+
+function boundedScore(value: number) {
+  return Math.round(Math.max(0, Math.min(100, value)));
+}
+
+function scoreRange(value: number, minimum: number, maximum: number, penaltyPerDegree = 9) {
+  const distance = value < minimum ? minimum - value : value > maximum ? value - maximum : 0;
+  return { score: boundedScore(100 - distance * penaltyPerDegree), favorable: distance === 0 };
+}
+
+function scoreMaximum(value: number, maximum: number, penaltyPerUnit: number) {
+  const excess = Math.max(0, value - maximum);
+  return { score: boundedScore(100 - excess * penaltyPerUnit), favorable: excess === 0 };
+}
+
+function finiteValue(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
 
 function scoreActivityHour(
-  activity: SupportedPlannerActivity,
   hour: HourlyForecast,
+  thresholds: PlannerThresholds,
+  aqiByHour: ReadonlyMap<number, number | null>,
 ): PlannerTimeWindow {
-  let score = 55;
-  const factors: PlannerFactor[] = [];
-  const [minimum, maximum] = activity === 'photography' ? [8, 28] : [7, 23];
-  if (hour.temperatureC >= minimum && hour.temperatureC <= maximum) {
-    score += 20;
-    factors.push({
-      dimension: 'temperature',
-      impact: 'positive',
-      explanation: 'Comfortable temperature.',
+  const checks: Array<{
+    dimension: PlannerDimension;
+    score: number;
+    favorable: boolean;
+    explanation: string;
+  }> = [];
+  const addCheck = (
+    dimension: PlannerDimension,
+    value: number,
+    maximum: number,
+    penaltyPerUnit: number,
+    explanation: (favorable: boolean) => string,
+  ) => {
+    const result = scoreMaximum(value, maximum, penaltyPerUnit);
+    checks.push({
+      dimension,
+      ...result,
+      explanation: explanation(result.favorable),
     });
-  } else {
-    score -= 15;
-    factors.push({
-      dimension: 'temperature',
-      impact: 'negative',
-      explanation: 'Temperature is outside the comfortable range.',
+  };
+
+  const temperature = scoreRange(
+    hour.temperatureC,
+    thresholds.temperatureMinC,
+    thresholds.temperatureMaxC,
+  );
+  checks.push({
+    dimension: 'temperature',
+    ...temperature,
+    explanation: temperature.favorable
+      ? "Temperature is within this profile's preferred range."
+      : "Temperature is outside this profile's preferred range.",
+  });
+
+  if (finiteValue(hour.apparentTemperatureC)) {
+    const feelsLike = scoreRange(
+      hour.apparentTemperatureC,
+      thresholds.feelsLikeMinC,
+      thresholds.feelsLikeMaxC,
+    );
+    checks.push({
+      dimension: 'feels-like',
+      ...feelsLike,
+      explanation: feelsLike.favorable
+        ? 'Feels-like temperature is within the profile range.'
+        : 'Feels-like temperature is outside the profile range.',
     });
   }
-  if (hour.precipitationProbability <= 20) {
-    score += 20;
-    factors.push({ dimension: 'rain', impact: 'positive', explanation: 'Low chance of rain.' });
-  } else if (hour.precipitationProbability >= 50) {
-    score -= 35;
-    factors.push({ dimension: 'rain', impact: 'negative', explanation: 'High chance of rain.' });
+
+  if (finiteValue(hour.humidityPercent)) {
+    addCheck('humidity', hour.humidityPercent, thresholds.humidityMaxPercent, 1.5, (favorable) =>
+      favorable
+        ? `Humidity ${Math.round(hour.humidityPercent!)}% is within the profile limit.`
+        : `Humidity ${Math.round(hour.humidityPercent!)}% is above the profile limit.`,
+    );
   }
-  if (hour.condition === 'thunderstorm' || hour.condition === 'snow') {
-    score -= 40;
-    factors.push({
-      dimension: 'rain',
-      impact: 'negative',
-      explanation: 'Severe or winter conditions expected.',
+
+  const rainProbability = scoreMaximum(
+    hour.precipitationProbability,
+    thresholds.rainProbabilityMax,
+    1.5,
+  );
+  checks.push({
+    dimension: 'rain',
+    score: rainProbability.score,
+    favorable: rainProbability.favorable,
+    explanation: rainProbability.favorable
+      ? `Rain probability is within this profile's ${thresholds.rainProbabilityMax}% limit.`
+      : `Rain probability exceeds this profile's ${thresholds.rainProbabilityMax}% limit.`,
+  });
+
+  if (finiteValue(hour.precipitationMm)) {
+    const precipitation = scoreMaximum(hour.precipitationMm, thresholds.precipitationMmMax, 30);
+    checks.push({
+      dimension: 'precipitation',
+      ...precipitation,
+      explanation: precipitation.favorable
+        ? 'Expected hourly precipitation is within this profile’s limit.'
+        : 'Expected hourly precipitation is above this profile’s limit.',
     });
   }
-  if (activity === 'photography' && hour.condition === 'partly-cloudy') {
-    score += 10;
-    factors.push({
-      dimension: 'temperature',
-      impact: 'positive',
-      explanation: 'Partly cloudy light can add visual interest.',
+
+  const windScore = [
+    finiteValue(hour.windSpeedKph)
+      ? scoreMaximum(hour.windSpeedKph, thresholds.windSpeedKphMax, 2.5)
+      : undefined,
+    finiteValue(hour.windGustKph)
+      ? scoreMaximum(hour.windGustKph, thresholds.windGustKphMax, 2.5)
+      : undefined,
+  ].filter((result) => result !== undefined);
+  if (windScore.length > 0) {
+    const favorable = windScore.every((result) => result.favorable);
+    checks.push({
+      dimension: 'wind',
+      score: Math.min(...windScore.map((result) => result.score)),
+      favorable,
+      explanation: favorable
+        ? 'Wind and any available gusts are within the profile limits.'
+        : 'Wind or gusts exceed this profile’s preferred limit.',
     });
   }
+
+  if (finiteValue(hour.uvIndex)) {
+    addCheck('uv', hour.uvIndex, thresholds.uvIndexMax, 12, (favorable) =>
+      favorable
+        ? `UV index ${hour.uvIndex!.toFixed(1)} is within the profile limit.`
+        : `UV index ${hour.uvIndex!.toFixed(1)} is above the profile limit.`,
+    );
+  }
+
+  const aqi = aqiByHour.get(Math.floor(Date.parse(hour.time) / 3_600_000));
+  if (finiteValue(aqi)) {
+    addCheck('aqi', aqi, thresholds.usAqiMax, 0.6, (favorable) =>
+      favorable
+        ? `Modeled U.S. AQI ${Math.round(aqi)} is within the profile limit.`
+        : `Modeled U.S. AQI ${Math.round(aqi)} is above the profile limit.`,
+    );
+  }
+
+  const conditionScore: Record<HourlyForecast['condition'], number> = {
+    clear: 100,
+    'partly-cloudy': 92,
+    cloudy: 82,
+    rain: 50,
+    snow: 20,
+    thunderstorm: 0,
+  };
+  const conditionValue = conditionScore[hour.condition];
+  checks.push({
+    dimension: 'conditions',
+    score: conditionValue,
+    favorable: conditionValue >= 70,
+    explanation:
+      hour.condition === 'thunderstorm' || hour.condition === 'snow'
+        ? `${hour.condition === 'snow' ? 'Snow' : 'Thunderstorm'} conditions reduce this outdoor suitability estimate.`
+        : `Forecast conditions: ${hour.condition.replace('-', ' ')}.`,
+  });
+
+  const availableWeight = checks.reduce(
+    (sum, check) => sum + plannerDimensionWeights[check.dimension],
+    0,
+  );
+  const weightedScore = checks.reduce(
+    (sum, check) => sum + check.score * plannerDimensionWeights[check.dimension],
+    0,
+  );
+  const rawScore = availableWeight > 0 ? weightedScore / availableWeight : 50;
+  const coveragePercent = boundedScore((availableWeight / totalPlannerWeight) * 100);
+  const missingDimensions = plannerDimensions.filter(
+    (dimension) => !checks.some((check) => check.dimension === dimension),
+  );
+  const score = boundedScore(50 + ((rawScore - 50) * coveragePercent) / 100);
+  const factors: PlannerFactor[] = checks.map((check) => ({
+    dimension: check.dimension,
+    impact: check.favorable ? 'positive' : 'negative',
+    explanation: check.explanation,
+  }));
+
   return {
     startsAt: hour.time,
-    endsAt: new Date(new Date(hour.time).getTime() + 60 * 60_000).toISOString(),
-    score: Math.max(0, Math.min(100, score)),
+    endsAt: new Date(Date.parse(hour.time) + 60 * 60_000).toISOString(),
+    score,
+    coveragePercent,
+    missingDimensions,
     factors,
   };
 }
 
 export function planActivity(
-  activity: SupportedPlannerActivity,
+  activityInput: PlannerActivity | PlannerActivityKind,
   hourly: readonly HourlyForecast[],
+  options: PlannerOptions = {},
 ): PlannerResult {
+  const activity: PlannerActivity =
+    typeof activityInput === 'string' ? { kind: activityInput } : activityInput;
+  const thresholds =
+    activity.kind === 'custom'
+      ? (options.customThresholds ?? defaultCustomPlannerThresholds)
+      : plannerActivityProfiles[activity.kind];
+  const aqiByHour = new Map<number, number | null>();
+  for (const point of options.aqiHours ?? []) {
+    const timestamp = Date.parse(point.time);
+    if (Number.isFinite(timestamp)) aqiByHour.set(Math.floor(timestamp / 3_600_000), point.usAqi);
+  }
   const rankedWindows = hourly
-    .map((hour) => scoreActivityHour(activity, hour))
-    .sort((left, right) => right.score - left.score)
+    .map((hour) => scoreActivityHour(hour, thresholds, aqiByHour))
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        right.coveragePercent - left.coveragePercent ||
+        Date.parse(left.startsAt) - Date.parse(right.startsAt),
+    )
     .slice(0, 3);
+  const best = rankedWindows[0];
+  const resultActivity: PlannerActivity =
+    activity.kind === 'custom'
+      ? { kind: 'custom', name: activity.name.trim().slice(0, 60) || 'Custom activity' }
+      : { kind: activity.kind };
   return {
-    activity: { kind: activity },
-    score: rankedWindows[0]?.score ?? 0,
+    activity: resultActivity,
+    score: best?.score ?? 50,
+    coveragePercent: best?.coveragePercent ?? 0,
+    missingDimensions: best?.missingDimensions ?? plannerDimensions,
     rankedWindows,
-    factors: rankedWindows[0]?.factors ?? [],
+    factors: best?.factors ?? [],
   };
 }
 
