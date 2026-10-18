@@ -1,0 +1,84 @@
+task:
+  id: FEAT-ANOM-001
+  title: Add deterministic anomalies against recorded baselines
+  status: REVIEW
+  objective: Compare fresh current weather with the user's own recorded observations and surface deterministic anomalies only when sample count and date coverage meet explicit minimums.
+  depends_on: [HIST-ANALYTICS-001, HIST-CAP-001, HIST-MGMT-001, FEAT-WX-002, AUTH-002, WEB-012]
+  external_policy_checks: [none; no provider history/backfill or new source]
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Anomaly calculations run on at most the already-loaded 100 RLS-returned snapshots in the browser.
+  scope:
+    include:
+      [
+        apps/web/components/weather-history-panel.tsx,
+        apps/web/lib/weather-history-analytics.ts,
+        apps/web/lib/weather-history-analytics.test.ts,
+        apps/web/app/globals.css,
+        tests/e2e/history-anomaly-insights.spec.ts,
+        tests/e2e/dashboard.spec.ts,
+        .agent,
+        docs/architecture/atmos-devsecops-master-plan.md,
+        docs/design/feature-completion-roadmap.md,
+        docs/evidence/feat-anom-001,
+      ]
+    exclude:
+      [
+        provider historical data,
+        automatic backfill,
+        alerts/notifications,
+        database changes,
+        unrecorded-hour interpolation,
+        unsupported rainfall/AQI/UV baselines,
+        production release,
+      ]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files:
+      [
+        apps/web/lib/weather-history-analytics.ts,
+        apps/web/components/weather-history-panel.tsx,
+        tests/e2e/history-anomaly-insights.spec.ts,
+      ]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web only; existing history endpoint]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Remove the client-only baseline analysis; recorded snapshots and history API remain unchanged.
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run apps/web/lib/weather-history-analytics.test.ts,
+        corepack pnpm exec playwright test tests/e2e/history-anomaly-insights.spec.ts tests/e2e/dashboard.spec.ts --workers=1,
+        corepack pnpm typecheck,
+        corepack pnpm --filter @atmos/web build,
+      ]
+    expected:
+      [
+        insights require at least 12 snapshots across 7 selected-location calendar dates,
+        current stale weather is not scored,
+        only supported metrics are tested,
+        unsupported rainfall/AQI/UV anomalies remain explicitly unavailable,
+        no sample gaps are interpolated,
+      ]
+  security_checks:
+    [existing owner-RLS history response only, no new storage/telemetry/provider fetch]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [existing weather_history route group only]
+    logs: [none added]
+    traces: [existing gateway request correlation only]
+  evidence: [docs/evidence/feat-anom-001/implementation.md, focused unit/browser tests]
+  rollback:
+    strategy: Revert the anomaly summary/helpers; no persisted state, schema or API changes exist.
+  human_approval:
+    required: false
+    reason: Owner selected deterministic group J; analysis uses only already-approved user-recorded snapshots.

@@ -1,10 +1,47 @@
-import type { UnitSystem, WeatherSnapshot } from '@atmos/contracts';
+import type { CurrentWeather, UnitSystem, WeatherSnapshot } from '@atmos/contracts';
 
 const millisecondsPerDay = 24 * 60 * 60 * 1000;
 
 export type WeatherHistoryRange = '24h' | '7d' | '30d' | '90d' | 'custom';
 export type WeatherHistoryMetric = 'temperature' | 'feels-like' | 'humidity' | 'wind' | 'pressure';
 export type CustomHistoryRange = { start: string; end: string };
+export const minimumAnomalySnapshots = 12;
+export const minimumAnomalyDates = 7;
+
+export type RecordedWeatherAnomaly = {
+  metric: WeatherHistoryMetric;
+  currentValue: number;
+  baselineAverage: number;
+  baselineStandardDeviation: number;
+  threshold: number;
+  deviation: number;
+  direction: 'above' | 'below';
+  sampleCount: number;
+};
+
+export type RecordedConditionAnomaly = {
+  condition: 'rain' | 'snow' | 'thunderstorm';
+  observedCount: number;
+  sampleCount: number;
+};
+
+export type RecordedWeatherAnomalyAnalysis = {
+  eligible: boolean;
+  sampleCount: number;
+  distinctDates: number;
+  requiredSamples: number;
+  requiredDates: number;
+  anomalies: RecordedWeatherAnomaly[];
+  unusualConditions: RecordedConditionAnomaly[];
+};
+
+const minimumAnomalyDeviation: Record<WeatherHistoryMetric, number> = {
+  temperature: 3,
+  'feels-like': 3,
+  humidity: 15,
+  wind: 12,
+  pressure: 8,
+};
 
 export const weatherHistoryMetrics: ReadonlyArray<{
   value: WeatherHistoryMetric;
@@ -117,19 +154,38 @@ export function weatherHistoryMetricValue(
   units: UnitSystem,
 ) {
   const { payload } = snapshot;
+  const value = (() => {
+    switch (metric) {
+      case 'temperature':
+        return payload.temperature_c;
+      case 'feels-like':
+        return payload.apparent_temperature_c;
+      case 'humidity':
+        return payload.humidity_percent;
+      case 'wind':
+        return payload.wind_speed_kph;
+      case 'pressure':
+        return payload.pressure_hpa;
+    }
+  })();
+  return convertHistoryMetricValue(value, metric, units);
+}
+
+export function convertHistoryMetricValue(
+  value: number,
+  metric: WeatherHistoryMetric,
+  units: UnitSystem,
+) {
   switch (metric) {
     case 'temperature':
-      return units === 'imperial' ? (payload.temperature_c * 9) / 5 + 32 : payload.temperature_c;
     case 'feels-like':
-      return units === 'imperial'
-        ? (payload.apparent_temperature_c * 9) / 5 + 32
-        : payload.apparent_temperature_c;
+      return units === 'imperial' ? (value * 9) / 5 + 32 : value;
     case 'humidity':
-      return payload.humidity_percent;
+      return value;
     case 'wind':
-      return units === 'imperial' ? payload.wind_speed_kph / 1.60934 : payload.wind_speed_kph;
+      return units === 'imperial' ? value / 1.60934 : value;
     case 'pressure':
-      return units === 'imperial' ? payload.pressure_hpa * 0.0295299830714 : payload.pressure_hpa;
+      return units === 'imperial' ? value * 0.0295299830714 : value;
   }
 }
 
@@ -155,6 +211,29 @@ export function formatWeatherHistoryMetric(
   const formatted = new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(value);
   const unit = weatherHistoryMetricUnit(metric, units);
   return unit === '%' ? `${formatted}%` : `${formatted} ${unit}`;
+}
+
+export function formatWeatherHistoryDifference(
+  value: number,
+  metric: WeatherHistoryMetric,
+  units: UnitSystem,
+) {
+  if (metric === 'humidity') {
+    return `${new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(value)} percentage points`;
+  }
+  const converted =
+    metric === 'temperature' || metric === 'feels-like'
+      ? units === 'imperial'
+        ? (value * 9) / 5
+        : value
+      : metric === 'wind'
+        ? units === 'imperial'
+          ? value / 1.60934
+          : value
+        : units === 'imperial'
+          ? value * 0.0295299830714
+          : value;
+  return formatWeatherHistoryMetric(converted, metric, units);
 }
 
 export function aggregateWeatherHistory(
@@ -223,4 +302,90 @@ export function recordedConditionCounts(snapshots: readonly WeatherSnapshot[]) {
     const count = counts.get(condition);
     return count ? [{ condition, count }] : [];
   });
+}
+
+function currentHistoryMetricValue(current: CurrentWeather, metric: WeatherHistoryMetric) {
+  switch (metric) {
+    case 'temperature':
+      return current.temperatureC;
+    case 'feels-like':
+      return current.apparentTemperatureC;
+    case 'humidity':
+      return current.humidityPercent;
+    case 'wind':
+      return current.windSpeedKph;
+    case 'pressure':
+      return current.pressureHpa;
+  }
+}
+
+export function analyzeRecordedWeatherAnomalies(
+  snapshots: readonly WeatherSnapshot[],
+  current: CurrentWeather,
+  timeZone: string,
+): RecordedWeatherAnomalyAnalysis {
+  const distinctDates = new Set(
+    snapshots.map((snapshot) => dateInTimeZone(new Date(snapshot.observed_at), timeZone)),
+  ).size;
+  const eligible =
+    snapshots.length >= minimumAnomalySnapshots && distinctDates >= minimumAnomalyDates;
+  if (!eligible) {
+    return {
+      eligible: false,
+      sampleCount: snapshots.length,
+      distinctDates,
+      requiredSamples: minimumAnomalySnapshots,
+      requiredDates: minimumAnomalyDates,
+      anomalies: [],
+      unusualConditions: [],
+    };
+  }
+
+  const anomalies = weatherHistoryMetrics.flatMap(({ value: metric }) => {
+    const values = snapshots.map((snapshot) =>
+      weatherHistoryMetricValue(snapshot, metric, 'metric'),
+    );
+    const currentValue = currentHistoryMetricValue(current, metric);
+    if (!Number.isFinite(currentValue) || values.length < minimumAnomalySnapshots) return [];
+    const baselineAverage = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const variance =
+      values.reduce((sum, value) => sum + (value - baselineAverage) ** 2, 0) / values.length;
+    const baselineStandardDeviation = Math.sqrt(variance);
+    const deviation = currentValue - baselineAverage;
+    const threshold = Math.max(minimumAnomalyDeviation[metric], baselineStandardDeviation * 2);
+    if (Math.abs(deviation) < threshold) return [];
+    return [
+      {
+        metric,
+        currentValue,
+        baselineAverage,
+        baselineStandardDeviation,
+        threshold,
+        deviation,
+        direction: deviation > 0 ? ('above' as const) : ('below' as const),
+        sampleCount: values.length,
+      },
+    ];
+  });
+
+  const conditionCounts = recordedConditionCounts(snapshots);
+  const unusualConditions = (['rain', 'snow', 'thunderstorm'] as const)
+    .flatMap((condition) => {
+      const observedCount =
+        conditionCounts.find((item) => item.condition === condition)?.count ?? 0;
+      return observedCount / snapshots.length <= 0.1
+        ? [{ condition, observedCount, sampleCount: snapshots.length }]
+        : [];
+    })
+    .filter((item) => current.condition === item.condition);
+
+  return {
+    eligible: true,
+    sampleCount: snapshots.length,
+    distinctDates,
+    requiredSamples: minimumAnomalySnapshots,
+    requiredDates: minimumAnomalyDates,
+    anomalies,
+    unusualConditions,
+  };
 }

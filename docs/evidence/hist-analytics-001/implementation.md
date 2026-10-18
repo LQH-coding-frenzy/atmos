@@ -1,6 +1,6 @@
 # HIST-ANALYTICS-001 — ranges and analytics for recorded weather
 
-Status: **REVIEW**. This task uses only the existing authenticated history endpoint and
+Status: **DONE locally**, merged in [PR #315](https://github.com/LQH-coding-frenzy/atmos/pull/315). This task uses only the existing authenticated history endpoint and
 user-recorded snapshots. No provider history, automatic backfill, schema change or
 production release was added.
 
@@ -36,5 +36,6 @@ fallback glyphs; all tests pass and the history implementation does not use thos
 
 ## Remaining gates
 
-Protected PR checks/review are pending. No production release, database change or provider
-backfill is part of HIST-ANALYTICS-001.
+PR #315 quality, database, Playwright, CodeQL, Semgrep, secret-scan, Trivy, SBOM and Vercel
+preview checks passed. No production release, database change or provider backfill is part
+of HIST-ANALYTICS-001.
