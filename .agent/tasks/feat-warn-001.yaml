@@ -1,7 +1,7 @@
 task:
   id: FEAT-WARN-001
   title: Research official severe-warning coverage
-  status: REVIEW
+  status: DONE
   objective: Compare free official severe-warning feeds and document verifiable regional coverage, access terms, quotas, attribution, failure behavior, and unsupported regions before choosing any integration.
   depends_on: [WX-004, EDGE-004, CACHE-001, PERF-001, WEB-012]
   external_policy_checks:

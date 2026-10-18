@@ -3330,6 +3330,7 @@ DONE
 | ALERT-002 | evaluator Edge Function | ALERT-001, WX-003 | evaluation |
 | ALERT-INAPP-001 | authenticated in-app alert rules and current status | ALERT-001, ALERT-002, DOM-002, FEAT-LOC-UI-001, FUNC-002, ROUTE-001, WEB-002 | feature |
 | FEAT-WARN-001 | research and document free official severe-warning feed coverage, access terms and unsupported regions | WX-004, EDGE-004, CACHE-001, PERF-001, WEB-012 | source/coverage evidence |
+| FEAT-WARN-002 | integrate approved official warning feeds through a bounded gateway route with honest regional coverage | FEAT-WARN-001, EDGE-004, CACHE-001, PERF-001, WX-004 | official warning center |
 | CRON-001 | Supabase Cron trigger | ALERT-002 | schedule |
 | QUEUE-001 | Cloudflare Queue IaC/config | EDGE-001 | queue |
 | QUEUE-002 | durable delivery schema | DB-001 | delivery table |
