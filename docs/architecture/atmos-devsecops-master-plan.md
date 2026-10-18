@@ -3318,6 +3318,7 @@ DONE
 | FEAT-MAP-002 | saved-place markers, arbitrary coordinate selection, bounded sampled AQI map layer, quantitative legends | FEAT-MAP-001, FEAT-AQI-LIVE-001, FEAT-LOC-002, WX-004, PERF-001 | map feature |
 | HIST-CAP-001 | authenticated user-captured weather history | FEAT-LOC-UI-001, FUNC-002, HIST-001, ROUTE-001, WEB-002 | feature |
 | HIST-MGMT-001 | delete own weather history observations | EDGE-003, FEAT-LOC-UI-001, HIST-CAP-001, RLS-002, ROUTE-001, WEB-002 | feature |
+| HIST-ANALYTICS-001 | user-recorded 24h/custom history ranges, expanded snapshot metrics/aggregates and recorded-condition counts | HIST-001, HIST-CAP-001, HIST-MGMT-001, AUTH-002, ROUTE-001, FEAT-CHART-002, WEB-012 | history analytics |
 | FEAT-PLAN-001 | deterministic planner | DOM-002, FUNC-001 | feature |
 | FEAT-PLAN-002 | expanded activity profiles, custom thresholds, coverage-aware A/E scoring and opt-in AQI timeline input | FEAT-PLAN-001, FEAT-WX-002, FEAT-AQI-TIMELINE-001, WEB-011, WEB-012, WX-004 | planner feature |
 | FEAT-CMP-001 | comparison | FEAT-PLAN-001 | feature |

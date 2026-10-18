@@ -1,7 +1,7 @@
 task:
   id: FEAT-CMP-003
   title: Expand comparison to bounded multi-city metrics and suitability
-  status: REVIEW
+  status: DONE
   objective: Compare the current city with up to three user-selected destinations across A/E weather and optional AQI metrics, with coverage-aware activity ranking and bounded requests.
   depends_on:
     [FEAT-CMP-002, FEAT-WX-002, FEAT-AQI-TIMELINE-001, FEAT-PLAN-002, PERF-001, WEB-012, WX-004]

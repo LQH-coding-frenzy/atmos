@@ -1,0 +1,91 @@
+task:
+  id: HIST-ANALYTICS-001
+  title: Add honest ranges and analytics for recorded history
+  status: REVIEW
+  objective: Extend the existing user-recorded weather history with a 24-hour/custom range, selectable recorded metrics, transparent aggregates and captured-condition counts.
+  depends_on: [HIST-001, HIST-CAP-001, HIST-MGMT-001, AUTH-002, ROUTE-001, FEAT-CHART-002, WEB-012]
+  external_policy_checks: [none; use only existing user-recorded snapshots]
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Filtering and aggregating a bounded set of up to 100 RLS-returned snapshots is lightweight client presentation logic.
+  scope:
+    include:
+      [
+        apps/web/components/weather-history-panel.tsx,
+        apps/web/lib/weather-history-analytics.ts,
+        apps/web/lib/weather-history-analytics.test.ts,
+        apps/web/app/globals.css,
+        tests/e2e/weather-history-analytics.spec.ts,
+        tests/e2e/dashboard.spec.ts,
+        .agent,
+        docs/architecture/atmos-devsecops-master-plan.md,
+        docs/design/feature-completion-roadmap.md,
+        docs/evidence/hist-analytics-001,
+      ]
+    exclude:
+      [
+        provider history/backfill,
+        inferred observations between snapshots,
+        aggregate persistence,
+        new tables/columns/RPCs,
+        automatic collection,
+        production release,
+      ]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files:
+      [
+        apps/web/components/weather-history-panel.tsx,
+        apps/web/lib/weather-history-analytics.ts,
+        apps/web/lib/weather-history-analytics.test.ts,
+      ]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web only; existing authenticated history endpoint]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert the client history filters, metrics and charts; stored snapshot shape and API remain unchanged.
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run apps/web/lib/weather-history-analytics.test.ts apps/web/lib/weather-history-export.test.ts,
+        corepack pnpm exec playwright test tests/e2e/weather-history-analytics.spec.ts tests/e2e/dashboard.spec.ts --workers=1,
+        corepack pnpm typecheck,
+        corepack pnpm --filter @atmos/web build,
+      ]
+    expected:
+      [
+        24h/7d/30d/90d/custom ranges filter only recorded snapshots,
+        custom dates use the selected location timezone and max 90 days,
+        charts show discrete recorded points without interpolation,
+        aggregates and condition counts state their sample basis,
+        unavailable metrics never display as zero,
+      ]
+  security_checks:
+    [
+      existing caller JWT and RLS,
+      no new persistence or history telemetry,
+      export contains only returned user-owned snapshots,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [existing authenticated weather_history route group only]
+    logs: [none added]
+    traces: [existing gateway request correlation only]
+  evidence:
+    [
+      docs/evidence/hist-analytics-001/implementation.md,
+      focused unit/browser tests and responsive screenshots,
+    ]
+  rollback:
+    strategy: Restore the existing 7/30/90 history view; snapshots, RLS and API contracts remain intact.
+  human_approval:
+    required: false
+    reason: Owner selected group I; this uses only existing user-captured records and performs no backfill or schema change.

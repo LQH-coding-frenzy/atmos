@@ -1419,6 +1419,7 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   expect(deletedSavedLocationId).toBe(paris.id);
 
   await openWeatherTool(page, 'History');
+  await page.getByRole('button', { name: '90 days' }).click();
   await page.getByRole('button', { name: 'Record this observation' }).click();
   await expect(page.locator('.weather-history-status')).toContainText('recorded.');
   await expect(page.getByRole('list', { name: 'Recorded observations' })).toContainText('20°');
@@ -1433,7 +1434,7 @@ test('authenticates, saves the current place, and switches to an API-returned sa
 
   const historyDownload = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export CSV' }).click();
-  expect((await historyDownload).suggestedFilename()).toBe('atmos-history-paris-30d.csv');
+  expect((await historyDownload).suggestedFilename()).toBe('atmos-history-paris-90d.csv');
 
   await page.getByRole('button', { name: /Delete observation from/ }).click();
   await expect(page.locator('.weather-history-status')).toContainText('Observation deleted.');
