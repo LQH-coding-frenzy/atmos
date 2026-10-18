@@ -12,10 +12,26 @@ import {
 import { formatTemperature } from '@atmos/domain';
 import type { Session } from '@supabase/supabase-js';
 import { Download, History, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { getSupabaseBrowserClient } from '../lib/supabase-browser';
 import { versionAffinityHeaders } from '../lib/version-affinity';
 import { weatherHistoryToCsv } from '../lib/weather-history-export';
+import {
+  aggregateWeatherHistory,
+  createWeatherHistoryChartPoints,
+  customHistoryRangeIsValid,
+  dateInTimeZone,
+  formatWeatherHistoryMetric,
+  historyApiDays,
+  recordedConditionCounts,
+  selectRecordedHistory,
+  shiftIsoDate,
+  weatherHistoryMetricValue,
+  weatherHistoryMetrics,
+  type CustomHistoryRange,
+  type WeatherHistoryMetric,
+  type WeatherHistoryRange,
+} from '../lib/weather-history-analytics';
 
 type HistoryDays = 7 | 30 | 90;
 
@@ -28,7 +44,13 @@ type WeatherHistoryPanelProps = {
   units: UnitSystem;
 };
 
-const historyWindows: HistoryDays[] = [7, 30, 90];
+const historyWindows: Array<{ value: WeatherHistoryRange; label: string }> = [
+  { value: '24h', label: '24 hours' },
+  { value: '7d', label: '7 days' },
+  { value: '30d', label: '30 days' },
+  { value: '90d', label: '90 days' },
+  { value: 'custom', label: 'Custom dates' },
+];
 
 function formatObservedTime(value: string, timezone: string): string {
   return new Intl.DateTimeFormat('en', {
@@ -43,21 +65,6 @@ function formatObservedTime(value: string, timezone: string): string {
 
 function temperature(value: number, units: UnitSystem): string {
   return formatTemperature(value, units).replace(' deg', '');
-}
-
-function historyChartPoints(snapshots: WeatherSnapshot[], units: UnitSystem) {
-  const ordered = [...snapshots].reverse();
-  const values = ordered.map(({ payload }) =>
-    units === 'imperial' ? (payload.temperature_c * 9) / 5 + 32 : payload.temperature_c,
-  );
-  const minimum = Math.min(...values);
-  const maximum = Math.max(...values);
-  const span = Math.max(1, maximum - minimum);
-  return ordered.map((snapshot, index) => ({
-    snapshot,
-    x: ordered.length === 1 ? 150 : 10 + (index / (ordered.length - 1)) * 280,
-    y: 100 - 10 - ((values[index]! - minimum) / span) * 80,
-  }));
 }
 
 async function fetchHistory(
@@ -98,12 +105,23 @@ export function WeatherHistoryPanel({
   const requestGeneration = useRef(0);
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
-  const [days, setDays] = useState<HistoryDays>(30);
+  const [range, setRange] = useState<WeatherHistoryRange>('30d');
+  const [customDateDraft, setCustomDateDraft] = useState<CustomHistoryRange>(() => {
+    const today = dateInTimeZone(new Date(), location.timezone);
+    return { start: shiftIsoDate(today, -6), end: today };
+  });
+  const [appliedCustomRange, setAppliedCustomRange] = useState<CustomHistoryRange>(customDateDraft);
+  const [metric, setMetric] = useState<WeatherHistoryMetric>('temperature');
   const [snapshots, setSnapshots] = useState<WeatherSnapshot[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const id = useId();
+  const today = dateInTimeZone(new Date(), location.timezone);
+  const firstAllowedDate = shiftIsoDate(today, -89);
+  const apiDays = historyApiDays(range, appliedCustomRange, today);
+  const customDateDraftIsValid = customHistoryRangeIsValid(customDateDraft, today);
 
   useEffect(() => {
     if (!client) {
@@ -137,7 +155,7 @@ export function WeatherHistoryPanel({
     const generation = ++requestGeneration.current;
     setLoading(true);
     try {
-      const nextSnapshots = await fetchHistory(gatewayOrigin, accessToken, location, days);
+      const nextSnapshots = await fetchHistory(gatewayOrigin, accessToken, location, apiDays);
       if (generation !== requestGeneration.current) return false;
       setSnapshots(nextSnapshots);
       setMessage('');
@@ -150,7 +168,7 @@ export function WeatherHistoryPanel({
     } finally {
       if (generation === requestGeneration.current) setLoading(false);
     }
-  }, [accessToken, days, gatewayOrigin, location]);
+  }, [accessToken, apiDays, gatewayOrigin, location]);
 
   useEffect(() => {
     requestGeneration.current += 1;
@@ -164,6 +182,39 @@ export function WeatherHistoryPanel({
       requestGeneration.current += 1;
     };
   }, [accessToken, refreshHistory]);
+
+  const visibleSnapshots = selectRecordedHistory(
+    snapshots,
+    range,
+    Date.now(),
+    location.timezone,
+    appliedCustomRange,
+  );
+  const chart = createWeatherHistoryChartPoints(visibleSnapshots, metric, units);
+  const statistics = aggregateWeatherHistory(visibleSnapshots, metric, units);
+  const conditionCounts = recordedConditionCounts(visibleSnapshots);
+  const chartDescription = visibleSnapshots
+    .slice()
+    .sort((left, right) => left.observed_at.localeCompare(right.observed_at))
+    .map(
+      (snapshot) =>
+        `${formatObservedTime(snapshot.observed_at, location.timezone)} ${formatWeatherHistoryMetric(
+          weatherHistoryMetricValue(snapshot, metric, units),
+          metric,
+          units,
+        )}`,
+    )
+    .join(', ');
+
+  function applyCustomRange() {
+    if (!customDateDraftIsValid) {
+      setMessage('Choose a valid date range within the most recent 90 days.');
+      return;
+    }
+    setAppliedCustomRange(customDateDraft);
+    setRange('custom');
+    setMessage('');
+  }
 
   async function recordObservation() {
     if (!client || !accessToken || provider !== 'open-meteo' || stale) return;
@@ -206,9 +257,19 @@ export function WeatherHistoryPanel({
       );
       if (!response.ok || !parsed.success) throw new Error('Snapshot rejected');
       const loaded = await refreshHistory();
+      const visibleAfterRecording =
+        selectRecordedHistory(
+          [parsed.data.snapshot],
+          range,
+          Date.now(),
+          location.timezone,
+          appliedCustomRange,
+        ).length > 0;
       setMessage(
         loaded
-          ? `${formatObservedTime(parsed.data.snapshot.observed_at, location.timezone)} recorded.`
+          ? visibleAfterRecording
+            ? `${formatObservedTime(parsed.data.snapshot.observed_at, location.timezone)} recorded.`
+            : `${formatObservedTime(parsed.data.snapshot.observed_at, location.timezone)} recorded outside the selected range.`
           : 'Observation recorded, but the history list could not be refreshed.',
       );
     } catch {
@@ -251,33 +312,26 @@ export function WeatherHistoryPanel({
   }
 
   function exportHistory() {
-    if (snapshots.length === 0) return;
+    if (visibleSnapshots.length === 0) return;
     const safeLocationName = location.name
       .toLocaleLowerCase('en-US')
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-|-$/g, '');
-    const blob = new Blob(['\uFEFF', weatherHistoryToCsv(snapshots)], {
+    const blob = new Blob(['\uFEFF', weatherHistoryToCsv(visibleSnapshots)], {
       type: 'text/csv;charset=utf-8',
     });
     const downloadUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = downloadUrl;
-    link.download = `atmos-history-${safeLocationName || 'location'}-${days}d.csv`;
+    const rangeName =
+      range === 'custom' ? `${appliedCustomRange.start}-to-${appliedCustomRange.end}` : range;
+    link.download = `atmos-history-${safeLocationName || 'location'}-${rangeName}.csv`;
     link.click();
     window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1_000);
-    setMessage(`Downloaded ${snapshots.length} recorded observations as CSV.`);
+    setMessage(`Downloaded ${visibleSnapshots.length} recorded observations as CSV.`);
   }
 
   const alreadyRecorded = snapshots.some((snapshot) => snapshot.observed_at === current.observedAt);
-  const points = historyChartPoints(snapshots, units);
-  const chartDescription = snapshots
-    .slice()
-    .reverse()
-    .map(
-      (snapshot) =>
-        `${formatObservedTime(snapshot.observed_at, location.timezone)} ${temperature(snapshot.payload.temperature_c, units)} degrees`,
-    )
-    .join(', ');
 
   return (
     <details className="weather-history-panel" name="dashboard-tools">
@@ -298,17 +352,62 @@ export function WeatherHistoryPanel({
           <>
             <p className="weather-history-location">{location.name}</p>
             <div className="history-window-tabs" role="group" aria-label="History range">
-              {historyWindows.map((windowDays) => (
+              {historyWindows.map((window) => (
                 <button
-                  key={windowDays}
+                  key={window.value}
                   type="button"
-                  aria-pressed={days === windowDays}
-                  onClick={() => setDays(windowDays)}
+                  aria-pressed={range === window.value}
+                  onClick={() => setRange(window.value)}
                 >
-                  {windowDays}d
+                  {window.label}
                 </button>
               ))}
             </div>
+            {range === 'custom' ? (
+              <fieldset className="history-custom-range">
+                <legend>Dates in {location.timezone}</legend>
+                <div>
+                  <label htmlFor={`${id}-history-start`}>From date</label>
+                  <input
+                    id={`${id}-history-start`}
+                    type="date"
+                    min={firstAllowedDate}
+                    max={today}
+                    value={customDateDraft.start}
+                    onChange={(event) =>
+                      setCustomDateDraft((draft) => ({ ...draft, start: event.target.value }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label htmlFor={`${id}-history-end`}>To date</label>
+                  <input
+                    id={`${id}-history-end`}
+                    type="date"
+                    min={firstAllowedDate}
+                    max={today}
+                    value={customDateDraft.end}
+                    onChange={(event) =>
+                      setCustomDateDraft((draft) => ({ ...draft, end: event.target.value }))
+                    }
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="history-apply-range"
+                  disabled={!customDateDraftIsValid || loading}
+                  onClick={applyCustomRange}
+                >
+                  Apply dates
+                </button>
+                <p>Custom ranges are limited to the latest 90 days of recorded snapshots.</p>
+                {!customDateDraftIsValid ? (
+                  <p role="status">
+                    Choose a valid range of up to 90 days, ending today or earlier.
+                  </p>
+                ) : null}
+              </fieldset>
+            ) : null}
             <button
               className="record-observation-button"
               type="button"
@@ -327,24 +426,71 @@ export function WeatherHistoryPanel({
               History contains observations you choose to record; earlier weather is not backfilled.
             </p>
             {loading ? <p role="status">Loading your observations…</p> : null}
-            {!loading && snapshots.length > 0 ? (
+            {snapshots.length >= 100 ? (
+              <p className="weather-history-cap" role="status">
+                The history endpoint returned its 100 most recent matching snapshots; older records
+                may not be included.
+              </p>
+            ) : null}
+            {!loading && visibleSnapshots.length > 0 ? (
               <>
+                <label className="history-metric-picker" htmlFor={`${id}-history-metric`}>
+                  <span>Chart metric</span>
+                  <select
+                    id={`${id}-history-metric`}
+                    aria-label="History metric"
+                    value={metric}
+                    onChange={(event) => setMetric(event.target.value as WeatherHistoryMetric)}
+                  >
+                    {weatherHistoryMetrics.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {statistics ? (
+                  <dl className="weather-history-summary" aria-label="Recorded value aggregates">
+                    <div>
+                      <dt>Samples</dt>
+                      <dd>{statistics.count}</dd>
+                    </div>
+                    <div>
+                      <dt>Minimum</dt>
+                      <dd>{formatWeatherHistoryMetric(statistics.minimum, metric, units)}</dd>
+                    </div>
+                    <div>
+                      <dt>Average</dt>
+                      <dd>{formatWeatherHistoryMetric(statistics.average, metric, units)}</dd>
+                    </div>
+                    <div>
+                      <dt>Maximum</dt>
+                      <dd>{formatWeatherHistoryMetric(statistics.maximum, metric, units)}</dd>
+                    </div>
+                  </dl>
+                ) : null}
                 <svg
                   className="weather-history-chart"
                   viewBox="0 0 300 100"
                   role="img"
                   aria-describedby="weather-history-chart-description"
-                  aria-label={`Temperature across ${snapshots.length} recorded observations`}
+                  aria-label={`${weatherHistoryMetrics.find((item) => item.value === metric)?.label} across ${visibleSnapshots.length} recorded observations`}
                 >
-                  <polyline
-                    points={points.map(({ x, y }) => `${x},${y}`).join(' ')}
-                    fill="none"
-                    stroke="var(--accent)"
-                    strokeWidth="3"
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                  />
-                  {points.map(({ snapshot, x, y }) => (
+                  <desc>
+                    Each dot is one recorded observation. No values are interpolated between
+                    snapshots. {chart.points.length} values are shown in {chart.unit}.
+                  </desc>
+                  {[20, 50, 80].map((y) => (
+                    <line
+                      className="weather-history-gridline"
+                      key={y}
+                      x1="10"
+                      x2="290"
+                      y1={y}
+                      y2={y}
+                    />
+                  ))}
+                  {chart.points.map(({ snapshot, x, y, value }) => (
                     <circle
                       key={snapshot.id}
                       cx={x}
@@ -353,12 +499,37 @@ export function WeatherHistoryPanel({
                       fill="var(--accent)"
                       stroke="var(--raised)"
                       strokeWidth="2"
-                    />
+                    >
+                      <title>
+                        {formatObservedTime(snapshot.observed_at, location.timezone)} ·{' '}
+                        {formatWeatherHistoryMetric(value, metric, units)}
+                      </title>
+                    </circle>
                   ))}
                 </svg>
+                <p className="weather-history-chart-note">
+                  Discrete user-recorded points; gaps are unknown, not filled in.
+                </p>
                 <p className="sr-only" id="weather-history-chart-description">
                   {chartDescription}
                 </p>
+                <section
+                  className="weather-history-condition-counts"
+                  aria-label="Recorded condition counts"
+                >
+                  <div>
+                    <h3>Recorded conditions</h3>
+                    <p>Snapshot counts, not event durations.</p>
+                  </div>
+                  <ul>
+                    {conditionCounts.map(({ condition, count }) => (
+                      <li key={condition}>
+                        <span>{condition.replace('-', ' ')}</span>
+                        <strong>{count}</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
                 <button
                   className="export-weather-history"
                   type="button"
@@ -368,7 +539,7 @@ export function WeatherHistoryPanel({
                   <Download size={15} aria-hidden="true" /> Export CSV
                 </button>
                 <ol className="weather-history-observations" aria-label="Recorded observations">
-                  {snapshots.map((snapshot) => {
+                  {visibleSnapshots.map((snapshot) => {
                     const observedTime = formatObservedTime(
                       snapshot.observed_at,
                       location.timezone,
@@ -378,6 +549,14 @@ export function WeatherHistoryPanel({
                         <time dateTime={snapshot.observed_at}>{observedTime}</time>
                         <strong>{temperature(snapshot.payload.temperature_c, units)}°</strong>
                         <span>{snapshot.payload.condition.replace('-', ' ')}</span>
+                        <small>
+                          {weatherHistoryMetrics.find((item) => item.value === metric)?.label}:{' '}
+                          {formatWeatherHistoryMetric(
+                            weatherHistoryMetricValue(snapshot, metric, units),
+                            metric,
+                            units,
+                          )}
+                        </small>
                         <button
                           type="button"
                           className="delete-weather-observation"
@@ -393,8 +572,10 @@ export function WeatherHistoryPanel({
                 </ol>
               </>
             ) : null}
-            {!loading && snapshots.length === 0 ? (
-              <p className="weather-history-empty">No observations recorded in this range yet.</p>
+            {!loading && visibleSnapshots.length === 0 ? (
+              <p className="weather-history-empty">
+                No user-recorded observations in this range. Earlier weather is not backfilled.
+              </p>
             ) : null}
           </>
         ) : null}

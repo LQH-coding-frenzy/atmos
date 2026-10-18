@@ -1,6 +1,6 @@
 # FEAT-CMP-003 — expanded multi-city comparison
 
-Status: **REVIEW**. No production release, schema, provider, secret, or paid-service
+Status: **DONE locally**, merged in [PR #314](https://github.com/LQH-coding-frenzy/atmos/pull/314). No production release, schema, provider, secret, or paid-service
 change is included.
 
 ## Scope
@@ -43,6 +43,7 @@ change is included.
 - Desktop and 390px comparison-panel screenshots were generated in ignored Playwright
   output. The activity comparison shows the chosen profile, ranking and coverage without
   overlap; the mobile panel scrolls the ranked list within the weather-tools drawer.
+- PR #314 quality, database, Playwright, CodeQL, Semgrep, secret-scan, Trivy, SBOM and Vercel preview checks passed.
 
 The dashboard E2E run logged OpenFreeMap glyph-range 404 responses and used the renderer
 fallback glyphs; assertions still passed. This existing external map-style behavior is
