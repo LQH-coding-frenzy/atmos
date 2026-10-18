@@ -74,7 +74,9 @@ export function UserManagementPage({ gatewayOrigin }: UserManagementPageProps) {
             <ul>
               <li>Sign in with email or Google.</li>
               <li>Review, rename, reorder, and remove saved places.</li>
-              <li>Set the default place for this device.</li>
+              <li>
+                Sync place favorites, categories, ordering, and your default place to your account.
+              </li>
               <li>Request permanent account and saved-data deletion.</li>
             </ul>
             <a href="/">Return to the dashboard</a>

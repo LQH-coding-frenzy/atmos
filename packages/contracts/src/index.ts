@@ -63,12 +63,56 @@ export const savedLocationSchema = z.object({
   longitude: z.number().gte(-180).lte(180),
   created_at: z.string().datetime({ offset: true }),
   updated_at: z.string().datetime({ offset: true }),
+  is_favorite: z.boolean().default(false),
+  category: z.enum(['home', 'work', 'university', 'travel']).nullable().default(null),
+  sort_order: z.number().int().min(0).max(2_147_483_647).default(0),
+  is_default: z.boolean().default(false),
 });
 export type SavedLocation = z.infer<typeof savedLocationSchema>;
 
 export const savedLocationsResponseSchema = z.object({
   locations: z.array(savedLocationSchema),
+  preferencesInitialized: z.boolean().optional(),
 });
+
+export const savedLocationCategorySchema = z.enum(['home', 'work', 'university', 'travel']);
+export const replaceSavedLocationPreferencesSchema = z
+  .object({
+    locations: z
+      .array(
+        z.object({
+          id: z.string().uuid(),
+          is_favorite: z.boolean(),
+          category: savedLocationCategorySchema.nullable(),
+        }),
+      )
+      .max(100)
+      .superRefine((locations, context) => {
+        const ids = new Set<string>();
+        locations.forEach((location, index) => {
+          if (ids.has(location.id))
+            context.addIssue({
+              code: 'custom',
+              path: [index, 'id'],
+              message: 'Saved location IDs must be unique.',
+            });
+          ids.add(location.id);
+        });
+      }),
+    defaultLocationId: z.string().uuid().nullable(),
+  })
+  .superRefine((preferences, context) => {
+    if (
+      preferences.defaultLocationId &&
+      !preferences.locations.some((location) => location.id === preferences.defaultLocationId)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['defaultLocationId'],
+        message: 'The default place must be in the preference set.',
+      });
+    }
+  });
 
 export const savedLocationResponseSchema = z.object({
   location: savedLocationSchema,

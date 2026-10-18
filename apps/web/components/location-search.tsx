@@ -4,6 +4,11 @@ import { locationSearchResultSchema, type LocationSearchResult } from '@atmos/co
 import { Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { versionAffinityHeaders } from '../lib/version-affinity';
+import {
+  addRecentSearch,
+  clearRecentSearches,
+  readRecentSearches,
+} from '../lib/saved-place-preferences';
 
 type LocationSearchProps = {
   gatewayOrigin: string;
@@ -24,6 +29,12 @@ export function LocationSearch({ gatewayOrigin, onSelect }: LocationSearchProps)
   const [activeIndex, setActiveIndex] = useState(-1);
   const [selectingId, setSelectingId] = useState<string>();
   const [selectionMessage, setSelectionMessage] = useState('');
+  const [recentLocations, setRecentLocations] = useState<LocationSearchResult[]>([]);
+  const [recentOpen, setRecentOpen] = useState(false);
+  const [coordinatesOpen, setCoordinatesOpen] = useState(false);
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [coordinateError, setCoordinateError] = useState('');
   const requestGeneration = useRef(0);
   const searchController = useRef<AbortController | null>(null);
   const debounceTimer = useRef<number | undefined>(undefined);
@@ -31,6 +42,14 @@ export function LocationSearch({ gatewayOrigin, onSelect }: LocationSearchProps)
   const searchCache = useRef(
     new Map<string, { results: LocationSearchResult[]; expiresAt: number }>(),
   );
+
+  useEffect(() => {
+    try {
+      setRecentLocations(readRecentSearches(window.localStorage));
+    } catch {
+      setRecentLocations([]);
+    }
+  }, []);
 
   async function fetchLocations(value: string, signal: AbortSignal, automatic: boolean) {
     const cacheKey = value.trim().toLocaleLowerCase('en-US');
@@ -162,6 +181,11 @@ export function LocationSearch({ gatewayOrigin, onSelect }: LocationSearchProps)
     if (generation !== requestGeneration.current) return;
     setSelectingId(undefined);
     if (loaded) {
+      try {
+        setRecentLocations(addRecentSearch(window.localStorage, location));
+      } catch {
+        /* Keep successful weather selection usable when browser storage is blocked. */
+      }
       setQuery(location.name);
       setResults([]);
       setStatus('idle');
@@ -170,6 +194,35 @@ export function LocationSearch({ gatewayOrigin, onSelect }: LocationSearchProps)
       return;
     }
     setSelectionMessage(`Weather for ${location.name} could not be loaded. Try again.`);
+  }
+
+  async function searchCoordinates(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const lat = Number(latitude),
+      lon = Number(longitude);
+    if (
+      !latitude.trim() ||
+      !longitude.trim() ||
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lon) ||
+      lat < -90 ||
+      lat > 90 ||
+      lon < -180 ||
+      lon > 180
+    ) {
+      setCoordinateError('Enter a latitude from −90 to 90 and longitude from −180 to 180.');
+      return;
+    }
+    setCoordinateError('');
+    setRecentOpen(false);
+    await select({
+      id: `coordinates:${lat.toFixed(5)}:${lon.toFixed(5)}`,
+      name: `${lat.toFixed(2)}°, ${lon.toFixed(2)}°`,
+      country: 'Coordinates',
+      latitude: lat,
+      longitude: lon,
+      timezone: 'auto',
+    });
   }
 
   function handleSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
@@ -182,11 +235,12 @@ export function LocationSearch({ gatewayOrigin, onSelect }: LocationSearchProps)
     } else if (event.key === 'Enter' && activeIndex >= 0 && results[activeIndex]) {
       event.preventDefault();
       void select(results[activeIndex]);
-    } else if (event.key === 'Escape' && results.length > 0) {
+    } else if (event.key === 'Escape' && (results.length > 0 || recentOpen)) {
       event.preventDefault();
       requestGeneration.current += 1;
       searchController.current?.abort();
       setResults([]);
+      setRecentOpen(false);
       setActiveIndex(-1);
       setAutocompleteEnabled(false);
       setStatus('idle');
@@ -203,8 +257,10 @@ export function LocationSearch({ gatewayOrigin, onSelect }: LocationSearchProps)
           id="location-query"
           role="combobox"
           aria-autocomplete="list"
-          aria-expanded={results.length > 0}
-          aria-controls="location-search-results"
+          aria-expanded={
+            results.length > 0 || (recentOpen && !query.trim() && recentLocations.length > 0)
+          }
+          aria-controls="location-search-results location-search-recents"
           aria-activedescendant={
             activeIndex >= 0 ? `location-search-option-${activeIndex}` : undefined
           }
@@ -224,6 +280,10 @@ export function LocationSearch({ gatewayOrigin, onSelect }: LocationSearchProps)
             setActiveIndex(-1);
             setAutocompleteEnabled(true);
             setSelectionMessage('');
+            setRecentOpen(!event.target.value.trim());
+          }}
+          onFocus={() => {
+            if (!query.trim()) setRecentOpen(true);
           }}
           placeholder="Search a city"
           minLength={2}
@@ -272,6 +332,78 @@ export function LocationSearch({ gatewayOrigin, onSelect }: LocationSearchProps)
           ))}
         </ul>
       ) : null}
+      {!results.length && recentOpen && !query.trim() && recentLocations.length > 0 ? (
+        <section className="location-search-recents" aria-label="Recent places">
+          <div className="recent-search-heading">
+            <span>Recent places</span>
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  clearRecentSearches(window.localStorage);
+                } catch {
+                  /* Storage is optional. */
+                }
+                setRecentLocations([]);
+                setRecentOpen(false);
+              }}
+            >
+              Clear
+            </button>
+          </div>
+          <ul id="location-search-recents" aria-label="Recent places">
+            {recentLocations.map((location) => (
+              <li key={`${location.latitude}:${location.longitude}`}>
+                <button
+                  type="button"
+                  onClick={() => void select(location)}
+                  disabled={selectingId !== undefined}
+                >
+                  <strong>{location.name}</strong>
+                  <span>{location.country}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      <details
+        className="coordinate-search"
+        open={coordinatesOpen}
+        onToggle={(event) => setCoordinatesOpen(event.currentTarget.open)}
+      >
+        <summary>Enter coordinates</summary>
+        <form onSubmit={searchCoordinates} aria-label="Search coordinates">
+          <label htmlFor="coordinate-latitude">Latitude</label>
+          <input
+            id="coordinate-latitude"
+            type="number"
+            inputMode="decimal"
+            min="-90"
+            max="90"
+            step="any"
+            required
+            value={latitude}
+            onChange={(event) => setLatitude(event.target.value)}
+          />
+          <label htmlFor="coordinate-longitude">Longitude</label>
+          <input
+            id="coordinate-longitude"
+            type="number"
+            inputMode="decimal"
+            min="-180"
+            max="180"
+            step="any"
+            required
+            value={longitude}
+            onChange={(event) => setLongitude(event.target.value)}
+          />
+          <button type="submit" disabled={selectingId !== undefined}>
+            {selectingId !== undefined ? 'Loading weather…' : 'Show weather'}
+          </button>
+        </form>
+        {coordinateError ? <p role="alert">{coordinateError}</p> : null}
+      </details>
     </div>
   );
 }

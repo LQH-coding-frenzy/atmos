@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <LegalPageLayout title="Privacy Policy">
+    <LegalPageLayout title="Privacy Policy" lastUpdated="October 16, 2026">
       <p>
         Atmos is a weather intelligence dashboard operated by the Atmos project owner. This policy
         explains the information processed when you use the site and how you can manage it.
@@ -38,12 +38,13 @@ export default function PrivacyPage() {
           basic identity details returned by your selected sign-in provider.
         </li>
         <li>
-          <strong>Saved places:</strong> place names and latitude/longitude coordinates that you
-          choose to save.
+          <strong>Saved places and place preferences:</strong> place names and latitude/longitude
+          coordinates that you choose to save, plus your favorite, category
+          (home/work/university/travel), order, and default-place choices when signed in.
         </li>
         <li>
-          <strong>Preferences:</strong> account preferences such as units, time zone, and theme,
-          where those settings are saved to your account.
+          <strong>Display settings:</strong> temperature/wind units and theme stored on this device;
+          weather times are formatted in the selected place&apos;s time zone.
         </li>
         <li>
           <strong>Weather history and alerts:</strong> if you use these features, the app stores
@@ -75,9 +76,12 @@ export default function PrivacyPage() {
 
       <h2>Browser storage and technical information</h2>
       <p>
-        Supabase Auth uses browser storage to maintain your sign-in session. Atmos also stores your
-        theme and units, saved-place ordering/default on this device, and a recent weather snapshot
-        for offline display. Device geolocation is excluded from the offline snapshot. You can clear
+        Supabase Auth uses browser storage to maintain your sign-in session. Atmos stores theme and
+        units on this device, keeps a small clearable list of recent places in this browser, and
+        stores a recent weather snapshot for offline display. Recent places are not synced to your
+        account; device geolocation is excluded from both recent places and the offline snapshot.
+        Signed-in place preferences are associated with your account, with a device-local copy used
+        for compatibility and recovery. You can clear recent places in the search control or clear
         browser storage in your browser settings; account deletion also clears the app&apos;s
         account-specific place preferences and offline snapshot on the current device.
       </p>

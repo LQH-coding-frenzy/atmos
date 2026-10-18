@@ -1097,6 +1097,10 @@ test('authenticates, saves the current place, and switches to an API-returned sa
     longitude: 2.3488,
     created_at: '2026-09-27T10:00:00.000Z',
     updated_at: '2026-09-27T10:00:00.000Z',
+    is_favorite: false,
+    category: null as 'home' | 'work' | 'university' | 'travel' | null,
+    sort_order: 0,
+    is_default: false,
   };
   const user = {
     id: '00000000-0000-4000-8000-000000000010',
@@ -1114,6 +1118,14 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   let deletedSavedLocationId = '';
   let savedLocationPatchAuthorization = '';
   let patchedSavedLocationName = '';
+  let preferenceAuthorization = '';
+  let preferencePayload:
+    | {
+        locations: Array<{ id: string; is_favorite: boolean; category: string | null }>;
+        defaultLocationId: string | null;
+      }
+    | undefined;
+  let serverPreferencesInitialized = false;
   const browserWeatherQueries: string[] = [];
   const removedSavedLocationIds = new Set<string>();
   let postedLocation: { name: string; latitude: number; longitude: number } | undefined;
@@ -1165,6 +1177,10 @@ test('authenticates, saves the current place, and switches to an API-returned sa
         ...postedLocation,
         created_at: '2026-09-27T10:01:00.000Z',
         updated_at: '2026-09-27T10:01:00.000Z',
+        is_favorite: false,
+        category: null,
+        sort_order: 1,
+        is_default: false,
       };
       await route.fulfill({ status: 201, json: { location: savedBerlin } });
       return;
@@ -1174,11 +1190,32 @@ test('authenticates, saves the current place, and switches to an API-returned sa
         locations: [paris, ...(savedBerlin ? [savedBerlin] : [])].filter(
           (location) => !removedSavedLocationIds.has(location.id),
         ),
+        preferencesInitialized: serverPreferencesInitialized,
       },
     });
   });
   await page.route('**/api/v1/locations/*', async (route) => {
     const id = new URL(route.request().url()).pathname.split('/').at(-1) ?? '';
+    if (id === 'preferences' && route.request().method() === 'PATCH') {
+      preferenceAuthorization = route.request().headers().authorization ?? '';
+      preferencePayload = route.request().postDataJSON() as typeof preferencePayload;
+      serverPreferencesInitialized = true;
+      if (savedBerlin && preferencePayload) {
+        const index = preferencePayload.locations.findIndex((item) => item.id === savedBerlin!.id);
+        if (index >= 0) {
+          const pref = preferencePayload.locations[index]!;
+          savedBerlin = {
+            ...savedBerlin,
+            is_favorite: pref.is_favorite,
+            category: pref.category,
+            sort_order: index,
+            is_default: preferencePayload.defaultLocationId === savedBerlin.id,
+          };
+        }
+      }
+      await route.fulfill({ status: 204, body: '' });
+      return;
+    }
     if (route.request().method() === 'PATCH') {
       savedLocationPatchAuthorization = route.request().headers().authorization ?? '';
       const body = route.request().postDataJSON() as { name: string };
@@ -1311,6 +1348,14 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   });
 
   await page.goto('/');
+  await page.evaluate(
+    ({ userId, placeId }) =>
+      window.localStorage.setItem(
+        `atmos.saved-places.${userId}`,
+        JSON.stringify({ orderedLocationIds: [placeId] }),
+      ),
+    { userId: user.id, placeId: paris.id },
+  );
   await openWeatherTool(page, 'Saved places');
   await page.getByLabel('Email').fill(user.email);
   await page.getByLabel('Password').fill('safe-example-password');
@@ -1319,6 +1364,8 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   await expect(page.getByText(user.email, { exact: true })).toBeVisible();
   await expect(page.getByRole('list', { name: 'Your saved places' })).toContainText('Paris');
   expect(forwardedAuthorization).toBe(`Bearer ${accessToken}`);
+  expect(serverPreferencesInitialized).toBe(true);
+  expect(preferencePayload?.locations.map((location) => location.id)).toEqual([paris.id]);
 
   await page.getByRole('button', { name: 'Save Berlin' }).click();
   await expect(page.locator('.saved-location-status')).toContainText('Berlin saved to your places');
@@ -1333,13 +1380,20 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   expect(savedLocationPatchAuthorization).toBe(`Bearer ${accessToken}`);
   expect(patchedSavedLocationName).toBe('Berlin Home');
   await expect(page.getByRole('list', { name: 'Your saved places' })).toContainText('Berlin Home');
+  await page.getByRole('button', { name: 'Add Berlin Home to favorites' }).click();
+  await expect.poll(() => savedBerlin?.is_favorite).toBe(true);
+  expect(preferenceAuthorization).toBe(`Bearer ${accessToken}`);
+  await page.getByLabel('Category for Berlin Home').selectOption('work');
+  await expect.poll(() => savedBerlin?.category).toBe('work');
   await page.getByRole('button', { name: 'Move Berlin Home up' }).click();
   const savedPlaceList = page.getByRole('list', { name: 'Your saved places' });
   await expect(savedPlaceList.locator('li').first()).toContainText('Berlin Home');
   await page.getByRole('button', { name: 'Set Berlin Home as default place' }).click();
   await expect(page.locator('.saved-location-status')).toContainText(
-    'Berlin Home is your default place on this device.',
+    'Berlin Home is your default place for your account.',
   );
+  expect(savedBerlin?.is_default).toBe(true);
+  expect(preferencePayload?.defaultLocationId).toBe(savedBerlin?.id);
   const placePreferences = await page.evaluate((userId) => {
     const value = window.localStorage.getItem(`atmos.saved-places.${userId}`);
     return value ? JSON.parse(value) : undefined;
@@ -1616,7 +1670,7 @@ test('deletes only the confirmed signed-in account through the authenticated API
     });
   });
   await page.route('**/api/v1/locations', async (route) => {
-    await route.fulfill({ json: { locations: [] } });
+    await route.fulfill({ json: { locations: [], preferencesInitialized: true } });
   });
   await page.route('**/api/v1/account', async (route) => {
     deleteAuthorization = route.request().headers().authorization ?? '';

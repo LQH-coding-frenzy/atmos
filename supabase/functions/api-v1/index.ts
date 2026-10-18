@@ -15,6 +15,7 @@ import {
   parseWeatherHistoryQuery,
   parseWeatherSnapshotInsert,
 } from '../_shared/weather-snapshot.ts';
+import { parseReplaceSavedLocationPreferences } from '../_shared/saved-location-preferences.ts';
 
 type Bindings = {
   CORS_ORIGIN?: string;
@@ -225,11 +226,67 @@ app.get('/api/v1/locations', async (context) => {
   if (!authenticated) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
   const { data, error: queryError } = await authenticated.client
     .from('saved_locations')
-    .select('id, name, latitude, longitude, created_at, updated_at')
-    .order('created_at', { ascending: false });
+    .select(
+      'id, name, latitude, longitude, created_at, updated_at, is_favorite, category, sort_order, is_default',
+    )
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true });
   if (queryError)
     return error(context, 'LOCATIONS_UNAVAILABLE', 'Saved locations are unavailable.', 503);
-  return context.json({ locations: data });
+  const { data: preferences, error: preferencesError } = await authenticated.client
+    .from('user_preferences')
+    .select('saved_place_preferences_initialized')
+    .eq('user_id', authenticated.user.id)
+    .maybeSingle();
+  if (preferencesError)
+    return error(context, 'LOCATIONS_UNAVAILABLE', 'Saved locations are unavailable.', 503);
+  return context.json({
+    locations: data,
+    preferencesInitialized: preferences?.saved_place_preferences_initialized ?? false,
+  });
+});
+
+app.patch('/api/v1/locations/preferences', async (context) => {
+  const authenticated = await authenticatedClient(context);
+  if (!authenticated) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+  const preferences = parseReplaceSavedLocationPreferences(
+    await context.req.json().catch(() => undefined),
+  );
+  if (!preferences)
+    return error(
+      context,
+      'INVALID_LOCATION_PREFERENCES',
+      'Valid saved-place preferences are required.',
+      400,
+    );
+  const { data: owned, error: queryError } = await authenticated.client
+    .from('saved_locations')
+    .select('id')
+    .eq('user_id', authenticated.user.id);
+  if (queryError)
+    return error(context, 'LOCATIONS_UNAVAILABLE', 'Saved locations are unavailable.', 503);
+  const ownedIds = new Set((owned ?? []).map((location) => location.id));
+  if (
+    ownedIds.size !== preferences.locations.length ||
+    preferences.locations.some((location) => !ownedIds.has(location.id))
+  ) {
+    return error(
+      context,
+      'LOCATION_PREFERENCES_STALE',
+      'Saved places changed. Refresh them and try again.',
+      409,
+    );
+  }
+  const { error: updateError } = await authenticated.client.rpc(
+    'replace_saved_location_preferences',
+    {
+      p_preferences: preferences.locations,
+      p_default_location_id: preferences.defaultLocationId,
+    },
+  );
+  if (updateError)
+    return error(context, 'LOCATIONS_UNAVAILABLE', 'Saved-place preferences are unavailable.', 503);
+  return context.body(null, 204);
 });
 
 app.post('/api/v1/locations', async (context) => {
@@ -242,7 +299,9 @@ app.post('/api/v1/locations', async (context) => {
     typeof body.name !== 'string' ||
     body.name.length < 1 ||
     body.name.length > 120 ||
+    typeof body.latitude !== 'number' ||
     !Number.isFinite(body.latitude) ||
+    typeof body.longitude !== 'number' ||
     !Number.isFinite(body.longitude) ||
     body.latitude < -90 ||
     body.latitude > 90 ||
@@ -251,6 +310,17 @@ app.post('/api/v1/locations', async (context) => {
   ) {
     return error(context, 'INVALID_LOCATION', 'A valid saved location is required.', 400);
   }
+  const { data: lastLocation, error: orderError } = await authenticated.client
+    .from('saved_locations')
+    .select('sort_order')
+    .eq('user_id', authenticated.user.id)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (orderError)
+    return error(context, 'LOCATIONS_UNAVAILABLE', 'Saved locations are unavailable.', 503);
+  if ((lastLocation?.sort_order ?? -1) >= 99)
+    return error(context, 'SAVED_LOCATION_LIMIT', 'An account can save up to 100 places.', 409);
   const { data, error: insertError } = await authenticated.client
     .from('saved_locations')
     .insert({
@@ -258,8 +328,11 @@ app.post('/api/v1/locations', async (context) => {
       name: body.name.trim(),
       latitude: body.latitude,
       longitude: body.longitude,
+      sort_order: (lastLocation?.sort_order ?? -1) + 1,
     })
-    .select('id, name, latitude, longitude, created_at, updated_at')
+    .select(
+      'id, name, latitude, longitude, created_at, updated_at, is_favorite, category, sort_order, is_default',
+    )
     .single();
   if (insertError)
     return error(context, 'LOCATIONS_UNAVAILABLE', 'Saved locations are unavailable.', 503);
@@ -288,7 +361,9 @@ app.patch('/api/v1/locations/:id', async (context) => {
     .update({ name })
     .eq('id', id)
     .eq('user_id', authenticated.user.id)
-    .select('id, name, latitude, longitude, created_at, updated_at')
+    .select(
+      'id, name, latitude, longitude, created_at, updated_at, is_favorite, category, sort_order, is_default',
+    )
     .maybeSingle();
   if (updateError) {
     return error(context, 'LOCATIONS_UNAVAILABLE', 'Saved locations are unavailable.', 503);

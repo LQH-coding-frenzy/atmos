@@ -3307,6 +3307,7 @@ DONE
 | ROUTE-001 | Worker -> versioned Supabase proxy | FUNC-001, EDGE-002 | split runtime |
 | FEAT-LOC-001 | saved locations | FUNC-002, RLS-002 | feature |
 | FEAT-LOC-UI-001 | authenticated saved-locations dashboard UI | AUTH-001, FEAT-LOC-001, ROUTE-001, WEB-002 | feature |
+| FEAT-LOC-002 | account-synced saved-place favorites, categories/order/default, local recents, and coordinate entry | FEAT-LOC-UI-001, AUTH-002, RLS-002, ROUTE-001, WEB-012 | feature |
 | FEAT-GEO-001 | user-controlled browser geolocation | EDGE-004, WEB-002, WX-004 | feature |
 | FEAT-CHART-001 | charts | WEB-002 | feature |
 | FEAT-CHART-002 | full weather chart series, ranges, annotations, daily/hourly zoom | FEAT-CHART-001, FEAT-WX-002, FEAT-AQI-TIMELINE-001, WEB-012 | feature |

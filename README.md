@@ -15,6 +15,8 @@ A live, location-aware weather dashboard and public DevSecOps case study.
 - Expand an on-demand Open-Meteo/CAMS air-quality panel with U.S./European AQI and pollutant values.
 - Create in-app weather rules and see whether the current dashboard/forecast matches them.
 - Sign in to save locations, record current observations, and delete entries from a personal 7/30/90-day history.
+- Mark saved places as favorites, assign home/work/university/travel categories, reorder them, and sync a default place with your account.
+- Reopen one of eight recent selections stored locally, or enter coordinates directly.
 - Use the dashboard on desktop or mobile without mock-data fallbacks.
 
 Berlin remains the reliable default. The public weather journey works without an account; users may
@@ -94,6 +96,7 @@ Do not commit secrets, Terraform state, database dumps, or generated backup arch
 ## Deliberately Deferred
 
 Atmos is a maintained portfolio showcase, not a continuously operated commercial weather service. Do
-not add paid providers, Google OAuth, email/push alert delivery, recurring backup/restore operations,
-AI advice, historical AQI analysis, provider history/backfill, or multi-provider failover without a
-defined user need and explicit owner approval.
+not add paid providers, email/push alert delivery, recurring backup/restore operations, AI advice,
+historical AQI analysis, provider history/backfill, or multi-provider failover without a defined user
+need and explicit owner approval. Google OAuth is implemented; Google Auth Platform branding
+verification/publication remains an owner-operated external step.
