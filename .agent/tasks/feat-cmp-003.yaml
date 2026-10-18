@@ -1,0 +1,98 @@
+task:
+  id: FEAT-CMP-003
+  title: Expand comparison to bounded multi-city metrics and suitability
+  status: REVIEW
+  objective: Compare the current city with up to three user-selected destinations across A/E weather and optional AQI metrics, with coverage-aware activity ranking and bounded requests.
+  depends_on:
+    [FEAT-CMP-002, FEAT-WX-002, FEAT-AQI-TIMELINE-001, FEAT-PLAN-002, PERF-001, WEB-012, WX-004]
+  external_policy_checks:
+    [
+      reuse existing Open-Meteo weather/AQI gateway contracts and attribution; no new provider,
+      key or paid service,
+    ]
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Comparison state, ranking and user-triggered reads remain browser-local; only existing validated/cached gateway routes are used.
+  scope:
+    include:
+      [
+        apps/web/components/weather-comparison-panel.tsx,
+        apps/web/lib/weather-comparison.ts,
+        apps/web/lib/weather-comparison.test.ts,
+        apps/web/app/globals.css,
+        tests/e2e/weather-comparison.spec.ts,
+        tests/e2e/dashboard.spec.ts,
+        .agent,
+        docs/architecture/atmos-devsecops-master-plan.md,
+        docs/design/feature-completion-roadmap.md,
+        docs/design/provenance.md,
+        docs/evidence/feat-cmp-003,
+      ]
+    exclude:
+      [
+        more than three compared destinations,
+        automatic polling/AQI fan-out,
+        server-side comparison persistence,
+        new API routes/providers,
+        database changes,
+        production release,
+      ]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files:
+      [
+        apps/web/components/weather-comparison-panel.tsx,
+        apps/web/lib/weather-comparison.ts,
+        tests/e2e/weather-comparison.spec.ts,
+      ]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web only; existing weather and AQI gateway routes]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert the browser comparison UI/helper; weather, AQI and saved-location contracts remain unchanged.
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run apps/web/lib/weather-comparison.test.ts packages/domain/src/index.test.ts,
+        corepack pnpm exec playwright test tests/e2e/weather-comparison.spec.ts tests/e2e/dashboard.spec.ts --workers=1,
+        corepack pnpm typecheck,
+        corepack pnpm --filter @atmos/web build,
+      ]
+    expected:
+      [
+        current city plus at most three comparisons,
+        weather fetched only after selection,
+        AQI timeline fetched only on explicit action with max two in-flight requests,
+        missing values stay unavailable and reduce coverage,
+        results rank by deterministic activity score then coverage,
+        existing switch-to-current behavior remains,
+      ]
+  security_checks:
+    [
+      existing gateway contract validation/cache,
+      no provider calls from browser,
+      no persisted comparison history or telemetry,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [existing weather_dashboard and air_quality route groups only]
+    logs: [none added]
+    traces: [existing gateway request correlation only]
+  evidence:
+    [
+      docs/evidence/feat-cmp-003/implementation.md,
+      focused comparison tests and mobile/desktop preview,
+    ]
+  rollback:
+    strategy: Restore the single-destination comparison view; no backend, schema or persisted state changes exist.
+  human_approval:
+    required: false
+    reason: Owner selected group H; the task uses only existing free data routes and bounded user-triggered requests.

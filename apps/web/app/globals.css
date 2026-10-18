@@ -1705,10 +1705,60 @@ body:has(.weather-tools-dialog[open]) {
   color: var(--muted);
   font-size: 11px;
 }
-.weather-comparison-cities {
+.weather-comparison-controls {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
   gap: 10px;
+}
+.weather-comparison-controls label {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.weather-comparison-controls select {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-low);
+  color: var(--ink);
+  font: inherit;
+}
+.weather-comparison-aqi {
+  min-height: 44px;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-low);
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 600;
+}
+.weather-comparison-aqi:disabled {
+  opacity: 0.58;
+}
+.weather-comparison-ranking {
+  display: grid;
+  max-height: min(54vh, 480px);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  overflow: auto;
+  padding: 2px 4px 2px 0;
+}
+.weather-comparison-ranking:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.weather-comparison-ranking-caption {
+  color: var(--muted);
+  font-size: 9px !important;
+}
+.weather-comparison-attribution a {
+  color: var(--ink);
 }
 .weather-comparison-city {
   display: grid;
@@ -1725,6 +1775,29 @@ body:has(.weather-tools-dialog[open]) {
   font-weight: 650;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+.weather-comparison-city-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.weather-comparison-city-heading > p {
+  margin: 0;
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.weather-comparison-rank {
+  padding: 3px 6px;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 650;
+  white-space: nowrap;
 }
 .weather-comparison-city h3 {
   margin: 0;
@@ -1764,6 +1837,76 @@ body:has(.weather-tools-dialog[open]) {
 }
 .weather-comparison-city dd {
   margin: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.weather-comparison-metrics {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px 10px;
+  margin: 10px 0;
+}
+.weather-comparison-metrics > div {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  font-size: 10px;
+}
+.weather-comparison-metrics dt {
+  color: var(--muted);
+}
+.weather-comparison-suitability {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 11px;
+  background: var(--accent-soft);
+}
+.weather-comparison-suitability > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.weather-comparison-suitability strong {
+  color: var(--accent);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.weather-comparison-suitability small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
+.weather-comparison-city-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.weather-comparison-city-actions .weather-comparison-switch {
+  flex: 1;
+}
+.weather-comparison-remove {
+  display: grid;
+  width: 44px;
+  min-height: 44px;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+}
+.weather-comparison-city > p.weather-comparison-delta {
+  text-transform: none;
+  letter-spacing: normal;
+}
+.weather-comparison-attribution {
+  color: var(--muted);
+  font-size: 9px;
 }
 .weather-comparison-delta {
   padding: 14px;
@@ -3557,8 +3700,12 @@ body:has(.is-map-view) {
   .tool-list {
     padding-inline: 10px;
   }
-  .weather-comparison-cities {
-    gap: 8px;
+  .weather-comparison-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .weather-comparison-ranking {
+    max-height: min(56dvh, 470px);
+    grid-template-columns: minmax(0, 1fr);
   }
   .weather-comparison-city {
     padding: 12px;

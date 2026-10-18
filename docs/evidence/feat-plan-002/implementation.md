@@ -1,6 +1,6 @@
 # FEAT-PLAN-002 — expanded activity profiles and scoring
 
-Status: **REVIEW**. No production release, schema, secret, provider or paid service
+Status: **DONE locally**, merged in [PR #313](https://github.com/LQH-coding-frenzy/atmos/pull/313). No production release, schema, secret, provider or paid service
 change is included.
 
 ## Scope
@@ -32,6 +32,7 @@ change is included.
   with zero warnings.
 - Prettier checks for changed source/docs and `git diff --check` — passed.
 - `NEXT_PUBLIC_SUPABASE_URL=https://auth-e2e.supabase.co NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=e2e-test corepack pnpm --filter @atmos/web build` — Next.js production build passed.
+- PR #313 quality, database, Playwright, CodeQL, Semgrep, secret-scan, Trivy, SBOM and Vercel preview checks passed.
 - Local Playwright planner screenshots were generated at desktop and 390px; the browser
   test also checks 320px viewport overflow. The deterministic fixture verifies no AQI
   request before selection and exactly one existing `view=timeline` request after the

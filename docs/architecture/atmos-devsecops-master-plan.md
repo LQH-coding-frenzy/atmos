@@ -3322,6 +3322,7 @@ DONE
 | FEAT-PLAN-002 | expanded activity profiles, custom thresholds, coverage-aware A/E scoring and opt-in AQI timeline input | FEAT-PLAN-001, FEAT-WX-002, FEAT-AQI-TIMELINE-001, WEB-011, WEB-012, WX-004 | planner feature |
 | FEAT-CMP-001 | comparison | FEAT-PLAN-001 | feature |
 | FEAT-CMP-002 | on-demand live city weather comparison | FEAT-CMP-001, WEB-002, WEB-003, EDGE-004, WX-004 | feature |
+| FEAT-CMP-003 | bounded multi-city metrics and coverage-aware activity/AQI suitability comparison | FEAT-CMP-002, FEAT-WX-002, FEAT-AQI-TIMELINE-001, FEAT-PLAN-002, PERF-001, WEB-012, WX-004 | comparison feature |
 | HIST-001 | snapshot schema | DB-001 | data tables |
 | ALERT-001 | alert rule schema/RLS | DB-001, RLS-001 | alert model |
 | ALERT-002 | evaluator Edge Function | ALERT-001, WX-003 | evaluation |
