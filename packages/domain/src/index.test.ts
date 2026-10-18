@@ -6,8 +6,11 @@ import {
   formatTemperature,
   formatWindSpeed,
   planActivity,
+  plannerActivityLabels,
+  plannerActivityProfiles,
   plannerActivityKinds,
   plannerDimensions,
+  supportedPlannerActivities,
   type AlertRule,
   type AlertCondition,
   type PlannerActivity,
@@ -61,10 +64,119 @@ describe('planner and alert models', () => {
       'feels-like',
       'humidity',
       'rain',
+      'precipitation',
+      'wind',
+      'uv',
+      'aqi',
+      'conditions',
+    ]);
+    expect(supportedPlannerActivities).toEqual(plannerActivityKinds);
+    expect(Object.keys(plannerActivityProfiles)).toEqual(plannerActivityKinds);
+    expect(plannerActivityLabels.beach).toBe('Beach day');
+  });
+
+  it('scores all weather dimensions and lowers coverage-adjusted scores when inputs are missing', () => {
+    const completeHour = {
+      time: '2026-09-01T09:00:00.000Z',
+      temperatureC: 18,
+      apparentTemperatureC: 18,
+      humidityPercent: 55,
+      precipitationProbability: 5,
+      precipitationMm: 0,
+      windSpeedKph: 10,
+      windGustKph: 14,
+      uvIndex: 2,
+      condition: 'clear' as const,
+    };
+    const aqiHours = [{ time: completeHour.time, usAqi: 24 }];
+    const full = planActivity('running', [completeHour], { aqiHours });
+    const partial = planActivity('running', [
+      {
+        time: completeHour.time,
+        temperatureC: 18,
+        precipitationProbability: 5,
+        condition: 'clear' as const,
+      },
+    ]);
+
+    expect(full.coveragePercent).toBe(100);
+    expect(full.rankedWindows[0]?.coveragePercent).toBe(100);
+    expect(full.missingDimensions).toEqual([]);
+    expect(partial.coveragePercent).toBeLessThan(full.coveragePercent);
+    expect(partial.score).toBeLessThan(full.score);
+    expect(partial.missingDimensions).toEqual([
+      'feels-like',
+      'humidity',
+      'precipitation',
       'wind',
       'uv',
       'aqi',
     ]);
+    expect(partial.rankedWindows[0]?.missingDimensions).toContain('aqi');
+  });
+
+  it('uses custom thresholds deterministically and returns the custom activity label', () => {
+    const hourly = [
+      {
+        time: '2026-09-01T09:00:00.000Z',
+        temperatureC: 18,
+        apparentTemperatureC: 18,
+        humidityPercent: 55,
+        precipitationProbability: 5,
+        windSpeedKph: 10,
+        uvIndex: 2,
+        condition: 'clear' as const,
+      },
+      {
+        time: '2026-09-01T10:00:00.000Z',
+        temperatureC: 31,
+        apparentTemperatureC: 30,
+        humidityPercent: 45,
+        precipitationProbability: 5,
+        windSpeedKph: 8,
+        uvIndex: 2,
+        condition: 'clear' as const,
+      },
+    ];
+    const custom = planActivity({ kind: 'custom', name: 'Greenhouse work' }, hourly, {
+      customThresholds: {
+        temperatureMinC: 28,
+        temperatureMaxC: 34,
+        feelsLikeMinC: 27,
+        feelsLikeMaxC: 35,
+        humidityMaxPercent: 90,
+        rainProbabilityMax: 20,
+        precipitationMmMax: 2,
+        windSpeedKphMax: 35,
+        windGustKphMax: 50,
+        uvIndexMax: 8,
+        usAqiMax: 120,
+      },
+    });
+
+    expect(custom.activity).toEqual({ kind: 'custom', name: 'Greenhouse work' });
+    expect(custom.rankedWindows[0]?.startsAt).toBe('2026-09-01T10:00:00.000Z');
+    expect(custom.score).toBe(custom.rankedWindows[0]?.score);
+  });
+
+  it('does not treat null or unmatched AQI timeline values as zero or as covered', () => {
+    const hour = {
+      time: '2026-09-01T09:00:00.000Z',
+      temperatureC: 18,
+      precipitationProbability: 5,
+      condition: 'clear' as const,
+    };
+    const missingAqi = planActivity('running', [hour], {
+      aqiHours: [{ time: hour.time, usAqi: null }],
+    });
+    const unmatchedAqi = planActivity('running', [hour], {
+      aqiHours: [{ time: '2026-09-01T10:00:00.000Z', usAqi: 0 }],
+    });
+
+    expect(missingAqi.missingDimensions).toContain('aqi');
+    expect(unmatchedAqi.missingDimensions).toContain('aqi');
+    expect(missingAqi.score).toBe(unmatchedAqi.score);
+    expect(missingAqi.factors.some((factor) => factor.dimension === 'aqi')).toBe(false);
   });
 
   it('rejects mixed discriminated-union shapes at compile time', () => {
@@ -95,6 +207,8 @@ describe('planner and alert models', () => {
     const planner: PlannerResult = {
       activity: { kind: 'running' },
       score: 84,
+      coveragePercent: 100,
+      missingDimensions: [],
       rankedWindows: [],
       factors: [
         {

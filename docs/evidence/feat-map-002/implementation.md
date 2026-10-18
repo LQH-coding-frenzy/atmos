@@ -1,6 +1,6 @@
 # FEAT-MAP-002 — saved places, coordinate previews and AQI map samples
 
-Status: **REVIEW**. This evidence is local-only; no production release, secret, map
+Status: **DONE locally**, merged in [PR #312](https://github.com/LQH-coding-frenzy/atmos/pull/312). No production release, secret, map
 provider, database schema, Worker or infrastructure change was made.
 
 ## Shipped in this task
@@ -49,6 +49,7 @@ provider, database schema, Worker or infrastructure change was made.
 - Targeted ESLint over contracts, dashboard/map components, map overlay helpers and browser tests — passed with zero warnings.
 - Prettier checks for all changed source/docs plus `git diff --check` — passed.
 - `NEXT_PUBLIC_SUPABASE_URL=https://auth-e2e.supabase.co NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=e2e-test corepack pnpm --filter @atmos/web build` — Next.js production build passed.
+- PR #312 quality, database, Playwright, CodeQL, Semgrep, secret-scan, Trivy, SBOM and Vercel preview checks passed.
 - Playwright screenshots were generated at desktop, 390px and 320px in the ignored `test-results` output directory. At 320px the AQI panel stays within the viewport and does not overlap map zoom controls.
 
 The new browser test uses a deterministic background-only map style to avoid depending

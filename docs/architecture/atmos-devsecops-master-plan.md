@@ -3319,6 +3319,7 @@ DONE
 | HIST-CAP-001 | authenticated user-captured weather history | FEAT-LOC-UI-001, FUNC-002, HIST-001, ROUTE-001, WEB-002 | feature |
 | HIST-MGMT-001 | delete own weather history observations | EDGE-003, FEAT-LOC-UI-001, HIST-CAP-001, RLS-002, ROUTE-001, WEB-002 | feature |
 | FEAT-PLAN-001 | deterministic planner | DOM-002, FUNC-001 | feature |
+| FEAT-PLAN-002 | expanded activity profiles, custom thresholds, coverage-aware A/E scoring and opt-in AQI timeline input | FEAT-PLAN-001, FEAT-WX-002, FEAT-AQI-TIMELINE-001, WEB-011, WEB-012, WX-004 | planner feature |
 | FEAT-CMP-001 | comparison | FEAT-PLAN-001 | feature |
 | FEAT-CMP-002 | on-demand live city weather comparison | FEAT-CMP-001, WEB-002, WEB-003, EDGE-004, WX-004 | feature |
 | HIST-001 | snapshot schema | DB-001 | data tables |

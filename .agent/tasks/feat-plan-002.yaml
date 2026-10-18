@@ -1,0 +1,96 @@
+task:
+  id: FEAT-PLAN-002
+  title: Complete activity profiles and coverage-aware scoring
+  status: REVIEW
+  objective: Support all nine built-in outdoor activities and an editable session-local custom profile, with deterministic scoring across available weather/AQI dimensions and honest coverage.
+  depends_on: [FEAT-PLAN-001, FEAT-WX-002, FEAT-AQI-TIMELINE-001, WEB-011, WEB-012, WX-004]
+  external_policy_checks:
+    [
+      reuse existing Open-Meteo/CAMS air-quality timeline route and attribution; no new provider,
+      service,
+      key,
+      or paid resource,
+    ]
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: The existing planner runs in the browser with pure domain logic; optional AQI data is fetched once per location only after explicit user action through the existing cached gateway contract.
+  scope:
+    include:
+      [
+        packages/domain/src/index.ts,
+        packages/domain/src/index.test.ts,
+        apps/web/components/activity-planner.tsx,
+        apps/web/components/dashboard.tsx,
+        apps/web/app/globals.css,
+        tests/e2e/activity-planner.spec.ts,
+        tests/e2e/dashboard.spec.ts,
+        .agent,
+        docs/architecture/atmos-devsecops-master-plan.md,
+        docs/design/feature-completion-roadmap.md,
+        docs/evidence/feat-plan-002,
+      ]
+    exclude:
+      [
+        new weather/AQI source,
+        automatic AQI fan-out,
+        background alert evaluation,
+        account persistence/custom-profile sync,
+        database migrations,
+        production release,
+      ]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files:
+      [
+        packages/domain/src/index.ts,
+        apps/web/components/activity-planner.tsx,
+        tests/e2e/activity-planner.spec.ts,
+      ]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web only; existing AQI gateway route]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert the browser planner UI/domain scoring; weather and AQI contracts remain unchanged.
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run packages/domain/src/index.test.ts,
+        corepack pnpm exec playwright test tests/e2e/activity-planner.spec.ts tests/e2e/dashboard.spec.ts --workers=1,
+        corepack pnpm typecheck,
+        corepack pnpm --filter @atmos/web build,
+      ]
+    expected:
+      [
+        all nine built-in profiles selectable,
+        custom thresholds change deterministic rankings,
+        AQI is fetched only on explicit request,
+        missing/null dimensions reduce coverage and never become favorable or zero,
+        score moderates toward neutral as coverage falls,
+        score remains bounded 0–100,
+      ]
+  security_checks:
+    [
+      existing public gateway validation/cache,
+      no custom profile persistence or telemetry,
+      AQI model disclosure and attribution,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [existing air_quality route group for the user-triggered timeline request only]
+    logs: [none; planner profile and values remain in browser state]
+    traces: [existing gateway request correlation only]
+  evidence:
+    [docs/evidence/feat-plan-002/implementation.md, focused domain tests, planner browser test]
+  rollback:
+    strategy: Restore the current four-profile planner UI/scorer; no persisted state or API contract changes exist.
+  human_approval:
+    required: false
+    reason: Owner selected group G; it uses only existing free provider data and makes no external mutations.
