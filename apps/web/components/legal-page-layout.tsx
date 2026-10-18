@@ -5,9 +5,14 @@ import { LegalLinks } from './legal-links';
 type LegalPageLayoutProps = {
   children: ReactNode;
   title: string;
+  lastUpdated?: string;
 };
 
-export function LegalPageLayout({ children, title }: LegalPageLayoutProps) {
+export function LegalPageLayout({
+  children,
+  title,
+  lastUpdated = 'October 14, 2026',
+}: LegalPageLayoutProps) {
   return (
     <main className="atmos-page legal-page">
       <section className="dashboard-shell legal-page-shell">
@@ -18,7 +23,7 @@ export function LegalPageLayout({ children, title }: LegalPageLayoutProps) {
           <div>
             <p className="eyebrow">Atmos policies</p>
             <h1>{title}</h1>
-            <p>Last updated October 14, 2026</p>
+            <p>Last updated {lastUpdated}</p>
           </div>
           <Link className="legal-page-dashboard-link" href="/">
             Back to dashboard

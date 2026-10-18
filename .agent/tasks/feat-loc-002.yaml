@@ -1,0 +1,105 @@
+task:
+  id: FEAT-LOC-002
+  title: Account-synced saved-place preferences and recents
+  status: REVIEW
+  objective: Support owner-scoped saved-place favorites/categories/order/default across devices with a 100-place preference cap, private bounded local recent searches, and direct coordinate entry.
+  depends_on: [FEAT-LOC-UI-001, AUTH-002, RLS-002, ROUTE-001, WEB-012]
+  external_policy_checks: [none; no new geocoder or vendor]
+  runtime_placement:
+    allowed: [postgres, supabase-edge-function, vercel-nextjs]
+    selected: supabase-edge-function
+    reason: Persisted place fields use existing PostgreSQL saved_locations/RLS via the authenticated Edge Function; browser recents remain local.
+  scope:
+    include:
+      [
+        supabase/migrations,
+        supabase/tests,
+        supabase/functions/api-v1,
+        supabase/functions/_shared,
+        packages/contracts,
+        apps/web/components/saved-locations-panel.tsx,
+        apps/web/components/location-search.tsx,
+        apps/web/lib,
+        apps/web/app/globals.css,
+        apps/web/app/privacy/page.tsx,
+        README.md,
+        docs/auth.md,
+        tests/e2e,
+        .agent,
+        docs/design/feature-completion-roadmap.md,
+        docs/evidence/feat-loc-002,
+      ]
+    exclude:
+      [
+        admins,
+        cross-user place access,
+        device GPS history storage,
+        third-party search provider,
+        analytics of recent searches,
+        production migration/application,
+      ]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files:
+      [
+        supabase/migrations/20261016000000_saved_location_preferences.sql,
+        supabase/migrations/20261016001000_fix_saved_location_preference_rpc.sql,
+        supabase/tests/009_saved_location_preferences.sql,
+        supabase/functions/_shared/saved-location-preferences.ts,
+        supabase/functions/_shared/saved-location-preferences.test.ts,
+        apps/web/components/location-search.tsx,
+        apps/web/components/saved-locations-panel.tsx,
+      ]
+    terraform_resources: []
+    database_changes:
+      [
+        additive saved-location metadata columns and owner-validated transactional RPC; additive initialization marker on user_preferences,
+      ]
+    deployed_units: [api-v1 and web only on separately approved release]
+  compatibility:
+    requires_expand_contract: true
+    stable_version_compatible: true
+    rollback_window: Old clients ignore additive response fields; preference fields can remain after code rollback and the additive migration is not dropped.
+  validation:
+    commands:
+      [
+        corepack pnpm exec supabase db reset,
+        corepack pnpm test:db,
+        corepack pnpm exec vitest run apps/web/lib/saved-place-preferences.test.ts supabase/functions/_shared/saved-location-preferences.test.ts packages/contracts/src/index.test.ts,
+        corepack pnpm typecheck,
+        deno check --node-modules-dir=auto supabase/functions/api-v1/index.ts supabase/functions/_shared/saved-location-preferences.test.ts,
+        corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts tests/e2e/location-preferences.spec.ts --workers=1,
+        corepack pnpm --filter @atmos/web build,
+      ]
+    expected:
+      [
+        two-user RLS allow/deny,
+        RPC atomically replaces only the caller's complete saved-place preference set,
+        local recents exclude device GPS,
+        coordinate input validates bounds,
+        legacy clients parse old rows,
+      ]
+  security_checks:
+    [
+      review new RPC,
+      explicit grants,
+      owner filter,
+      invalid/foreign IDs denied,
+      no recent-search telemetry,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [existing bounded locations route group only]
+    logs: [sanitized request failures only; no search terms, categories, or location preferences]
+    traces: [existing correlation only]
+  evidence: [docs/evidence/feat-loc-002/implementation.md]
+  rollback:
+    strategy: Revert API/UI while retaining additive favorite/category/order/default columns and initialization marker; no data is dropped.
+  human_approval:
+    required: true
+    reason: Owner selected account-synced saved-place preferences; no destructive migration or production apply is included.

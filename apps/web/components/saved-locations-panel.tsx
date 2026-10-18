@@ -3,6 +3,7 @@
 import {
   savedLocationResponseSchema,
   savedLocationsResponseSchema,
+  replaceSavedLocationPreferencesSchema,
   type LocationSearchResult,
   type SavedLocation,
 } from '@atmos/contracts';
@@ -11,6 +12,7 @@ import {
   ArrowDown,
   ArrowUp,
   Bookmark,
+  Heart,
   Globe2,
   KeyRound,
   LogIn,
@@ -25,11 +27,13 @@ import { getSupabaseBrowserClient } from '../lib/supabase-browser';
 import { offlineDashboardStorageKey } from '../lib/offline-dashboard';
 import {
   emptySavedPlacePreferences,
+  parseSavedPlacePreferences,
   moveSavedLocation,
   orderSavedLocations,
   readSavedPlacePreferences,
   savedPlacePreferencesKey,
   writeSavedPlacePreferences,
+  savedPlacePreferencesFromLocations,
   type SavedPlacePreferences,
 } from '../lib/saved-place-preferences';
 import { versionAffinityHeaders } from '../lib/version-affinity';
@@ -59,7 +63,7 @@ async function fetchSavedLocations(gatewayOrigin: string, accessToken: string) {
     await response.json().catch(() => undefined),
   );
   if (!response.ok || !parsed.success) throw new Error('Saved locations are unavailable');
-  return parsed.data.locations;
+  return parsed.data;
 }
 
 export function SavedLocationsPanel({
@@ -95,6 +99,42 @@ export function SavedLocationsPanel({
   const [deleteConfirmationEmail, setDeleteConfirmationEmail] = useState('');
   const [deleteConfirmationPhrase, setDeleteConfirmationPhrase] = useState('');
   const [message, setMessage] = useState('');
+  const [preferencesSaving, setPreferencesSaving] = useState(false);
+
+  const persistSavedPlacePreferences = useCallback(
+    async (
+      accessToken: string,
+      nextLocations: SavedLocation[],
+      nextPreferences: SavedPlacePreferences,
+    ) => {
+      const ordered = orderSavedLocations(nextLocations, nextPreferences);
+      const body = replaceSavedLocationPreferencesSchema.safeParse({
+        locations: ordered.map((location) => ({
+          id: location.id,
+          is_favorite: location.is_favorite,
+          category: location.category,
+        })),
+        defaultLocationId: nextPreferences.defaultLocationId ?? null,
+      });
+      if (!body.success) throw new Error('Saved-place preferences are invalid');
+      const response = await fetch(new URL('/api/v1/locations/preferences', gatewayOrigin), {
+        method: 'PATCH',
+        headers: {
+          ...versionAffinityHeaders(),
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body.data),
+      });
+      if (!response.ok) throw new Error('Saved-place preferences could not be synced');
+      return ordered.map((location, index) => ({
+        ...location,
+        sort_order: index,
+        is_default: location.id === nextPreferences.defaultLocationId,
+      }));
+    },
+    [gatewayOrigin],
+  );
 
   useEffect(() => {
     if (!client) {
@@ -141,22 +181,58 @@ export function SavedLocationsPanel({
     const requestGeneration = ++locationRequestGeneration.current;
     setLocationsLoading(true);
     try {
-      const nextLocations = await fetchSavedLocations(gatewayOrigin, session.access_token);
+      const locationResponse = await fetchSavedLocations(gatewayOrigin, session.access_token);
       if (requestGeneration !== locationRequestGeneration.current) return false;
+      let nextLocations = locationResponse.locations;
+      let nextPreferences: SavedPlacePreferences;
+      let preferenceSyncFailed = false;
+      if (locationResponse.preferencesInitialized === true) {
+        nextPreferences = savedPlacePreferencesFromLocations(nextLocations);
+      } else {
+        let localPreferences: SavedPlacePreferences;
+        try {
+          localPreferences = readSavedPlacePreferences(window.localStorage, session.user.id);
+        } catch {
+          localPreferences = { ...emptySavedPlacePreferences };
+        }
+        const availableIds = new Set(nextLocations.map((location) => location.id));
+        nextPreferences = {
+          ...(localPreferences.defaultLocationId &&
+          availableIds.has(localPreferences.defaultLocationId)
+            ? { defaultLocationId: localPreferences.defaultLocationId }
+            : {}),
+          orderedLocationIds: [
+            ...localPreferences.orderedLocationIds.filter((id) => availableIds.has(id)),
+            ...nextLocations
+              .filter((location) => !localPreferences.orderedLocationIds.includes(location.id))
+              .map((location) => location.id),
+          ],
+        };
+        try {
+          if (nextLocations.length > 100)
+            throw new Error('Account preference sync is bounded to 100 saved places');
+          nextLocations = await persistSavedPlacePreferences(
+            session.access_token,
+            nextLocations,
+            nextPreferences,
+          );
+        } catch {
+          preferenceSyncFailed = true;
+          setMessage(
+            nextLocations.length > 100
+              ? 'Your places are available. Account-synced place preferences support up to 100 saved places; remove some places to enable syncing.'
+              : 'Your places are available, but their account preferences could not be synced. They remain saved on this device.',
+          );
+        }
+      }
+      setPlacePreferences(nextPreferences);
+      writeSavedPlacePreferences(window.localStorage, session.user.id, nextPreferences);
       setLocations(nextLocations);
       setLocationsUnavailable(false);
-      setMessage('');
+      if (!preferenceSyncFailed) setMessage('');
       if (!initialLocationExplicit && appliedDefaultForUser.current !== session.user.id) {
         appliedDefaultForUser.current = session.user.id;
-        let defaultLocationId: string | undefined;
-        try {
-          defaultLocationId = readSavedPlacePreferences(
-            window.localStorage,
-            session.user.id,
-          ).defaultLocationId;
-        } catch {
-          defaultLocationId = undefined;
-        }
+        const defaultLocationId = nextPreferences.defaultLocationId;
         const defaultLocation = nextLocations.find((location) => location.id === defaultLocationId);
         const selectedLocation = selectionRef.current.currentLocation;
         if (
@@ -199,7 +275,7 @@ export function SavedLocationsPanel({
     } finally {
       if (requestGeneration === locationRequestGeneration.current) setLocationsLoading(false);
     }
-  }, [gatewayOrigin, session]);
+  }, [gatewayOrigin, persistSavedPlacePreferences, session]);
 
   useEffect(() => {
     locationRequestGeneration.current += 1;
@@ -289,17 +365,40 @@ export function SavedLocationsPanel({
     }
   }
 
-  function updatePlacePreferences(next: SavedPlacePreferences) {
-    setPlacePreferences(next);
-    if (!session) return;
+  async function updatePlacePreferences(
+    next: SavedPlacePreferences,
+    nextLocations: SavedLocation[] = locations,
+  ) {
+    const parsed = parseSavedPlacePreferences(next);
+    setPlacePreferences(parsed);
+    setLocations(nextLocations);
+    if (session) writeSavedPlacePreferences(window.localStorage, session.user.id, parsed);
+    if (!session) return true;
+    if (nextLocations.length > 100) {
+      setMessage('Account-synced place preferences support up to 100 saved places.');
+      return false;
+    }
+    setPreferencesSaving(true);
     try {
-      writeSavedPlacePreferences(window.localStorage, session.user.id, next);
+      const synced = await persistSavedPlacePreferences(
+        session.access_token,
+        nextLocations,
+        parsed,
+      );
+      setLocations(synced);
+      writeSavedPlacePreferences(window.localStorage, session.user.id, parsed);
+      return true;
     } catch {
-      setMessage('This device could not save the place-order preference.');
+      setMessage(
+        'Your preference change is saved on this device but could not be synced to your account. Retry by changing it again.',
+      );
+      return false;
+    } finally {
+      setPreferencesSaving(false);
     }
   }
 
-  function setDefaultPlace(location: SavedLocation) {
+  async function setDefaultPlace(location: SavedLocation) {
     const defaultLocationId =
       placePreferences.defaultLocationId === location.id ? undefined : location.id;
     const nextPreferences: SavedPlacePreferences = {
@@ -308,23 +407,39 @@ export function SavedLocationsPanel({
     };
     if (defaultLocationId) nextPreferences.defaultLocationId = defaultLocationId;
     else delete nextPreferences.defaultLocationId;
-    updatePlacePreferences(nextPreferences);
-    setMessage(
-      defaultLocationId
-        ? `${location.name} is your default place on this device.`
-        : `Default place cleared on this device.`,
-    );
+    const saved = await updatePlacePreferences(nextPreferences);
+    if (saved)
+      setMessage(
+        defaultLocationId
+          ? `${location.name} is your default place for your account.`
+          : 'Default place cleared for your account.',
+      );
   }
 
-  function moveSavedPlace(location: SavedLocation, direction: -1 | 1) {
+  async function moveSavedPlace(location: SavedLocation, direction: -1 | 1) {
     const orderedIds = moveSavedLocation(
       orderedLocations.map((item) => item.id),
       location.id,
       direction,
     );
     if (orderedIds.every((id, index) => id === orderedLocations[index]?.id)) return;
-    updatePlacePreferences({ ...placePreferences, orderedLocationIds: orderedIds });
-    setMessage(`${location.name} moved ${direction < 0 ? 'up' : 'down'}.`);
+    const saved = await updatePlacePreferences({
+      ...placePreferences,
+      orderedLocationIds: orderedIds,
+    });
+    if (saved)
+      setMessage(`${location.name} moved ${direction < 0 ? 'up' : 'down'} in your account places.`);
+  }
+
+  async function updateSavedPlaceMetadata(
+    location: SavedLocation,
+    patch: Partial<Pick<SavedLocation, 'is_favorite' | 'category'>>,
+  ) {
+    const nextLocations = locations.map((item) =>
+      item.id === location.id ? { ...item, ...patch } : item,
+    );
+    const saved = await updatePlacePreferences(placePreferences, nextLocations);
+    if (saved) setMessage(`${location.name} preferences saved to your account.`);
   }
 
   async function requestPasswordReset() {
@@ -411,6 +526,10 @@ export function SavedLocationsPanel({
 
   async function saveCurrentLocation() {
     if (!session) return;
+    if (locations.length >= 100) {
+      setMessage('An account can save up to 100 places. Remove a place before saving another.');
+      return;
+    }
     if (
       locations.some(
         (location) =>
@@ -496,7 +615,10 @@ export function SavedLocationsPanel({
       if (nextPreferences.defaultLocationId === location.id) {
         delete nextPreferences.defaultLocationId;
       }
-      updatePlacePreferences(nextPreferences);
+      await updatePlacePreferences(
+        nextPreferences,
+        locations.filter((item) => item.id !== location.id),
+      );
       setConfirmRemoveId(undefined);
       setMessage(`${location.name} removed from your places.`);
     } catch {
@@ -554,6 +676,7 @@ export function SavedLocationsPanel({
       location.latitude === currentLocation.latitude &&
       location.longitude === currentLocation.longitude,
   );
+  const preferencesOverLimit = locations.length > 100;
 
   return (
     <details
@@ -720,16 +843,33 @@ export function SavedLocationsPanel({
               ) : null}
             </div>
             {presentation === 'popover' ? (
-              <button
-                className="save-current-location"
-                type="button"
-                onClick={saveCurrentLocation}
-                disabled={busy || currentLocationIsSaved}
-              >
-                {currentLocationIsSaved ? 'Already saved' : `Save ${currentLocation.name}`}
-              </button>
+              <>
+                <button
+                  className="save-current-location"
+                  type="button"
+                  onClick={saveCurrentLocation}
+                  disabled={
+                    busy || preferencesSaving || currentLocationIsSaved || locations.length >= 100
+                  }
+                >
+                  {currentLocationIsSaved
+                    ? 'Already saved'
+                    : locations.length >= 100
+                      ? 'Saved-place limit reached'
+                      : `Save ${currentLocation.name}`}
+                </button>
+                {locations.length >= 100 && !currentLocationIsSaved ? (
+                  <p role="status">An account can save up to 100 places.</p>
+                ) : null}
+              </>
             ) : null}
             {locationsLoading ? <p role="status">Loading saved places…</p> : null}
+            {preferencesOverLimit ? (
+              <p role="status">
+                Account-synced ordering, favorites, categories, and default place support up to 100
+                saved places. Remove places to enable these preferences.
+              </p>
+            ) : null}
             {locations.length > 0 ? (
               <ul aria-label="Your saved places">
                 {orderedLocations.map((location, index) => (
@@ -753,10 +893,45 @@ export function SavedLocationsPanel({
                         aria-label={`Manage ${location.name}`}
                       >
                         <button
+                          className="favorite-saved-location"
+                          type="button"
+                          onClick={() =>
+                            void updateSavedPlaceMetadata(location, {
+                              is_favorite: !location.is_favorite,
+                            })
+                          }
+                          disabled={
+                            busy ||
+                            preferencesSaving ||
+                            preferencesOverLimit ||
+                            removingId !== undefined ||
+                            renamingId !== undefined
+                          }
+                          aria-label={
+                            location.is_favorite
+                              ? `Remove ${location.name} from favorites`
+                              : `Add ${location.name} to favorites`
+                          }
+                          aria-pressed={location.is_favorite}
+                          title={location.is_favorite ? 'Favorite' : 'Add to favorites'}
+                        >
+                          <Heart
+                            size={15}
+                            fill={location.is_favorite ? 'currentColor' : 'none'}
+                            aria-hidden="true"
+                          />
+                        </button>
+                        <button
                           className="saved-location-default"
                           type="button"
-                          onClick={() => setDefaultPlace(location)}
-                          disabled={busy || removingId !== undefined || renamingId !== undefined}
+                          onClick={() => void setDefaultPlace(location)}
+                          disabled={
+                            busy ||
+                            preferencesSaving ||
+                            preferencesOverLimit ||
+                            removingId !== undefined ||
+                            renamingId !== undefined
+                          }
                           aria-label={
                             placePreferences.defaultLocationId === location.id
                               ? `Clear default place ${location.name}`
@@ -765,8 +940,8 @@ export function SavedLocationsPanel({
                           aria-pressed={placePreferences.defaultLocationId === location.id}
                           title={
                             placePreferences.defaultLocationId === location.id
-                              ? 'Default place on this device'
-                              : 'Set as default on this device'
+                              ? 'Default place for this account'
+                              : 'Set as default for this account'
                           }
                         >
                           <Star
@@ -782,9 +957,11 @@ export function SavedLocationsPanel({
                         <button
                           className="move-saved-location"
                           type="button"
-                          onClick={() => moveSavedPlace(location, -1)}
+                          onClick={() => void moveSavedPlace(location, -1)}
                           disabled={
                             busy ||
+                            preferencesSaving ||
+                            preferencesOverLimit ||
                             removingId !== undefined ||
                             renamingId !== undefined ||
                             index === 0
@@ -796,9 +973,11 @@ export function SavedLocationsPanel({
                         <button
                           className="move-saved-location"
                           type="button"
-                          onClick={() => moveSavedPlace(location, 1)}
+                          onClick={() => void moveSavedPlace(location, 1)}
                           disabled={
                             busy ||
+                            preferencesSaving ||
+                            preferencesOverLimit ||
                             removingId !== undefined ||
                             renamingId !== undefined ||
                             index === orderedLocations.length - 1
@@ -835,6 +1014,29 @@ export function SavedLocationsPanel({
                         </button>
                       </div>
                     </div>
+                    <label
+                      className="saved-location-category-label"
+                      htmlFor={`saved-category-${location.id}`}
+                    >
+                      Category
+                      <select
+                        id={`saved-category-${location.id}`}
+                        value={location.category ?? ''}
+                        aria-label={`Category for ${location.name}`}
+                        disabled={preferencesSaving || busy || preferencesOverLimit}
+                        onChange={(event) =>
+                          void updateSavedPlaceMetadata(location, {
+                            category: (event.target.value || null) as SavedLocation['category'],
+                          })
+                        }
+                      >
+                        <option value="">Uncategorized</option>
+                        <option value="home">Home</option>
+                        <option value="work">Work</option>
+                        <option value="university">University</option>
+                        <option value="travel">Travel</option>
+                      </select>
+                    </label>
                     {renamingId === location.id ? (
                       <form
                         className="saved-location-rename-form"

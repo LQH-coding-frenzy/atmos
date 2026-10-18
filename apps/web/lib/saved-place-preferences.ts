@@ -1,4 +1,8 @@
-import type { SavedLocation } from '@atmos/contracts';
+import {
+  locationSearchResultSchema,
+  type LocationSearchResult,
+  type SavedLocation,
+} from '@atmos/contracts';
 
 export type SavedPlacePreferences = {
   defaultLocationId?: string;
@@ -68,6 +72,84 @@ export function orderSavedLocations<T extends Pick<SavedLocation, 'id'>>(
     const rightOrder = order.get(right.id) ?? Number.MAX_SAFE_INTEGER;
     return leftOrder - rightOrder;
   });
+}
+
+export function savedPlacePreferencesFromLocations(
+  locations: readonly SavedLocation[],
+): SavedPlacePreferences {
+  const ordered = [...locations].sort(
+    (left, right) =>
+      left.sort_order - right.sort_order ||
+      left.created_at.localeCompare(right.created_at) ||
+      left.id.localeCompare(right.id),
+  );
+  const defaultLocation = locations.find((location) => location.is_default);
+  return {
+    ...(defaultLocation ? { defaultLocationId: defaultLocation.id } : {}),
+    orderedLocationIds: ordered.map((location) => location.id),
+  };
+}
+
+export const recentSearchesStorageKey = 'atmos.recent-searches.v1';
+export const maximumRecentSearches = 8;
+
+type StorageWithRemove = StorageLike & Pick<Storage, 'removeItem'>;
+
+export function parseRecentSearches(value: unknown): LocationSearchResult[] {
+  if (!Array.isArray(value)) return [];
+  const byKey = new Map<string, LocationSearchResult>();
+  for (const item of value) {
+    const parsed = locationSearchResultSchema.safeParse(item);
+    if (
+      !parsed.success ||
+      parsed.data.id === 'device-location' ||
+      parsed.data.country === 'Device location'
+    )
+      continue;
+    const location = parsed.data;
+    const key = `${location.latitude.toFixed(5)}:${location.longitude.toFixed(5)}`;
+    if (!byKey.has(key)) byKey.set(key, location);
+  }
+  return [...byKey.values()].slice(0, maximumRecentSearches);
+}
+
+export function readRecentSearches(storage: Pick<Storage, 'getItem'>) {
+  try {
+    const raw = storage.getItem(recentSearchesStorageKey);
+    return parseRecentSearches(raw ? JSON.parse(raw) : []);
+  } catch {
+    return [];
+  }
+}
+
+export function addRecentSearch(
+  storage: Pick<Storage, 'getItem' | 'setItem'>,
+  location: LocationSearchResult,
+) {
+  if (location.id === 'device-location' || location.country === 'Device location')
+    return readRecentSearches(storage);
+  const key = `${location.latitude.toFixed(5)}:${location.longitude.toFixed(5)}`;
+  const next = parseRecentSearches([
+    location,
+    ...readRecentSearches(storage).filter(
+      (item) => `${item.latitude.toFixed(5)}:${item.longitude.toFixed(5)}` !== key,
+    ),
+  ]).slice(0, maximumRecentSearches);
+  try {
+    storage.setItem(recentSearchesStorageKey, JSON.stringify(next));
+  } catch {
+    /* Search remains usable if storage is unavailable. */
+  }
+  return next;
+}
+
+export function clearRecentSearches(storage: StorageWithRemove) {
+  try {
+    storage.removeItem(recentSearchesStorageKey);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function moveSavedLocation(locationIds: string[], locationId: string, direction: -1 | 1) {

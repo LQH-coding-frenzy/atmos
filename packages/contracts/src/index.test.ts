@@ -18,6 +18,7 @@ import {
   dailyForecastSchema,
   hourlyForecastSchema,
   extendedDailyForecastSchema,
+  replaceSavedLocationPreferencesSchema,
 } from './index';
 
 describe('additive full weather contract', () => {
@@ -145,6 +146,10 @@ describe('saved-location API contracts', () => {
     longitude: 2.3488,
     created_at: '2026-09-27T10:00:00.000Z',
     updated_at: '2026-09-27T10:00:00.000Z',
+    is_favorite: false,
+    category: null,
+    sort_order: 0,
+    is_default: false,
   };
 
   it('accepts the authenticated list and create response shapes', () => {
@@ -152,6 +157,30 @@ describe('saved-location API contracts', () => {
       location,
     ]);
     expect(savedLocationResponseSchema.parse({ location }).location).toEqual(location);
+    expect(
+      replaceSavedLocationPreferencesSchema.parse({
+        locations: [{ id: location.id, is_favorite: true, category: 'home' }],
+        defaultLocationId: location.id,
+      }),
+    ).toMatchObject({ defaultLocationId: location.id });
+  });
+
+  it('defaults additive saved-place preference fields when parsing an older response', () => {
+    const legacy = {
+      id: location.id,
+      name: location.name,
+      latitude: location.latitude,
+      longitude: location.longitude,
+      created_at: location.created_at,
+      updated_at: location.updated_at,
+    };
+    expect(savedLocationsResponseSchema.parse({ locations: [legacy] })).toMatchObject({
+      locations: [{ is_favorite: false, category: null, sort_order: 0, is_default: false }],
+    });
+    expect(
+      savedLocationsResponseSchema.parse({ locations: [legacy], preferencesInitialized: false })
+        .preferencesInitialized,
+    ).toBe(false);
   });
 
   it('rejects invalid coordinates and malformed response fields', () => {
@@ -161,6 +190,27 @@ describe('saved-location API contracts', () => {
     expect(() =>
       savedLocationResponseSchema.parse({ location: { ...location, id: 'bad' } }),
     ).toThrow();
+    expect(
+      replaceSavedLocationPreferencesSchema.safeParse({
+        locations: [{ id: location.id, is_favorite: true, category: 'admin' }],
+        defaultLocationId: location.id,
+      }).success,
+    ).toBe(false);
+    expect(
+      replaceSavedLocationPreferencesSchema.safeParse({
+        locations: [
+          { id: location.id, is_favorite: true, category: null },
+          { id: location.id, is_favorite: false, category: null },
+        ],
+        defaultLocationId: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      replaceSavedLocationPreferencesSchema.safeParse({
+        locations: [],
+        defaultLocationId: location.id,
+      }).success,
+    ).toBe(false);
   });
 });
 

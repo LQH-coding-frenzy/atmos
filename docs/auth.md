@@ -16,10 +16,11 @@ Google provider. Google Cloud requires the exact Supabase callback URL
 `https://<project-ref>.supabase.co/auth/v1/callback`; the Supabase Auth redirect allow-list may use
 `https://rainify.dpdns.org/**` for app paths.
 
-After sign-in, saved-location requests go through the Cloudflare gateway with the user's access token.
-The versioned Supabase Edge Function verifies the token and relies on the caller-scoped client and
-database RLS policies. The browser never receives a privileged key. The dashboard's public weather
-journey remains available without authentication.
+After sign-in, saved-location and account-synced place-preference requests go through the Cloudflare
+gateway with the user's access token. The versioned Supabase Edge Function verifies the token and
+relies on the caller-scoped client and database RLS policies. The browser never receives a privileged
+key. The dashboard's public weather journey remains available without authentication. Recent place
+selections remain in a bounded, clearable browser-local list, separate from account data.
 
 ## Self-service account deletion
 
