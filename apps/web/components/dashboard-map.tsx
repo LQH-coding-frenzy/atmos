@@ -1,10 +1,12 @@
 'use client';
 
 import {
+  airQualitySchema,
   dashboardSchema,
   openWeatherMapLayerSchema,
   type Dashboard as DashboardData,
   type LocationSearchResult,
+  type SavedLocation,
   type OpenWeatherMapLayer,
   type UnitSystem,
   type WeatherCondition,
@@ -31,8 +33,26 @@ import {
   SkipBack,
   SkipForward,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createLocationMapData } from '../lib/location-map';
+import {
+  aqiMapCacheMilliseconds,
+  aqiMapSampleKey,
+  aqiMarkerColor,
+  createAqiPlaceCollection,
+  createSavedPlaceCollection,
+  createUnavailableAqiMapPoint,
+  failedAqiMapCacheMilliseconds,
+  formatOpenWeatherLegendValue,
+  maxAqiMapCacheEntries,
+  maxConcurrentAqiMapRequests,
+  openWeatherMapLegend,
+  reserveAqiMapSampleSlots,
+  runWithConcurrency,
+  selectAqiMapCandidates,
+  usAqiMapLegend,
+  type AqiMapPoint,
+} from '../lib/map-overlays';
 import { observeMapAppearance } from '../lib/map-appearance';
 import {
   cityPreviewCacheMilliseconds,
@@ -56,6 +76,7 @@ type DashboardMapProps = {
   dashboard: DashboardData;
   gatewayOrigin: string;
   units: UnitSystem;
+  savedLocations: readonly SavedLocation[];
   observatory?: boolean;
   onSelectLocation: (dashboard: DashboardData) => void;
   onOpenLocation: (location: LocationSearchResult) => Promise<boolean>;
@@ -68,7 +89,8 @@ type CityPreview = {
 };
 
 type RadarStatus = 'idle' | 'loading' | 'ready' | 'unavailable';
-type SelectedWeatherMapLayer = 'cities' | 'rainviewer' | OpenWeatherMapLayer;
+type AqiMapStatus = 'idle' | 'loading' | 'ready' | 'unavailable' | 'limited';
+type SelectedWeatherMapLayer = 'cities' | 'rainviewer' | 'aqi' | OpenWeatherMapLayer;
 
 const weatherOverlaySourceId = 'atmos-weather-overlay';
 const weatherOverlayLayerId = 'atmos-weather-overlay-layer';
@@ -128,18 +150,26 @@ export function DashboardMap({
   dashboard,
   gatewayOrigin,
   units,
+  savedLocations,
   observatory = false,
   onSelectLocation,
   onOpenLocation,
 }: DashboardMapProps) {
   const mapElement = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const collectSavedLocationsRef = useRef<() => void>(() => {});
   const openMapLink = useRef<HTMLAnchorElement>(null);
   const closeMapLink = useRef<HTMLAnchorElement>(null);
   const viewOpener = useRef<HTMLElement | null>(null);
   const wasObservatory = useRef(false);
-  const propsRef = useRef({ dashboard, gatewayOrigin, onSelectLocation, onOpenLocation });
-  propsRef.current = { dashboard, gatewayOrigin, onSelectLocation, onOpenLocation };
+  const propsRef = useRef({
+    dashboard,
+    gatewayOrigin,
+    onSelectLocation,
+    onOpenLocation,
+    savedLocations,
+  });
+  propsRef.current = { dashboard, gatewayOrigin, onSelectLocation, onOpenLocation, savedLocations };
 
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState(false);
@@ -152,10 +182,19 @@ export function DashboardMap({
   const [radarOpacity, setRadarOpacity] = useState(0.58);
   const [cityLayersAvailable, setCityLayersAvailable] = useState(false);
   const [visibleCities, setVisibleCities] = useState<MapCity[]>([]);
+  const [visibleSavedLocations, setVisibleSavedLocations] = useState<SavedLocation[]>([]);
+  const [aqiMapPoints, setAqiMapPoints] = useState<AqiMapPoint[]>([]);
+  const [aqiMapStatus, setAqiMapStatus] = useState<AqiMapStatus>('idle');
+  const [aqiMapRetry, setAqiMapRetry] = useState(0);
   const [preview, setPreview] = useState<CityPreview>();
   const [pickerValue, setPickerValue] = useState('');
   const [openingCity, setOpeningCity] = useState(false);
   const previewCache = useRef(new Map<string, { data: DashboardData; storedAt: number }>());
+  const aqiCache = useRef(new Map<string, { point: AqiMapPoint; storedAt: number }>());
+  const aqiGeneration = useRef(0);
+  const aqiController = useRef<AbortController | null>(null);
+  const aqiRequestTimestamps = useRef<number[]>([]);
+  const aqiMapRetryRef = useRef(0);
   const previewRequests = useRef<number[]>([]);
   const previewGeneration = useRef(0);
   const previewController = useRef<AbortController | null>(null);
@@ -167,6 +206,14 @@ export function DashboardMap({
   const selectedRadarTimestampRef = useRef<number | undefined>(undefined);
   const weatherOverlayProviderRef = useRef<'openweather' | 'rainviewer' | undefined>(undefined);
   const radarVisible = selectedMapLayer === 'rainviewer';
+  const aqiVisible = selectedMapLayer === 'aqi';
+  const aqiCandidates = useMemo(
+    () => selectAqiMapCandidates(dashboard.location, visibleSavedLocations),
+    [dashboard.location, visibleSavedLocations],
+  );
+  const aqiCandidateKey = aqiCandidates
+    .map((item) => `${item.id}:${aqiMapSampleKey(item)}`)
+    .join('|');
   radarTimelineRef.current = radarTimeline;
   selectedRadarTimestampRef.current = selectedRadarTimestamp;
 
@@ -248,6 +295,20 @@ export function DashboardMap({
           );
         };
 
+        const collectVisibleSavedLocations = () => {
+          const bounds = instance.getBounds();
+          const next = propsRef.current.savedLocations.filter((location) =>
+            bounds.contains([location.longitude, location.latitude]),
+          );
+          setVisibleSavedLocations((current) =>
+            current.length === next.length &&
+            current.every((location, index) => location.id === next[index]?.id)
+              ? current
+              : next,
+          );
+        };
+        collectSavedLocationsRef.current = collectVisibleSavedLocations;
+
         const addWeatherMarker = () => {
           if (instance.getSource('atmos-current-location')) return;
           const latest = propsRef.current.dashboard;
@@ -278,6 +339,105 @@ export function DashboardMap({
               'circle-stroke-width': 3,
             },
           });
+        };
+
+        const addPlaceOverlaySources = () => {
+          if (!instance.getSource('atmos-saved-locations')) {
+            instance.addSource('atmos-saved-locations', {
+              type: 'geojson',
+              data: createSavedPlaceCollection(propsRef.current.savedLocations),
+            });
+            instance.addLayer({
+              id: 'atmos-saved-location-points',
+              type: 'circle',
+              source: 'atmos-saved-locations',
+              paint: {
+                'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 4, 8, 7, 14, 10],
+                'circle-color': [
+                  'case',
+                  ['==', ['get', 'isDefault'], true],
+                  '#d98b38',
+                  ['==', ['get', 'isFavorite'], true],
+                  '#4269ad',
+                  '#3f8179',
+                ],
+                'circle-stroke-color': '#ffffff',
+                'circle-stroke-width': 2,
+              },
+            });
+            instance.addLayer({
+              id: 'atmos-saved-location-labels',
+              type: 'symbol',
+              source: 'atmos-saved-locations',
+              layout: {
+                'text-field': ['get', 'name'],
+                'text-size': 10,
+                'text-offset': [0, 1.25],
+                'text-anchor': 'top',
+                'text-allow-overlap': true,
+              },
+              paint: {
+                'text-color': '#183236',
+                'text-halo-color': '#ffffff',
+                'text-halo-width': 1.5,
+              },
+            });
+          }
+          if (!instance.getSource('atmos-aqi-points')) {
+            instance.addSource('atmos-aqi-points', {
+              type: 'geojson',
+              data: createAqiPlaceCollection([]),
+            });
+            instance.addLayer({
+              id: 'atmos-aqi-point-circles',
+              type: 'circle',
+              source: 'atmos-aqi-points',
+              layout: { visibility: 'none' },
+              paint: {
+                'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 7, 8, 12, 14, 16],
+                'circle-color': [
+                  'case',
+                  ['==', ['get', 'usAqi'], null],
+                  '#76869a',
+                  ['<=', ['get', 'usAqi'], 50],
+                  '#4fa779',
+                  ['<=', ['get', 'usAqi'], 100],
+                  '#d5ad35',
+                  ['<=', ['get', 'usAqi'], 150],
+                  '#df873b',
+                  ['<=', ['get', 'usAqi'], 200],
+                  '#d85a50',
+                  ['<=', ['get', 'usAqi'], 300],
+                  '#a16bb0',
+                  '#8d536f',
+                ],
+                'circle-stroke-color': '#ffffff',
+                'circle-stroke-width': 2,
+                'circle-translate': [0, -12],
+              },
+            });
+            instance.addLayer({
+              id: 'atmos-aqi-point-labels',
+              type: 'symbol',
+              source: 'atmos-aqi-points',
+              layout: {
+                visibility: 'none',
+                'text-field': [
+                  'case',
+                  ['==', ['get', 'usAqi'], null],
+                  '—',
+                  ['to-string', ['round', ['get', 'usAqi']]],
+                ],
+                'text-size': 10,
+                'text-allow-overlap': true,
+              },
+              paint: {
+                'text-color': '#ffffff',
+                'text-halo-color': '#183236',
+                'text-halo-width': 1.5,
+              },
+            });
+          }
         };
 
         const showPreview = (city: MapCity, delay = 280) => {
@@ -368,8 +528,13 @@ export function DashboardMap({
         };
 
         const handlePointerMove = (event: MapMouseEvent) => {
-          const feature = cityLayerIds.length
-            ? instance.queryRenderedFeatures(event.point, { layers: cityLayerIds })[0]
+          const layers = [
+            ...cityLayerIds,
+            'atmos-saved-location-points',
+            'atmos-aqi-point-circles',
+          ].filter((layer) => instance.getLayer(layer));
+          const feature = layers.length
+            ? instance.queryRenderedFeatures(event.point, { layers })[0]
             : undefined;
           const current = propsRef.current.dashboard;
           const currentPoint = instance.project([
@@ -385,13 +550,48 @@ export function DashboardMap({
               : undefined;
           if (!city) {
             activeCityKey.current = undefined;
-            instance.getCanvas().style.cursor = '';
+            instance.getCanvas().style.cursor = 'crosshair';
             closePreviewSoon();
             return;
           }
           instance.getCanvas().style.cursor = 'pointer';
           if (activeCityKey.current === city.key) return;
           showPreview(city);
+        };
+
+        const handleMapClick = (event: MapMouseEvent) => {
+          const layers = [
+            'atmos-aqi-point-circles',
+            'atmos-saved-location-points',
+            ...cityLayerIds,
+          ].filter((layer) => instance.getLayer(layer));
+          const feature = layers.length
+            ? instance.queryRenderedFeatures(event.point, { layers })[0]
+            : undefined;
+          const current = propsRef.current.dashboard;
+          const projected = instance.project([
+            current.location.longitude,
+            current.location.latitude,
+          ]);
+          const isCurrent =
+            Math.hypot(projected.x - event.point.x, projected.y - event.point.y) <= 18;
+          const city = isCurrent
+            ? currentDashboardCity(current)
+            : feature
+              ? asCity(feature)
+              : undefined;
+          const point = event.lngLat;
+          showPreview(
+            city ?? {
+              key: `coordinates:${point.lat.toFixed(5)}:${point.lng.toFixed(5)}`,
+              name: `${point.lat.toFixed(2)}°, ${point.lng.toFixed(2)}°`,
+              country: 'Selected coordinates',
+              latitude: point.lat,
+              longitude: point.lng,
+              placeClass: 'coordinates',
+            },
+            0,
+          );
         };
 
         const handlePointerLeave = () => {
@@ -407,6 +607,7 @@ export function DashboardMap({
           setMapError(false);
           if (styleTimeout) window.clearTimeout(styleTimeout);
           addWeatherMarker();
+          addPlaceOverlaySources();
           const layers = instance.getStyle().layers ?? [];
           cityLayerIds = mapCityLayerIds(layers);
           hasPlaceLayers = cityLayerIds.length > 0;
@@ -415,7 +616,11 @@ export function DashboardMap({
           instance.on('mousemove', handlePointerMove);
           instance.on('mouseout', handlePointerLeave);
           instance.on('idle', collectVisibleCities);
+          instance.on('idle', collectVisibleSavedLocations);
+          instance.on('moveend', collectVisibleSavedLocations);
+          instance.on('click', handleMapClick);
           collectVisibleCities();
+          collectVisibleSavedLocations();
         });
 
         instance.on('error', () => {
@@ -447,6 +652,7 @@ export function DashboardMap({
       if (closeTimer.current) window.clearTimeout(closeTimer.current);
       previewController.current?.abort();
       stopObservingAppearance?.();
+      collectSavedLocationsRef.current = () => {};
       mapRef.current?.remove();
       mapRef.current = null;
       observer.disconnect();
@@ -476,6 +682,30 @@ export function DashboardMap({
       map.setPaintProperty('atmos-location-point', 'circle-color', currentMarker.markerColor);
     }
   }, [dashboard.current.condition, dashboard.location.latitude, dashboard.location.longitude]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const source = map.getSource('atmos-saved-locations') as GeoJSONSource | undefined;
+    source?.setData(createSavedPlaceCollection(savedLocations));
+    collectSavedLocationsRef.current();
+  }, [mapReady, savedLocations]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const source = map.getSource('atmos-aqi-points') as GeoJSONSource | undefined;
+    source?.setData(createAqiPlaceCollection(aqiMapPoints));
+  }, [aqiMapPoints, mapReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    const visibility = aqiVisible ? 'visible' : 'none';
+    for (const layerId of ['atmos-aqi-point-circles', 'atmos-aqi-point-labels']) {
+      if (map.getLayer(layerId)) map.setLayoutProperty(layerId, 'visibility', visibility);
+    }
+  }, [aqiVisible, mapReady]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -565,6 +795,158 @@ export function DashboardMap({
       window.clearInterval(refreshInterval);
     };
   }, [gatewayOrigin, mapReady, radarVisible]);
+
+  useEffect(() => {
+    if (!mapReady || !aqiVisible) {
+      if (!aqiVisible) {
+        aqiController.current?.abort();
+        aqiGeneration.current += 1;
+        setAqiMapStatus('idle');
+      }
+      return;
+    }
+
+    aqiController.current?.abort();
+    const controller = new AbortController();
+    aqiController.current = controller;
+    const generation = ++aqiGeneration.current;
+    let disposed = false;
+    const results = new Map<string, AqiMapPoint>();
+    const candidatesToFetch: (typeof aqiCandidates)[number][] = [];
+    const now = Date.now();
+    const manualRetry = aqiMapRetry !== aqiMapRetryRef.current;
+    aqiMapRetryRef.current = aqiMapRetry;
+
+    for (const candidate of aqiCandidates) {
+      const key = aqiMapSampleKey(candidate);
+      const cached = aqiCache.current.get(key);
+      if (manualRetry && cached?.point.status === 'unavailable') {
+        aqiCache.current.delete(key);
+      }
+      const nextCached = aqiCache.current.get(key);
+      const cacheTtl =
+        nextCached?.point.status === 'unavailable'
+          ? failedAqiMapCacheMilliseconds
+          : aqiMapCacheMilliseconds;
+      if (nextCached && now - nextCached.storedAt < cacheTtl) {
+        results.set(key, nextCached.point);
+      } else {
+        if (nextCached) aqiCache.current.delete(key);
+        candidatesToFetch.push(candidate);
+      }
+    }
+
+    setAqiMapPoints([...results.values()]);
+    const reservation = reserveAqiMapSampleSlots(
+      aqiRequestTimestamps.current,
+      now,
+      candidatesToFetch.length,
+    );
+    aqiRequestTimestamps.current = reservation.timestamps;
+    const reservedCandidates = candidatesToFetch.slice(0, reservation.reserved);
+    const rateLimitedCandidates = candidatesToFetch.slice(reservation.reserved);
+
+    const storePoint = (candidate: (typeof aqiCandidates)[number], point: AqiMapPoint) => {
+      const key = aqiMapSampleKey(candidate);
+      if (!aqiCache.current.has(key) && aqiCache.current.size >= maxAqiMapCacheEntries) {
+        const oldestKey = aqiCache.current.keys().next().value;
+        if (oldestKey !== undefined) aqiCache.current.delete(oldestKey);
+      }
+      aqiCache.current.set(key, { point, storedAt: Date.now() });
+      results.set(key, point);
+    };
+
+    if (reservedCandidates.length === 0) {
+      const points = aqiCandidates.map((candidate) => {
+        const key = aqiMapSampleKey(candidate);
+        return results.get(key) ?? createUnavailableAqiMapPoint(candidate, 'rate-limited');
+      });
+      setAqiMapPoints(points);
+      setAqiMapStatus(
+        rateLimitedCandidates.length > 0
+          ? 'limited'
+          : points.length > 0 && points.every((point) => point.status === 'unavailable')
+            ? 'unavailable'
+            : 'ready',
+      );
+      return () => {
+        disposed = true;
+        controller.abort();
+      };
+    }
+
+    setAqiMapStatus('loading');
+    let startedRequests = 0;
+
+    const fetchCandidate = async (candidate: (typeof aqiCandidates)[number]) => {
+      if (controller.signal.aborted) return;
+      startedRequests += 1;
+      try {
+        const url = new URL('/api/v1/weather/air-quality', gatewayOrigin);
+        url.search = new URLSearchParams({
+          lat: String(candidate.latitude),
+          lon: String(candidate.longitude),
+        }).toString();
+        const response = await fetch(url, {
+          cache: 'no-store',
+          headers: versionAffinityHeaders(),
+          signal: controller.signal,
+        });
+        const parsed = airQualitySchema.safeParse(await response.json().catch(() => undefined));
+        if (!response.ok || !parsed.success) throw new Error('AQI sample unavailable');
+        storePoint(candidate, {
+          ...candidate,
+          usAqi: parsed.data.usAqi,
+          europeanAqi: parsed.data.europeanAqi,
+          observedAt: parsed.data.observedAt,
+          stale: parsed.data.meta.stale,
+          status: 'ready',
+        });
+      } catch {
+        if (!controller.signal.aborted) {
+          storePoint(candidate, createUnavailableAqiMapPoint(candidate, 'unavailable'));
+        }
+      }
+    };
+
+    void (async () => {
+      await runWithConcurrency(reservedCandidates, maxConcurrentAqiMapRequests, fetchCandidate);
+      if (disposed || controller.signal.aborted || generation !== aqiGeneration.current) return;
+      const points = aqiCandidates.map((candidate) => {
+        const key = aqiMapSampleKey(candidate);
+        return (
+          results.get(key) ??
+          createUnavailableAqiMapPoint(
+            candidate,
+            rateLimitedCandidates.some((limited) => aqiMapSampleKey(limited) === key)
+              ? 'rate-limited'
+              : 'unavailable',
+          )
+        );
+      });
+      setAqiMapPoints(points);
+      if (
+        rateLimitedCandidates.length > 0 ||
+        points.some((point) => point.status === 'rate-limited')
+      ) {
+        setAqiMapStatus('limited');
+      } else if (points.every((point) => point.status === 'unavailable')) {
+        setAqiMapStatus('unavailable');
+      } else {
+        setAqiMapStatus('ready');
+      }
+    })();
+
+    return () => {
+      disposed = true;
+      controller.abort();
+      const unstartedReservations = reservedCandidates.length - startedRequests;
+      if (unstartedReservations > 0) {
+        aqiRequestTimestamps.current.splice(-unstartedReservations, unstartedReservations);
+      }
+      if (aqiController.current === controller) aqiController.current = null;
+    };
+  }, [aqiCandidateKey, aqiCandidates, aqiMapRetry, aqiVisible, gatewayOrigin, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -778,6 +1160,9 @@ export function DashboardMap({
   );
   const selectedRadarFrame = radarFrames[selectedRadarFrameIndex];
   const selectedOpenWeatherLayer = openWeatherMapLayerSchema.safeParse(selectedMapLayer);
+  const selectedOpenWeatherLegend = selectedOpenWeatherLayer.success
+    ? openWeatherMapLegend(selectedOpenWeatherLayer.data)
+    : undefined;
 
   return (
     <article className="map-card" id="map" aria-labelledby="map-title" tabIndex={-1}>
@@ -828,7 +1213,7 @@ export function DashboardMap({
           value={selectedMapLayer}
           onChange={(event) => {
             const value = event.target.value;
-            if (value === 'cities' || value === 'rainviewer') {
+            if (value === 'cities' || value === 'rainviewer' || value === 'aqi') {
               setSelectedMapLayer(value);
             } else {
               const openWeatherLayer = openWeatherMapLayerSchema.safeParse(value);
@@ -841,6 +1226,7 @@ export function DashboardMap({
         >
           <option value="cities">City map only</option>
           <option value="rainviewer">RainViewer radar</option>
+          <option value="aqi">Air-quality sample points</option>
           <optgroup label="OpenWeather · current maps">
             {openWeatherAvailable ? (
               openWeatherMapLayerSchema.options.map((layer) => (
@@ -861,6 +1247,38 @@ export function DashboardMap({
           <p role="status">
             OpenWeather · {openWeatherLayerLabels[selectedOpenWeatherLayer.data]} · current snapshot
           </p>
+          {selectedOpenWeatherLegend ? (
+            <div
+              className="map-layer-legend"
+              aria-label={`${openWeatherLayerLabels[selectedOpenWeatherLayer.data]} legend`}
+            >
+              <p>Provider scale · stops shown in selected units</p>
+              <div
+                className="map-layer-color-ramp"
+                aria-hidden="true"
+                style={{
+                  background: `linear-gradient(90deg, ${selectedOpenWeatherLegend.stops
+                    .map(
+                      (stop, index, stops) =>
+                        `${stop.color} ${(index / Math.max(1, stops.length - 1)) * 100}%`,
+                    )
+                    .join(', ')})`,
+                }}
+              />
+              <ol
+                className="map-layer-color-stops"
+                aria-label="Map color scale thresholds"
+                tabIndex={0}
+              >
+                {selectedOpenWeatherLegend.stops.map((stop) => (
+                  <li key={stop.value}>
+                    <span aria-hidden="true" style={{ backgroundColor: stop.color }} />
+                    {formatOpenWeatherLegendValue(stop.value, selectedOpenWeatherLayer.data, units)}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
           <label className="map-current-layer-opacity">
             <span>Overlay opacity</span>
             <input
@@ -874,6 +1292,117 @@ export function DashboardMap({
             />
           </label>
         </div>
+      ) : null}
+      {aqiVisible ? (
+        <section className="map-aqi-controls" aria-label="Air quality map samples" tabIndex={0}>
+          <div className="map-aqi-heading">
+            <div>
+              <p className="eyebrow">Modeled air quality</p>
+              <h3>Point samples</h3>
+            </div>
+            <button
+              type="button"
+              aria-label="Refresh air-quality map samples"
+              disabled={aqiMapStatus === 'loading'}
+              onClick={() => setAqiMapRetry((retry) => retry + 1)}
+            >
+              <RefreshCw size={15} aria-hidden="true" />
+            </button>
+          </div>
+          <p className="map-aqi-explanation">
+            Current estimates at this place and up to seven visible saved places. Dots only—not a
+            continuous surface.
+          </p>
+          {aqiMapStatus === 'loading' ? (
+            <p className="map-aqi-status" role="status">
+              Loading bounded AQI samples…
+            </p>
+          ) : null}
+          {aqiMapStatus === 'unavailable' ? (
+            <p className="map-aqi-status" role="status">
+              AQI is unavailable for these locations right now. Unavailable values are not shown as
+              zero.
+            </p>
+          ) : null}
+          {aqiMapStatus === 'limited' ? (
+            <p className="map-aqi-status" role="status">
+              Some places were not sampled. This map session allows 12 new samples per minute; retry
+              after a minute.
+            </p>
+          ) : null}
+          <ul className="map-aqi-sample-list" aria-label="Sampled location values" tabIndex={0}>
+            {aqiCandidates.map((candidate) => {
+              const point = aqiMapPoints.find(
+                (item) => aqiMapSampleKey(item) === aqiMapSampleKey(candidate),
+              );
+              const value =
+                point?.status === 'ready'
+                  ? point.usAqi === null
+                    ? 'Unavailable'
+                    : String(Math.round(point.usAqi))
+                  : point?.status === 'rate-limited'
+                    ? 'Not sampled'
+                    : point?.status === 'unavailable'
+                      ? 'Unavailable'
+                      : aqiMapStatus === 'loading'
+                        ? 'Loading…'
+                        : 'Not sampled';
+              return (
+                <li key={candidate.id}>
+                  <span
+                    className="map-aqi-dot"
+                    aria-hidden="true"
+                    style={{ backgroundColor: aqiMarkerColor(point?.usAqi ?? null) }}
+                  />
+                  <span className="map-aqi-place-name">{candidate.name}</span>
+                  <span className="map-aqi-value">U.S. AQI {value}</span>
+                  {point?.status === 'ready' ? (
+                    <small>
+                      European AQI{' '}
+                      {point.europeanAqi === null ? 'Unavailable' : Math.round(point.europeanAqi)}
+                      {point.observedAt
+                        ? ` · ${new Intl.DateTimeFormat('en', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            timeZone: 'UTC',
+                          }).format(new Date(point.observedAt))} UTC`
+                        : ''}
+                      {point.stale ? ' · cached estimate' : ''}
+                    </small>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+          <div className="map-aqi-legend" role="list" aria-label="U.S. AQI color legend">
+            {usAqiMapLegend.map((item) => (
+              <span
+                key={item.label}
+                role="listitem"
+                aria-label={`${item.range} ${item.label}`}
+                title={item.label}
+              >
+                <i aria-hidden="true" style={{ backgroundColor: item.color }} />
+                <strong>{item.range}</strong>{' '}
+                {item.label === 'Unhealthy for sensitive groups' ? 'Sensitive groups' : item.label}
+              </span>
+            ))}
+          </div>
+          <p className="map-aqi-attribution">
+            Model estimates (~11–45 km resolution), not station readings.{' '}
+            <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
+              Open-Meteo Air Quality API
+            </a>{' '}
+            ·{' '}
+            <a href="https://atmosphere.copernicus.eu/" target="_blank" rel="noreferrer">
+              CAMS
+            </a>{' '}
+            ·{' '}
+            <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">
+              CC BY 4.0
+            </a>
+          </p>
+        </section>
       ) : null}
       {radarVisible ? (
         <section className="map-radar-controls" aria-label="RainViewer radar playback">
@@ -983,7 +1512,7 @@ export function DashboardMap({
           No city labels are visible here yet. Pan or zoom the map to explore another area.
         </p>
       ) : null}
-      {visibleCities.length > 0 ? (
+      {!aqiVisible && visibleCities.length > 0 ? (
         <label className="map-city-picker">
           <MapPinned size={15} aria-hidden="true" />
           <span className="sr-only">Browse cities visible on the map</span>
@@ -1005,6 +1534,7 @@ export function DashboardMap({
       {preview ? (
         <section
           className="map-weather-preview"
+          aria-live="polite"
           aria-label={`Weather preview for ${preview.city.name}`}
           onMouseEnter={() => {
             previewPanelHovered.current = true;
@@ -1022,7 +1552,11 @@ export function DashboardMap({
         >
           <div className="map-preview-heading">
             <div>
-              <p className="eyebrow">City forecast</p>
+              <p className="eyebrow">
+                {preview.city.placeClass === 'coordinates'
+                  ? 'Selected map point'
+                  : 'Place forecast'}
+              </p>
               <h3>{preview.city.name}</h3>
               {preview.city.country ? <span>{preview.city.country}</span> : null}
             </div>
@@ -1072,11 +1606,18 @@ export function DashboardMap({
             onClick={() => void openPreviewCity()}
             disabled={openingCity}
           >
-            {openingCity ? 'Opening…' : `Open ${preview.city.name}`}
+            {openingCity
+              ? 'Opening…'
+              : preview.city.placeClass === 'coordinates'
+                ? 'Use this location'
+                : `Open ${preview.city.name}`}
           </button>
         </section>
       ) : null}
-      <p className="map-caption">Hover a map label or choose a city to preview its weather.</p>
+      <p className="map-caption">
+        Choose a label or click the map to preview a place. Use coordinate search above for keyboard
+        entry.
+      </p>
     </article>
   );
 }

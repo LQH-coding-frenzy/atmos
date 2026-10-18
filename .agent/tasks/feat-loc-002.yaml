@@ -1,7 +1,7 @@
 task:
   id: FEAT-LOC-002
   title: Account-synced saved-place preferences and recents
-  status: REVIEW
+  status: DONE
   objective: Support owner-scoped saved-place favorites/categories/order/default across devices with a 100-place preference cap, private bounded local recent searches, and direct coordinate entry.
   depends_on: [FEAT-LOC-UI-001, AUTH-002, RLS-002, ROUTE-001, WEB-012]
   external_policy_checks: [none; no new geocoder or vendor]

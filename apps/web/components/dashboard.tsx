@@ -5,6 +5,7 @@ import {
   type Dashboard as DashboardData,
   type LocationSearchResult,
   type UnitSystem,
+  type SavedLocation,
   type WeatherCondition,
 } from '@atmos/contracts';
 import { formatTemperature, formatWindSpeed } from '@atmos/domain';
@@ -142,6 +143,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
   const refreshRequestGeneration = useRef(0);
   const offlineSnapshotApplied = useRef(false);
   const [dashboard, setDashboard] = useState(initialDashboard);
+  const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
   const [isOnline, setIsOnline] = useState(true);
   const [connectivityReady, setConnectivityReady] = useState(false);
   const [refreshStatus, setRefreshStatus] = useState<'idle' | 'refreshing' | 'failed'>('idle');
@@ -473,6 +475,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
                 currentLocation={dashboard.location}
                 initialLocationExplicit={initialDashboard.location.id !== 'berlin-de'}
                 onSelect={selectLocation}
+                onLocationsChange={setSavedLocations}
               />
               <AirQualityPanel gatewayOrigin={gatewayOrigin} location={dashboard.location} />
               <WeatherComparisonPanel
@@ -713,6 +716,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
             onSelectLocation={selectMapLocation}
             onOpenLocation={selectLocation}
             observatory={mapView}
+            savedLocations={savedLocations}
           />
 
           <article className="overview-card panel" id="trends" aria-labelledby="trend-title">

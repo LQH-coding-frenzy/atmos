@@ -1,0 +1,100 @@
+task:
+  id: FEAT-MAP-002
+  title: Saved-place, coordinate and bounded AQI map layers
+  status: REVIEW
+  objective: Add saved-place markers, confirm-before-open arbitrary coordinate previews, bounded sampled AQI map points and accurate quantitative weather-map legends.
+  depends_on: [FEAT-MAP-001, FEAT-AQI-LIVE-001, FEAT-LOC-002, WX-004, PERF-001]
+  external_policy_checks:
+    [
+      reuse existing Open-Meteo/CAMS current AQI and OpenWeather Weather Maps 1.0 layers; no new vendor,
+      tile source,
+      key or paid service,
+    ]
+  runtime_placement:
+    allowed: [vercel-nextjs, cloudflare-worker]
+    selected: vercel-nextjs
+    reason: Map markers/rendering stay browser-local; opt-in AQI sampling uses the existing cached and coalesced gateway endpoint.
+  scope:
+    include:
+      [
+        apps/web/app/globals.css,
+        apps/web/components/dashboard.tsx,
+        apps/web/components/saved-locations-panel.tsx,
+        apps/web/components/dashboard-map.tsx,
+        apps/web/lib/location-map.ts,
+        apps/web/lib/map-city.ts,
+        apps/web/lib/map-overlays.ts,
+        apps/web/lib/map-overlays.test.ts,
+        apps/web/lib/weather-radar.ts,
+        packages/contracts,
+        tests/e2e/dashboard.spec.ts,
+        tests/e2e/map-feature-completion.spec.ts,
+        .agent,
+        docs/design/feature-completion-roadmap.md,
+        docs/design/provenance.md,
+        docs/evidence/feat-map-002,
+      ]
+    exclude:
+      [
+        new AQI vendor/tile,
+        interpolated continuous heatmap,
+        unbounded coordinate/AQI fanout,
+        user GPS persistence,
+        database writes,
+        production release,
+      ]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files:
+      [
+        apps/web/components/dashboard-map.tsx,
+        apps/web/lib/map-overlays.ts,
+        tests/e2e/map-feature-completion.spec.ts,
+      ]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [web only; existing gateway AQI route]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert map UI/marker layers; current map marker, city previews, and existing weather routes remain.
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run apps/web/lib/map-overlays.test.ts apps/web/lib/map-city.test.ts apps/web/lib/weather-radar.test.ts packages/contracts,
+        corepack pnpm exec playwright test tests/e2e/map-feature-completion.spec.ts tests/e2e/dashboard.spec.ts --workers=1,
+        corepack pnpm typecheck,
+        corepack pnpm --filter @atmos/web build,
+      ]
+    expected:
+      [
+        RLS-returned saved places only,
+        confirm-before-open coordinate selection,
+        explicit sampled AQI scope/no interpolation,
+        missing AQI never rendered as zero,
+        documented layer units/ranges,
+        map overlays do not cover controls at 320px,
+      ]
+  security_checks:
+    [
+      existing saved-location RLS gateway,
+      bounded on-demand AQI calls,
+      no coordinate telemetry,
+      no raw provider response in UI,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [existing weather_dashboard and air_quality route groups only]
+    logs: [existing sanitized gateway errors only]
+    traces: [existing request correlation]
+  evidence: [docs/evidence/feat-map-002/implementation.md, local desktop/mobile screenshots]
+  rollback:
+    strategy: Remove the new GeoJSON sources/layers and click handler; existing map/radar/weather routes remain unchanged.
+  human_approval:
+    required: true
+    reason: Owner selected group D; only existing sources are reused; no external mutation is included.

@@ -10,8 +10,8 @@ public gateway boundary, local-device geolocation privacy, RLS, and protected re
 | ----- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
 | A     | Full weather readings, local sun/daylight details, 7–16-day outlook                        | DONE locally: FEAT-WX-002 merged in PR #309; protected production release and live CPU gate pending |
 | B     | Additional chart series, ranges, annotations, and appropriate zoom                         | DONE locally: FEAT-CHART-002 merged in PR #310; chart changes are browser-only                      |
-| C     | Favorites/categories, recent searches, account-synced place preferences, coordinate search | REVIEW: FEAT-LOC-002; account-owned favorites/categories/order/default; recents stay local          |
-| D     | Saved-place markers, arbitrary map-point selection, AQI overlay, legends                   | PLANNED: verify AQI tile availability/licensing; do not fake a continuous layer from sparse points  |
+| C     | Favorites/categories, recent searches, account-synced place preferences, coordinate search | DONE locally: FEAT-LOC-002 merged in PR #311; production migration/release pending                  |
+| D     | Saved-place markers, arbitrary map-point selection, AQI overlay, legends                   | REVIEW: FEAT-MAP-002; discrete model AQI points only, no interpolated heatmap                       |
 | E     | AQI forecasts and historical AQI charts                                                    | DONE locally: FEAT-AQI-TIMELINE-001 merged in PR #309; modeled history, not station/diary readings  |
 | F     | Weather calendar with day-specific hourly, sun, AQI, planner and rule context              | PLANNED: A/E/G/K                                                                                    |
 | G     | Full activity set, custom profile, richer deterministic scoring                            | PLANNED: A/E; missing inputs must reduce coverage, not imply good weather                           |

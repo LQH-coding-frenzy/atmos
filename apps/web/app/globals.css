@@ -2056,6 +2056,7 @@ body:has(.weather-tools-dialog[open]) {
 .map-layer-control,
 .map-radar-controls,
 .map-current-layer-status,
+.map-aqi-controls,
 .map-weather-preview,
 .map-city-picker,
 .map-caption {
@@ -2245,6 +2246,45 @@ body:has(.weather-tools-dialog[open]) {
 .map-current-layer-status p {
   margin: 0;
 }
+.map-layer-legend {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+.map-layer-legend > p {
+  color: var(--muted);
+  font-size: 9px;
+}
+.map-layer-color-ramp {
+  height: 9px;
+  border: 1px solid color-mix(in srgb, var(--ink) 14%, transparent);
+  border-radius: 99px;
+}
+.map-layer-color-stops {
+  display: flex;
+  max-width: 100%;
+  gap: 10px;
+  overflow-x: auto;
+  margin: 0;
+  padding: 0 0 4px;
+  list-style: none;
+  scrollbar-width: thin;
+}
+.map-layer-color-stops li {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 9px;
+  white-space: nowrap;
+}
+.map-layer-color-stops li > span {
+  width: 9px;
+  height: 9px;
+  border: 1px solid color-mix(in srgb, var(--ink) 16%, transparent);
+  border-radius: 50%;
+}
 .map-current-layer-opacity {
   display: flex;
   align-items: center;
@@ -2257,6 +2297,121 @@ body:has(.weather-tools-dialog[open]) {
   width: 100%;
   min-width: 50px;
   min-height: 28px;
+}
+.map-aqi-controls {
+  position: absolute;
+  z-index: 4;
+  bottom: 48px;
+  left: 18px;
+  display: grid;
+  width: min(360px, calc(100% - 36px));
+  max-height: min(390px, calc(100% - 190px));
+  gap: 9px;
+  overflow: auto;
+  padding: 13px 15px;
+  font-size: 10px;
+}
+.map-aqi-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.map-aqi-heading .eyebrow {
+  margin: 0 0 2px;
+  font-size: 8px;
+}
+.map-aqi-heading h3 {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: -0.02em;
+}
+.map-aqi-heading button {
+  display: grid;
+  width: 38px;
+  min-height: 38px;
+  flex: none;
+  place-items: center;
+  border: 0;
+  border-radius: 11px;
+  background: var(--surface-low);
+  color: var(--ink);
+}
+.map-aqi-heading button:disabled {
+  opacity: 0.55;
+}
+.map-aqi-explanation,
+.map-aqi-status,
+.map-aqi-attribution {
+  margin: 0;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.45;
+}
+.map-aqi-sample-list {
+  display: grid;
+  max-height: 96px;
+  gap: 4px;
+  overflow: auto;
+  margin: 0;
+  padding: 0 2px 0 0;
+  list-style: none;
+}
+.map-aqi-sample-list li {
+  display: grid;
+  grid-template-columns: 8px minmax(50px, 1fr) auto;
+  align-items: center;
+  gap: 4px 7px;
+  min-height: 22px;
+}
+.map-aqi-dot,
+.map-aqi-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.map-aqi-place-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.map-aqi-value {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.map-aqi-sample-list small {
+  grid-column: 2 / -1;
+  margin-top: -3px;
+  color: var(--muted);
+  font-size: 8px;
+}
+.map-aqi-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 10px;
+}
+.map-aqi-legend > span {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 8px;
+  white-space: nowrap;
+}
+.map-aqi-legend strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.map-aqi-legend i {
+  width: 9px;
+  height: 9px;
+  flex: none;
+}
+.map-aqi-attribution a {
+  color: var(--ink);
 }
 .map-feedback {
   position: absolute;
@@ -2473,10 +2628,11 @@ body:has(.is-map-view) {
   right: 24px;
 }
 .is-map-view .map-radar-controls,
-.is-map-view .map-current-layer-status {
+.is-map-view .map-current-layer-status,
+.is-map-view .map-aqi-controls {
   bottom: 64px;
   left: calc(50% + 150px);
-  width: min(540px, calc(100% - 450px));
+  width: min(420px, calc(100% - 450px));
 }
 .is-map-view .map-weather-preview {
   top: 230px;
@@ -2979,7 +3135,8 @@ body:has(.is-map-view) {
     padding: 24px;
   }
   .is-map-view .map-radar-controls,
-  .is-map-view .map-current-layer-status {
+  .is-map-view .map-current-layer-status,
+  .is-map-view .map-aqi-controls {
     left: 50%;
     bottom: 92px;
     width: min(540px, calc(100% - 48px));
@@ -2988,7 +3145,8 @@ body:has(.is-map-view) {
     display: none;
   }
   .is-map-view:not([data-map-panel='closed']) .map-radar-controls,
-  .is-map-view:not([data-map-panel='closed']) .map-current-layer-status {
+  .is-map-view:not([data-map-panel='closed']) .map-current-layer-status,
+  .is-map-view:not([data-map-panel='closed']) .map-aqi-controls {
     visibility: hidden;
   }
 }
@@ -3247,6 +3405,13 @@ body:has(.is-map-view) {
   .map-current-layer-status {
     bottom: 78px;
   }
+  .map-aqi-controls {
+    bottom: 74px;
+    left: 14px;
+    width: min(340px, calc(100% - 70px));
+    max-height: min(245px, calc(100dvh - 230px));
+    padding: 11px 12px;
+  }
   .map-card .maplibregl-ctrl-top-right {
     top: 136px;
     right: 4px;
@@ -3445,12 +3610,14 @@ body:has(.is-map-view) {
     font-size: 9px;
   }
   .is-map-view .map-radar-controls,
-  .is-map-view .map-current-layer-status {
+  .is-map-view .map-current-layer-status,
+  .is-map-view .map-aqi-controls {
     bottom: calc(92px + env(safe-area-inset-bottom));
     width: min(540px, calc(100% - 28px));
   }
   .is-map-view:not([data-map-panel='closed']) .map-radar-controls,
-  .is-map-view:not([data-map-panel='closed']) .map-current-layer-status {
+  .is-map-view:not([data-map-panel='closed']) .map-current-layer-status,
+  .is-map-view:not([data-map-panel='closed']) .map-aqi-controls {
     visibility: hidden;
   }
   .is-map-view .map-city-picker {
@@ -3555,6 +3722,7 @@ body:has(.is-map-view) {
   .map-layer-control,
   .map-radar-controls,
   .map-current-layer-status,
+  .map-aqi-controls,
   .map-weather-preview,
   .map-city-picker,
   .map-caption,
@@ -3580,6 +3748,7 @@ body:has(.is-map-view) {
   .map-layer-control,
   .map-radar-controls,
   .map-current-layer-status,
+  .map-aqi-controls,
   .map-weather-preview,
   .map-city-picker {
     background: var(--raised);
