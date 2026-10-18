@@ -1,5 +1,5 @@
 project: atmos
-updated: 2026-10-16
+updated: 2026-10-18
 scope:
   profile: CV_SHOWCASE
   production_hardening: IN_PROGRESS
@@ -40,7 +40,8 @@ tasks:
   WX-004: DONE
   FEAT-WX-002: DONE
   FEAT-CHART-002: DONE
-  FEAT-LOC-002: REVIEW
+  FEAT-LOC-002: DONE
+  FEAT-MAP-002: REVIEW
   WEB-001: DONE
   WEB-002: DONE
   SUPA-001: DONE

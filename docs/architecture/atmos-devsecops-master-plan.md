@@ -2,7 +2,7 @@
 document: Atmos DevSecOps Master Plan
 version: 2.1.0
 status: cv-showcase-scope
-last_updated: 2026-10-12
+last_updated: 2026-10-18
 validation:
   last_validated: 2026-08-31
   result: GO
@@ -3315,6 +3315,7 @@ DONE
 | FEAT-AQI-LIVE-001 | on-demand Open-Meteo air-quality experience | CACHE-001, EDGE-004, FEAT-AQI-001, PERF-001, WEB-002, WX-003, WX-004 | feature |
 | FEAT-AQI-TIMELINE-001 | on-demand AQI forecast and past-model timeline (owner-selected group E) | FEAT-AQI-LIVE-001, WX-004, WEB-012, CACHE-001, PERF-001 | compatible public timeline and accessible charts |
 | FEAT-MAP-001 | map | WEB-002 | feature |
+| FEAT-MAP-002 | saved-place markers, arbitrary coordinate selection, bounded sampled AQI map layer, quantitative legends | FEAT-MAP-001, FEAT-AQI-LIVE-001, FEAT-LOC-002, WX-004, PERF-001 | map feature |
 | HIST-CAP-001 | authenticated user-captured weather history | FEAT-LOC-UI-001, FUNC-002, HIST-001, ROUTE-001, WEB-002 | feature |
 | HIST-MGMT-001 | delete own weather history observations | EDGE-003, FEAT-LOC-UI-001, HIST-CAP-001, RLS-002, ROUTE-001, WEB-002 | feature |
 | FEAT-PLAN-001 | deterministic planner | DOM-002, FUNC-001 | feature |

@@ -719,6 +719,10 @@ test('supports full map view, city previews, and the user management page', asyn
   await page.getByRole('combobox', { name: 'Weather map layer' }).selectOption('precipitation_new');
   await expect(page.getByText('OpenWeather · Precipitation · current snapshot')).toBeVisible();
   await openWeatherTileRequest;
+  const weatherMapScale = page.getByRole('list', { name: 'Map color scale thresholds' });
+  await expect(weatherMapScale).toContainText('0 mm');
+  await expect(weatherMapScale).toContainText('0.1 mm');
+  await expect(weatherMapScale).toContainText('140 mm');
   await page.getByRole('combobox', { name: 'Weather map layer' }).selectOption('cities');
   await expect(radarSlider).toBeHidden();
 

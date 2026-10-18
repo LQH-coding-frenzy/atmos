@@ -47,6 +47,7 @@ type SavedLocationsPanelProps = {
     urlBehavior?: 'push' | 'clear' | 'preserve',
   ) => Promise<boolean>;
   presentation?: 'page' | 'popover';
+  onLocationsChange?: (locations: SavedLocation[]) => void;
 };
 
 type AuthMode = 'sign-in' | 'sign-up';
@@ -72,6 +73,7 @@ export function SavedLocationsPanel({
   initialLocationExplicit,
   onSelect,
   presentation = 'popover',
+  onLocationsChange,
 }: SavedLocationsPanelProps) {
   const client = useMemo(() => getSupabaseBrowserClient(), []);
   const panel = useRef<HTMLDetailsElement>(null);
@@ -100,6 +102,10 @@ export function SavedLocationsPanel({
   const [deleteConfirmationPhrase, setDeleteConfirmationPhrase] = useState('');
   const [message, setMessage] = useState('');
   const [preferencesSaving, setPreferencesSaving] = useState(false);
+
+  useEffect(() => {
+    onLocationsChange?.(locations);
+  }, [locations, onLocationsChange]);
 
   const persistSavedPlacePreferences = useCallback(
     async (
