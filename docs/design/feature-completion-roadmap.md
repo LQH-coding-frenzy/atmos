@@ -14,8 +14,8 @@ public gateway boundary, local-device geolocation privacy, RLS, and protected re
 | D     | Saved-place markers, arbitrary map-point selection, AQI overlay, legends                   | DONE locally: FEAT-MAP-002 merged in PR #312; discrete model AQI points only, no interpolation      |
 | E     | AQI forecasts and historical AQI charts                                                    | DONE locally: FEAT-AQI-TIMELINE-001 merged in PR #309; modeled history, not station/diary readings  |
 | F     | Weather calendar with day-specific hourly, sun, AQI, planner and rule context              | PLANNED: A/E/G/K                                                                                    |
-| G     | Full activity set, custom profile, richer deterministic scoring                            | REVIEW: FEAT-PLAN-002; A/E inputs, optional AQI, missing metrics lower coverage                     |
-| H     | Multi-city comparison with the expanded metrics and suitability ranking                    | PLANNED: A/E/G; bound requests/concurrency                                                          |
+| G     | Full activity set, custom profile, richer deterministic scoring                            | DONE locally: FEAT-PLAN-002 merged in PR #313; AQI timeline remains opt-in                          |
+| H     | Multi-city comparison with the expanded metrics and suitability ranking                    | REVIEW: FEAT-CMP-003; max three destinations, explicit AQI load, bounded concurrency                |
 | I     | Custom/24-hour history ranges, aggregates, additional charts and event counts              | PLANNED: user-recorded history remains the source until separate backfill approval                  |
 | J     | Deterministic anomaly insights                                                             | PLANNED: meaningful historical baseline and minimum sample coverage required                        |
 | K     | Expanded in-app rules, schedules and cooldown configuration                                | PLANNED: A/E/M plus additive validation; no background delivery implied                             |
