@@ -1,6 +1,6 @@
 # FEAT-WARN-001 — official severe-warning source research
 
-Status: **REVIEW**. This was a documentation-only audit. No alert provider was integrated,
+Status: **DONE locally**, merged in [PR #318](https://github.com/LQH-coding-frenzy/atmos/pull/318). This was a documentation-only audit. No alert provider was integrated,
 no credentials were acquired, and no production or paid-resource change was made.
 
 ## Findings
@@ -26,3 +26,7 @@ owner-approval gate because it adds external warning sources. Before implementin
 the required attribution/User-Agent, avoid modifying alert content/intent, cache and bound
 gateway requests, and measure Worker p95 CPU against the 7 ms threshold. Do not add paid
 services or credentials as a workaround.
+
+PR #318 quality, database, Playwright, CodeQL, Semgrep, secret-scan, Trivy, SBOM and Vercel
+preview checks passed. FEAT-WARN-002 remains blocked until the owner approves source
+integration.

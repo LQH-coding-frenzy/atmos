@@ -19,7 +19,7 @@ public gateway boundary, local-device geolocation privacy, RLS, and protected re
 | I     | Custom/24-hour history ranges, aggregates, additional charts and event counts              | DONE locally: HIST-ANALYTICS-001 merged in PR #315; recorded snapshots only, no backfill            |
 | J     | Deterministic anomaly insights                                                             | DONE locally: FEAT-ANOM-001 merged in PR #316; minimum coverage and unsupported metrics disclosed   |
 | K     | Expanded in-app rules, schedules and cooldown configuration                                | PLANNED: A/E/M plus additive validation; no background delivery implied                             |
-| M     | Official warning center with honest geographic coverage                                    | REVIEW: FEAT-WARN-001 research; NWS/ECCC candidates, integration awaits source approval             |
+| M     | Official warning center with honest geographic coverage                                    | BLOCKED: FEAT-WARN-002; research done, NWS/ECCC integration awaits owner approval                   |
 | O     | Profile, account preferences, timezone and owner/user roles                                | PLANNED: owner and users only; no admin tier, no client-controlled privilege assignment             |
 
 ## Delivery sequence

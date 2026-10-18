@@ -1,0 +1,100 @@
+task:
+  id: FEAT-WARN-002
+  title: Integrate approved NWS and ECCC warning feeds
+  status: BLOCKED
+  objective: Add an on-demand official warning center for U.S. NWS and Canadian ECCC service areas, with source/coverage disclosure and explicit unsupported regions.
+  depends_on: [FEAT-WARN-001, EDGE-004, CACHE-001, PERF-001, WX-004, WEB-012]
+  external_policy_checks:
+    [
+      new NWS/ECCC upstream integrations require owner approval; re-check NWS User-Agent/rate guidance and ECCC licence/usage terms before coding,
+    ]
+  runtime_placement:
+    allowed: [cloudflare-worker, vercel-nextjs]
+    selected: cloudflare-worker
+    reason: Keep public-source credentials out of the browser and reuse the existing gateway cache; implementation must measure CPU p95 <=7 ms or be moved out of the Worker.
+  scope:
+    include:
+      [
+        workers/gateway/src/index.ts,
+        workers/gateway/src/warnings.ts,
+        workers/gateway/src/warnings.test.ts,
+        packages/contracts/src/index.ts,
+        packages/contracts/src/index.test.ts,
+        apps/web/components/severe-weather-panel.tsx,
+        apps/web/components/dashboard.tsx,
+        apps/web/app/globals.css,
+        tests/e2e/severe-weather.spec.ts,
+        .agent,
+        docs/design/feature-completion-roadmap.md,
+        docs/design/provenance.md,
+        docs/evidence/feat-warn-002,
+      ]
+    exclude:
+      [
+        paid warning provider,
+        credentials/API keys,
+        regions without verified official source coverage,
+        WMO SWIC page scraping,
+        automatic alerts/notifications,
+        database persistence,
+        production release,
+      ]
+  inputs:
+    required_config: []
+    required_secrets: []
+  outputs:
+    files:
+      [
+        workers/gateway/src/warnings.ts,
+        apps/web/components/severe-weather-panel.tsx,
+        tests/e2e/severe-weather.spec.ts,
+      ]
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [Cloudflare gateway and web]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Remove the warning route/panel; current dashboard/weather API remains unchanged.
+  validation:
+    commands:
+      [
+        corepack pnpm exec vitest run workers/gateway/src/warnings.test.ts workers/gateway/src/index.test.ts packages/contracts/src/index.test.ts,
+        corepack pnpm exec playwright test tests/e2e/severe-weather.spec.ts tests/e2e/dashboard.spec.ts --workers=1,
+        corepack pnpm --filter @atmos/gateway build,
+        corepack pnpm typecheck,
+      ]
+    expected:
+      [
+        NWS/ECCC errors are sanitized,
+        providers are queried only for supported country coverage and on user action,
+        warnings keep original source text/intent/times/areas,
+        unsupported geography is distinct from no active warning,
+        Worker p95 CPU <=7 ms,
+      ]
+  security_checks:
+    [
+      bounded coordinates and upstream responses,
+      server-side requests only,
+      sanitized errors,
+      no secrets or personal data in logs,
+    ]
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [existing weather warning/gateway route group only]
+    logs: [sanitized route/provider outcome only]
+    traces: [existing request correlation]
+  evidence:
+    [
+      docs/evidence/feat-warn-002/implementation.md,
+      Worker CPU p95 measurement,
+      official coverage and attribution screenshots,
+    ]
+  rollback:
+    strategy: Remove the warning route and panel; no schema or durable state is introduced.
+  human_approval:
+    required: true
+    reason: The researched NWS and ECCC sources are new external providers; do not integrate them until the owner approves this source set and its US/Canada-only coverage.
