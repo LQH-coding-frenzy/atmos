@@ -16,8 +16,8 @@ public gateway boundary, local-device geolocation privacy, RLS, and protected re
 | F     | Weather calendar with day-specific hourly, sun, AQI, planner and rule context              | PLANNED: A/E/G/K                                                                                    |
 | G     | Full activity set, custom profile, richer deterministic scoring                            | DONE locally: FEAT-PLAN-002 merged in PR #313; AQI timeline remains opt-in                          |
 | H     | Multi-city comparison with the expanded metrics and suitability ranking                    | DONE locally: FEAT-CMP-003 merged in PR #314; explicit AQI load and bounded destinations            |
-| I     | Custom/24-hour history ranges, aggregates, additional charts and event counts              | REVIEW: HIST-ANALYTICS-001; user-recorded snapshots only, no provider backfill                      |
-| J     | Deterministic anomaly insights                                                             | PLANNED: meaningful historical baseline and minimum sample coverage required                        |
+| I     | Custom/24-hour history ranges, aggregates, additional charts and event counts              | DONE locally: HIST-ANALYTICS-001 merged in PR #315; recorded snapshots only, no backfill            |
+| J     | Deterministic anomaly insights                                                             | REVIEW: FEAT-ANOM-001; minimum 12 samples across 7 local dates; unsupported metrics disclosed       |
 | K     | Expanded in-app rules, schedules and cooldown configuration                                | PLANNED: A/E/M plus additive validation; no background delivery implied                             |
 | M     | Official warning center with honest geographic coverage                                    | RESEARCH: broadest verifiable free coverage; new vendors/credentials require approval               |
 | O     | Profile, account preferences, timezone and owner/user roles                                | PLANNED: owner and users only; no admin tier, no client-controlled privilege assignment             |

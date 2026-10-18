@@ -1,7 +1,7 @@
 task:
   id: HIST-ANALYTICS-001
   title: Add honest ranges and analytics for recorded history
-  status: REVIEW
+  status: DONE
   objective: Extend the existing user-recorded weather history with a 24-hour/custom range, selectable recorded metrics, transparent aggregates and captured-condition counts.
   depends_on: [HIST-001, HIST-CAP-001, HIST-MGMT-001, AUTH-002, ROUTE-001, FEAT-CHART-002, WEB-012]
   external_policy_checks: [none; use only existing user-recorded snapshots]

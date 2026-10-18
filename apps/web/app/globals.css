@@ -2069,6 +2069,52 @@ body:has(.weather-tools-dialog[open]) {
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
+.weather-history-anomalies {
+  display: grid;
+  gap: 8px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--surface-low);
+}
+.weather-history-anomalies h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.weather-history-anomalies > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+.weather-history-anomaly-baseline {
+  font-variant-numeric: tabular-nums;
+}
+.weather-history-anomaly-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.weather-history-anomaly-list li {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: var(--raised);
+  font-size: 10px;
+}
+.weather-history-anomaly-list strong {
+  color: var(--accent);
+}
+.weather-history-anomaly-list span,
+.weather-history-anomaly-list small {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.4;
+}
 .weather-history-location,
 .air-quality-location,
 .in-app-alerts-location {

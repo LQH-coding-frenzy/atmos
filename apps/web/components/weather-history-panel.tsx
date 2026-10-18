@@ -17,11 +17,14 @@ import { getSupabaseBrowserClient } from '../lib/supabase-browser';
 import { versionAffinityHeaders } from '../lib/version-affinity';
 import { weatherHistoryToCsv } from '../lib/weather-history-export';
 import {
+  analyzeRecordedWeatherAnomalies,
   aggregateWeatherHistory,
+  convertHistoryMetricValue,
   createWeatherHistoryChartPoints,
   customHistoryRangeIsValid,
   dateInTimeZone,
   formatWeatherHistoryMetric,
+  formatWeatherHistoryDifference,
   historyApiDays,
   recordedConditionCounts,
   selectRecordedHistory,
@@ -577,6 +580,15 @@ export function WeatherHistoryPanel({
                 No user-recorded observations in this range. Earlier weather is not backfilled.
               </p>
             ) : null}
+            {!loading ? (
+              <WeatherHistoryAnomalyInsights
+                snapshots={visibleSnapshots}
+                current={current}
+                location={location}
+                stale={stale}
+                units={units}
+              />
+            ) : null}
           </>
         ) : null}
         {message ? (
@@ -586,5 +598,112 @@ export function WeatherHistoryPanel({
         ) : null}
       </section>
     </details>
+  );
+}
+
+function WeatherHistoryAnomalyInsights({
+  snapshots,
+  current,
+  location,
+  stale,
+  units,
+}: {
+  snapshots: WeatherSnapshot[];
+  current: CurrentWeather;
+  location: Location;
+  stale: boolean;
+  units: UnitSystem;
+}) {
+  const analysis = analyzeRecordedWeatherAnomalies(snapshots, current, location.timezone);
+  return (
+    <section className="weather-history-anomalies" aria-label="Recorded baseline anomaly insights">
+      <h3>Current weather vs your recorded baseline</h3>
+      <p>
+        Deterministic deviations from your own recorded observations; not a forecast alert or safety
+        advice.
+      </p>
+      {stale ? (
+        <p role="status">Current weather is stale. Anomaly comparisons are paused.</p>
+      ) : !analysis.eligible ? (
+        <p role="status">
+          Need at least {analysis.requiredSamples} recorded observations across{' '}
+          {analysis.requiredDates} location-local dates. Current coverage: {analysis.sampleCount}{' '}
+          observations across {analysis.distinctDates} dates.
+        </p>
+      ) : (
+        <>
+          <p className="weather-history-anomaly-baseline">
+            Baseline: mean of {analysis.sampleCount} recorded observations across{' '}
+            {analysis.distinctDates} local dates. Numeric anomalies require a deviation of at least
+            two standard deviations and the metric's minimum threshold.
+          </p>
+          {analysis.anomalies.length === 0 && analysis.unusualConditions.length === 0 ? (
+            <p role="status">
+              No supported reading exceeds its threshold. Unrecorded times and unsupported metrics
+              remain unknown.
+            </p>
+          ) : null}
+          {analysis.anomalies.length > 0 ? (
+            <ul className="weather-history-anomaly-list" aria-label="Recorded baseline anomalies">
+              {analysis.anomalies.map((anomaly) => {
+                const currentValue = convertHistoryMetricValue(
+                  anomaly.currentValue,
+                  anomaly.metric,
+                  units,
+                );
+                const baselineValue = convertHistoryMetricValue(
+                  anomaly.baselineAverage,
+                  anomaly.metric,
+                  units,
+                );
+                return (
+                  <li key={anomaly.metric}>
+                    <strong>
+                      {
+                        weatherHistoryMetrics.find((metric) => metric.value === anomaly.metric)
+                          ?.label
+                      }
+                    </strong>
+                    <span>
+                      Current {formatWeatherHistoryMetric(currentValue, anomaly.metric, units)};
+                      recorded average{' '}
+                      {formatWeatherHistoryMetric(baselineValue, anomaly.metric, units)}.
+                    </span>
+                    <small>
+                      {anomaly.direction === 'above' ? 'Above' : 'Below'} baseline by{' '}
+                      {formatWeatherHistoryDifference(
+                        Math.abs(anomaly.deviation),
+                        anomaly.metric,
+                        units,
+                      )}{' '}
+                      (threshold{' '}
+                      {formatWeatherHistoryDifference(anomaly.threshold, anomaly.metric, units)}; n=
+                      {anomaly.sampleCount}).
+                    </small>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
+          {analysis.unusualConditions.length > 0 ? (
+            <ul className="weather-history-anomaly-list" aria-label="Unusual recorded conditions">
+              {analysis.unusualConditions.map((item) => (
+                <li key={item.condition}>
+                  <strong>Unusual {item.condition.replace('-', ' ')} condition</strong>
+                  <span>
+                    Current condition appeared in {item.observedCount} of {item.sampleCount}{' '}
+                    recorded condition snapshots. This is not a rainfall amount or event duration.
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      )}
+      <p className="weather-history-anomaly-unsupported">
+        Rainfall amount, AQI and UV baselines are unavailable because those values are not stored in
+        recorded snapshots; no provider history is substituted.
+      </p>
+    </section>
   );
 }

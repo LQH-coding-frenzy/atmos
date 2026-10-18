@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { WeatherSnapshot } from '@atmos/contracts';
 import {
+  analyzeRecordedWeatherAnomalies,
   aggregateWeatherHistory,
   createWeatherHistoryChartPoints,
   customHistoryRangeIsValid,
@@ -99,5 +100,49 @@ describe('recorded weather history analytics', () => {
       { condition: 'cloudy', count: 1 },
       { condition: 'rain', count: 1 },
     ]);
+  });
+
+  it('requires twelve recorded samples across seven local dates and detects deterministic deviations', () => {
+    const baseline = Array.from({ length: 12 }, (_, index) =>
+      snapshot(index + 1, new Date(now - ((index % 8) * 24 + 1) * 60 * 60 * 1000).toISOString(), {
+        temperature_c: 18 + (index % 3),
+        apparent_temperature_c: 17 + (index % 3),
+        humidity_percent: 54 + (index % 3),
+        wind_speed_kph: 9 + (index % 3),
+        pressure_hpa: 1009 + (index % 3),
+        condition: index === 0 ? 'rain' : 'clear',
+      }),
+    );
+    const current = {
+      observedAt: '2026-10-18T12:00:00.000Z',
+      temperatureC: 32,
+      apparentTemperatureC: 31,
+      humidityPercent: 90,
+      windSpeedKph: 50,
+      pressureHpa: 1040,
+      condition: 'thunderstorm' as const,
+    };
+    const analysis = analyzeRecordedWeatherAnomalies(baseline, current, 'UTC');
+    expect(analysis).toMatchObject({ eligible: true, sampleCount: 12, distinctDates: 8 });
+    expect(analysis.anomalies.map((anomaly) => anomaly.metric)).toEqual([
+      'temperature',
+      'feels-like',
+      'humidity',
+      'wind',
+      'pressure',
+    ]);
+    expect(analysis.unusualConditions).toEqual([
+      { condition: 'thunderstorm', observedCount: 0, sampleCount: 12 },
+    ]);
+    expect(analyzeRecordedWeatherAnomalies(baseline.slice(0, 11), current, 'UTC').eligible).toBe(
+      false,
+    );
+    expect(
+      analyzeRecordedWeatherAnomalies(
+        baseline.map((item) => ({ ...item, observed_at: '2026-10-18T10:00:00.000Z' })),
+        current,
+        'UTC',
+      ).distinctDates,
+    ).toBe(1);
   });
 });
