@@ -56,7 +56,7 @@ describe('saved-location preference API parser', () => {
     ).toBeUndefined();
     expect(
       parseReplaceSavedLocationPreferences({
-        locations: Array.from({ length: 501 }, (_, index) => ({
+        locations: Array.from({ length: 101 }, (_, index) => ({
           id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
           is_favorite: false,
           category: null,

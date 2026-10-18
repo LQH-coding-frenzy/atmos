@@ -86,7 +86,7 @@ export const replaceSavedLocationPreferencesSchema = z
           category: savedLocationCategorySchema.nullable(),
         }),
       )
-      .max(500)
+      .max(100)
       .superRefine((locations, context) => {
         const ids = new Set<string>();
         locations.forEach((location, index) => {

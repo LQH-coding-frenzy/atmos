@@ -196,6 +196,17 @@ describe('saved-location API contracts', () => {
         defaultLocationId: location.id,
       }).success,
     ).toBe(false);
+    const overLimit = Array.from({ length: 101 }, (_, index) => ({
+      id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+      is_favorite: false,
+      category: null,
+    }));
+    expect(
+      replaceSavedLocationPreferencesSchema.safeParse({
+        locations: overLimit,
+        defaultLocationId: null,
+      }).success,
+    ).toBe(false);
     expect(
       replaceSavedLocationPreferencesSchema.safeParse({
         locations: [

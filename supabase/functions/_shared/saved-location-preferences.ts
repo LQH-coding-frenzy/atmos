@@ -17,7 +17,7 @@ export function parseReplaceSavedLocationPreferences(
 ): ReplaceSavedLocationPreferencesInput | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const input = value as Record<string, unknown>;
-  if (!Array.isArray(input.locations) || input.locations.length > 500) return undefined;
+  if (!Array.isArray(input.locations) || input.locations.length > 100) return undefined;
   if (
     input.defaultLocationId !== null &&
     (typeof input.defaultLocationId !== 'string' || !uuidPattern.test(input.defaultLocationId))
