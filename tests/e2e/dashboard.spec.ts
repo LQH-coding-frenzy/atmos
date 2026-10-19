@@ -5,8 +5,9 @@ async function openWeatherTool(page: Page, name: string) {
   if (!(await dialog.isVisible())) {
     await page.getByRole('button', { name: 'Open weather tools' }).click();
   }
-  const summary = dialog.locator('.tool-list > details > summary').filter({ hasText: name });
-  if ((await summary.locator('..').getAttribute('open')) === null) await summary.click();
+  const summary = dialog.locator('.tool-list > details > summary').getByText(name, { exact: true });
+  const panel = summary.locator('..');
+  if ((await panel.getAttribute('open')) === null) await summary.click();
 }
 
 test('renders the responsive live-weather dashboard', async ({ page }) => {

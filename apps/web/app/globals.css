@@ -1377,6 +1377,7 @@ body:has(.weather-tools-dialog[open]) {
   .saved-locations-popover,
   .weather-history-popover,
   .air-quality-popover,
+  .severe-weather-popover,
   .in-app-alerts-popover,
   .preferences-popover,
   .weather-comparison-popover
@@ -1390,6 +1391,7 @@ body:has(.weather-tools-dialog[open]) {
     .saved-locations-popover,
     .weather-history-popover,
     .air-quality-popover,
+    .severe-weather-popover,
     .in-app-alerts-popover,
     .preferences-popover,
     .weather-comparison-popover
@@ -1404,6 +1406,7 @@ body:has(.weather-tools-dialog[open]) {
     .saved-locations-popover,
     .weather-history-popover,
     .air-quality-popover,
+    .severe-weather-popover,
     .in-app-alerts-popover,
     .preferences-popover,
     .weather-comparison-popover
@@ -2117,9 +2120,164 @@ body:has(.weather-tools-dialog[open]) {
 }
 .weather-history-location,
 .air-quality-location,
+.severe-weather-location,
 .in-app-alerts-location {
   color: var(--ink) !important;
   font-weight: 600;
+}
+.severe-weather-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.severe-weather-heading .eyebrow {
+  margin: 0 0 5px;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.severe-weather-heading h2 {
+  margin: 0;
+}
+.severe-weather-refresh {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-low);
+  color: var(--ink);
+  font-size: 11px;
+}
+.severe-weather-refresh:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+.severe-weather-location,
+.severe-weather-checked,
+.severe-weather-event,
+.severe-weather-alert-context,
+.severe-weather-area {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.severe-weather-alert-context {
+  font-size: 10px;
+}
+.severe-weather-list {
+  display: grid;
+  max-height: min(48dvh, 420px);
+  gap: 10px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0 2px 0 0;
+  list-style: none;
+}
+.severe-weather-alert {
+  display: grid;
+  gap: 9px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--warning);
+  border-radius: 12px;
+  background: var(--surface-low);
+}
+.severe-weather-alert-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.severe-weather-alert-heading h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.severe-weather-alert-heading > span {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--warning);
+  font-size: 9px;
+  font-weight: 650;
+}
+.severe-weather-description,
+.severe-weather-instruction {
+  margin: 0;
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.severe-weather-instruction {
+  padding: 10px;
+  border-radius: 9px;
+  background: var(--raised);
+  font-weight: 600;
+}
+.severe-weather-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 14px;
+  margin: 0;
+}
+.severe-weather-times div {
+  display: grid;
+  gap: 2px;
+}
+.severe-weather-times dt {
+  color: var(--muted);
+  font-size: 9px;
+}
+.severe-weather-times dd {
+  margin: 0;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.severe-weather-alert a,
+.severe-weather-attribution a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+.severe-weather-alert a {
+  width: fit-content;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+}
+.severe-weather-attribution {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+.severe-weather-unsupported,
+.severe-weather-empty {
+  margin: 0;
+  padding: 13px;
+  border-left: 3px solid var(--accent-muted);
+  border-radius: 10px;
+  background: var(--surface-low);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.severe-weather-error,
+.severe-weather-stale,
+.severe-weather-truncated {
+  margin: 0;
+  color: var(--warning);
+  font-size: 11px;
+  line-height: 1.5;
 }
 .weather-history-chart {
   width: 100%;

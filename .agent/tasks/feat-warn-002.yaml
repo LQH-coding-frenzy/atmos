@@ -1,28 +1,37 @@
 task:
   id: FEAT-WARN-002
   title: Integrate approved NWS and ECCC warning feeds
-  status: BLOCKED
+  status: REVIEW
   objective: Add an on-demand official warning center for U.S. NWS and Canadian ECCC service areas, with source/coverage disclosure and explicit unsupported regions.
   depends_on: [FEAT-WARN-001, EDGE-004, CACHE-001, PERF-001, WX-004, WEB-012]
   external_policy_checks:
     [
-      new NWS/ECCC upstream integrations require owner approval; re-check NWS User-Agent/rate guidance and ECCC licence/usage terms before coding,
+      owner approved NWS + ECCC sources for US service areas and Canada on 2026-10-19; NWS User-Agent required and alert route cached for 60 seconds,
+      NWS API/Alerts documentation and ECCC GeoMet OGC API docs rechecked 2026-10-19; ECCC licence v2.1.1 attribution and no-content/intent-alteration terms retained,
+      ECCC usage policy rechecked 2026-10-19: meaningful User-Agent,
+      no no-cache request headers,
+      avoid excess request volume,
+      staging warning route p95 measured 9.196 ms on 2026-10-19,
+      above the 7 ms Worker gate; owner approved moving the route to the existing Vercel Next.js runtime on 2026-10-20,
+      official NWS OpenAPI schema confirmed /alerts/active has no limit parameter; removed before validating the Next.js server route,
     ]
   runtime_placement:
     allowed: [cloudflare-worker, vercel-nextjs]
-    selected: cloudflare-worker
-    reason: Keep public-source credentials out of the browser and reuse the existing gateway cache; implementation must measure CPU p95 <=7 ms or be moved out of the Worker.
+    selected: vercel-nextjs
+    reason: The staging Worker warning route measured 9.196 ms CPU p95, above the internal 7 ms gate. Owner approved moving provider requests/normalization to the existing Next.js server runtime; keep upstream data cached and never expose provider responses or credentials in the browser.
   scope:
     include:
       [
-        workers/gateway/src/index.ts,
-        workers/gateway/src/warnings.ts,
-        workers/gateway/src/warnings.test.ts,
         packages/contracts/src/index.ts,
         packages/contracts/src/index.test.ts,
         apps/web/components/severe-weather-panel.tsx,
+        apps/web/app/api/v1/weather/warnings/route.ts,
+        apps/web/app/api/v1/weather/warnings/route.test.ts,
+        apps/web/lib/official-warnings.ts,
+        apps/web/lib/official-warnings.test.ts,
         apps/web/components/dashboard.tsx,
         apps/web/app/globals.css,
+        tests/e2e/dashboard.spec.ts,
         tests/e2e/severe-weather.spec.ts,
         .agent,
         docs/design/feature-completion-roadmap.md,
@@ -45,13 +54,15 @@ task:
   outputs:
     files:
       [
-        workers/gateway/src/warnings.ts,
+        apps/web/app/api/v1/weather/warnings/route.ts,
+        apps/web/lib/official-warnings.ts,
         apps/web/components/severe-weather-panel.tsx,
         tests/e2e/severe-weather.spec.ts,
       ]
     terraform_resources: []
     database_changes: [none]
-    deployed_units: [Cloudflare gateway and web]
+    deployed_units:
+      [isolated atmos-gateway-staging with warning route removed; no Vercel or production release]
   compatibility:
     requires_expand_contract: false
     stable_version_compatible: true
@@ -59,9 +70,9 @@ task:
   validation:
     commands:
       [
-        corepack pnpm exec vitest run workers/gateway/src/warnings.test.ts workers/gateway/src/index.test.ts packages/contracts/src/index.test.ts,
+        corepack pnpm exec vitest run apps/web/lib/official-warnings.test.ts apps/web/app/api/v1/weather/warnings/route.test.ts packages/contracts/src/index.test.ts,
         corepack pnpm exec playwright test tests/e2e/severe-weather.spec.ts tests/e2e/dashboard.spec.ts --workers=1,
-        corepack pnpm --filter @atmos/gateway build,
+        corepack pnpm --filter @atmos/web build,
         corepack pnpm typecheck,
       ]
     expected:
@@ -70,7 +81,12 @@ task:
         providers are queried only for supported country coverage and on user action,
         warnings keep original source text/intent/times/areas,
         unsupported geography is distinct from no active warning,
-        Worker p95 CPU <=7 ms,
+        warning route is served by the existing Vercel Next.js server runtime,
+        not the Worker,
+        upstream requests use the Next.js data cache,
+        bounded bodies,
+        and sanitized errors,
+        NWS/ECCC provider requests remain server-only and occur only after the panel is opened,
       ]
   security_checks:
     [
@@ -84,17 +100,17 @@ task:
     creates_paid_resource: false
     requires_student_credit: false
   telemetry:
-    metrics: [existing weather warning/gateway route group only]
-    logs: [sanitized route/provider outcome only]
+    metrics: [existing Vercel server telemetry only; no coordinates or alert text]
+    logs: [sanitized route/provider outcome only; no request-body location data]
     traces: [existing request correlation]
   evidence:
     [
       docs/evidence/feat-warn-002/implementation.md,
-      Worker CPU p95 measurement,
+      Worker CPU p95 failure measurement and runtime-placement decision,
       official coverage and attribution screenshots,
     ]
   rollback:
     strategy: Remove the warning route and panel; no schema or durable state is introduced.
   human_approval:
     required: true
-    reason: The researched NWS and ECCC sources are new external providers; do not integrate them until the owner approves this source set and its US/Canada-only coverage.
+    reason: Owner approved NWS for U.S. service areas and ECCC for Canada on 2026-10-19, authorized an isolated staging CPU check after preflight, and approved moving the route to Vercel Next.js on 2026-10-20. Production release remains separately gated.

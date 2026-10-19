@@ -19,6 +19,8 @@ import {
   hourlyForecastSchema,
   extendedDailyForecastSchema,
   replaceSavedLocationPreferencesSchema,
+  severeWeatherRequestSchema,
+  severeWeatherResponseSchema,
 } from './index';
 
 describe('additive full weather contract', () => {
@@ -122,6 +124,108 @@ describe('weather radar timeline contract', () => {
         })),
       }),
     ).toThrow();
+  });
+});
+
+describe('official severe-weather response contract', () => {
+  const base = {
+    coverage: 'supported' as const,
+    source: 'nws' as const,
+    alerts: [
+      {
+        id: 'https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.test',
+        event: 'Severe Thunderstorm Warning',
+        headline: 'Warning issued',
+        severity: 'Severe',
+        urgency: 'Immediate',
+        certainty: 'Observed',
+        area: 'County A; County B',
+        publishedAt: '2026-10-19T14:00:00+00:00',
+        effectiveAt: '2026-10-19T14:00:00+00:00',
+        onsetAt: null,
+        expiresAt: '2026-10-19T15:00:00+00:00',
+        endsAt: null,
+        description: 'Original alert text.\nSecond paragraph.',
+        instruction: 'Take shelter.',
+        sourceUrl: 'https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.test',
+      },
+    ],
+    meta: {
+      checkedAt: '2026-10-19T14:00:00.000Z',
+      cached: false,
+      stale: false,
+      truncated: false,
+    },
+  };
+
+  it('accepts source-preserving alerts and explicitly unsupported coverage', () => {
+    expect(severeWeatherResponseSchema.parse(base)).toEqual(base);
+    expect(
+      severeWeatherResponseSchema.parse({
+        ...base,
+        coverage: 'unsupported',
+        source: null,
+        alerts: [],
+      }).coverage,
+    ).toBe('unsupported');
+  });
+
+  it('rejects unsupported results with alerts and stale results without a cache marker', () => {
+    expect(
+      severeWeatherResponseSchema.safeParse({
+        ...base,
+        coverage: 'unsupported',
+        source: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      severeWeatherResponseSchema.safeParse({
+        ...base,
+        meta: { ...base.meta, stale: true },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('bounds alert text and result counts', () => {
+    expect(
+      severeWeatherResponseSchema.safeParse({
+        ...base,
+        alerts: [{ ...base.alerts[0], description: 'x'.repeat(32_769) }],
+      }).success,
+    ).toBe(false);
+    expect(
+      severeWeatherResponseSchema.safeParse({ ...base, alerts: Array(21).fill(base.alerts[0]) })
+        .success,
+    ).toBe(false);
+  });
+});
+
+describe('official severe-weather request contract', () => {
+  it('accepts bounded coordinates and an unknown country for explicit unsupported coverage', () => {
+    expect(
+      severeWeatherRequestSchema.parse({ latitude: 52.52, longitude: 13.405, country: 'Germany' }),
+    ).toEqual({ latitude: 52.52, longitude: 13.405, country: 'Germany' });
+    expect(
+      severeWeatherRequestSchema.parse({ latitude: 0, longitude: 0, country: '' }).country,
+    ).toBe('');
+  });
+
+  it('rejects invalid coordinates and oversized country labels', () => {
+    expect(
+      severeWeatherRequestSchema.safeParse({ latitude: 91, longitude: 0, country: 'Canada' })
+        .success,
+    ).toBe(false);
+    expect(
+      severeWeatherRequestSchema.safeParse({
+        latitude: 0,
+        longitude: 181,
+        country: 'Canada',
+      }).success,
+    ).toBe(false);
+    expect(
+      severeWeatherRequestSchema.safeParse({ latitude: 0, longitude: 0, country: 'x'.repeat(65) })
+        .success,
+    ).toBe(false);
   });
 });
 

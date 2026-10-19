@@ -6,21 +6,21 @@ The owner selected groups A–K, M, and O after the Skyglass/Observatory release
 Google OAuth is complete and is not part of this work. Preserve the current design,
 public gateway boundary, local-device geolocation privacy, RLS, and protected releases.
 
-| Group | Scope                                                                                      | State / prerequisite                                                                                |
-| ----- | ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| A     | Full weather readings, local sun/daylight details, 7–16-day outlook                        | DONE locally: FEAT-WX-002 merged in PR #309; protected production release and live CPU gate pending |
-| B     | Additional chart series, ranges, annotations, and appropriate zoom                         | DONE locally: FEAT-CHART-002 merged in PR #310; chart changes are browser-only                      |
-| C     | Favorites/categories, recent searches, account-synced place preferences, coordinate search | DONE locally: FEAT-LOC-002 merged in PR #311; production migration/release pending                  |
-| D     | Saved-place markers, arbitrary map-point selection, AQI overlay, legends                   | DONE locally: FEAT-MAP-002 merged in PR #312; discrete model AQI points only, no interpolation      |
-| E     | AQI forecasts and historical AQI charts                                                    | DONE locally: FEAT-AQI-TIMELINE-001 merged in PR #309; modeled history, not station/diary readings  |
-| F     | Weather calendar with day-specific hourly, sun, AQI, planner and rule context              | PLANNED: A/E/G/K                                                                                    |
-| G     | Full activity set, custom profile, richer deterministic scoring                            | DONE locally: FEAT-PLAN-002 merged in PR #313; AQI timeline remains opt-in                          |
-| H     | Multi-city comparison with the expanded metrics and suitability ranking                    | DONE locally: FEAT-CMP-003 merged in PR #314; explicit AQI load and bounded destinations            |
-| I     | Custom/24-hour history ranges, aggregates, additional charts and event counts              | DONE locally: HIST-ANALYTICS-001 merged in PR #315; recorded snapshots only, no backfill            |
-| J     | Deterministic anomaly insights                                                             | DONE locally: FEAT-ANOM-001 merged in PR #316; minimum coverage and unsupported metrics disclosed   |
-| K     | Expanded in-app rules, schedules and cooldown configuration                                | PLANNED: A/E/M plus additive validation; no background delivery implied                             |
-| M     | Official warning center with honest geographic coverage                                    | BLOCKED: FEAT-WARN-002; research done, NWS/ECCC integration awaits owner approval                   |
-| O     | Profile, account preferences, timezone and owner/user roles                                | PLANNED: owner and users only; no admin tier, no client-controlled privilege assignment             |
+| Group | Scope                                                                                      | State / prerequisite                                                                                                                              |
+| ----- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A     | Full weather readings, local sun/daylight details, 7–16-day outlook                        | DONE locally: FEAT-WX-002 merged in PR #309; protected production release and live CPU gate pending                                               |
+| B     | Additional chart series, ranges, annotations, and appropriate zoom                         | DONE locally: FEAT-CHART-002 merged in PR #310; chart changes are browser-only                                                                    |
+| C     | Favorites/categories, recent searches, account-synced place preferences, coordinate search | DONE locally: FEAT-LOC-002 merged in PR #311; production migration/release pending                                                                |
+| D     | Saved-place markers, arbitrary map-point selection, AQI overlay, legends                   | DONE locally: FEAT-MAP-002 merged in PR #312; discrete model AQI points only, no interpolation                                                    |
+| E     | AQI forecasts and historical AQI charts                                                    | DONE locally: FEAT-AQI-TIMELINE-001 merged in PR #309; modeled history, not station/diary readings                                                |
+| F     | Weather calendar with day-specific hourly, sun, AQI, planner and rule context              | PLANNED: A/E/G/K                                                                                                                                  |
+| G     | Full activity set, custom profile, richer deterministic scoring                            | DONE locally: FEAT-PLAN-002 merged in PR #313; AQI timeline remains opt-in                                                                        |
+| H     | Multi-city comparison with the expanded metrics and suitability ranking                    | DONE locally: FEAT-CMP-003 merged in PR #314; explicit AQI load and bounded destinations                                                          |
+| I     | Custom/24-hour history ranges, aggregates, additional charts and event counts              | DONE locally: HIST-ANALYTICS-001 merged in PR #315; recorded snapshots only, no backfill                                                          |
+| J     | Deterministic anomaly insights                                                             | DONE locally: FEAT-ANOM-001 merged in PR #316; minimum coverage and unsupported metrics disclosed                                                 |
+| K     | Expanded in-app rules, schedules and cooldown configuration                                | PLANNED: A/E/M plus additive validation; no background delivery implied                                                                           |
+| M     | Official warning center with honest geographic coverage                                    | REVIEW: warning route moved to Vercel after staging Worker p95 exceeded 7 ms; staging baseline restored; production release remains separately gated |
+| O     | Profile, account preferences, timezone and owner/user roles                                | PLANNED: owner and users only; no admin tier, no client-controlled privilege assignment                                                           |
 
 ## Delivery sequence
 
