@@ -62,7 +62,7 @@ task:
     terraform_resources: []
     database_changes: [none]
     deployed_units:
-      [isolated atmos-gateway-staging with warning route removed; no Vercel or production release]
+      [isolated atmos-gateway-staging baseline, Vercel PR preview only; no production release]
   compatibility:
     requires_expand_contract: false
     stable_version_compatible: true

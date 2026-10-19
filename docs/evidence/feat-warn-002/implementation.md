@@ -77,4 +77,5 @@ CPU p50 `1,837 µs` (`1.837 ms`), p95 `9,196 µs` (`9.196 ms`), and p99 `26,330 
 The measured p95 exceeds Atmos's 7 ms placement gate; warning fetch and normalization were moved
 to the existing Vercel/Next.js runtime. Staging Worker version
 `330f6348-0d81-411b-aed4-a90a8adb8aee` is the post-move baseline with the warning route removed.
-No Vercel preview or production deployment has been performed.
+PR [#320](https://github.com/LQH-coding-frenzy/atmos/pull/320) is open; its protected checks and
+Vercel preview passed. No production release was performed.
