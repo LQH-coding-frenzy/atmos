@@ -30,8 +30,13 @@ task:
         apps/web/lib/official-warnings.ts,
         apps/web/lib/official-warnings.test.ts,
         apps/web/components/dashboard.tsx,
+        apps/web/app/page.tsx,
         apps/web/app/globals.css,
+        apps/web/next.config.ts,
+        playwright.config.ts,
+        tests/e2e/mock-weather-gateway.mjs,
         tests/e2e/dashboard.spec.ts,
+        tests/e2e/forecast-charts.spec.ts,
         tests/e2e/severe-weather.spec.ts,
         .agent,
         docs/design/feature-completion-roadmap.md,
@@ -71,7 +76,7 @@ task:
     commands:
       [
         corepack pnpm exec vitest run apps/web/lib/official-warnings.test.ts apps/web/app/api/v1/weather/warnings/route.test.ts packages/contracts/src/index.test.ts,
-        corepack pnpm exec playwright test tests/e2e/severe-weather.spec.ts tests/e2e/dashboard.spec.ts --workers=1,
+        corepack pnpm exec playwright test --workers=1,
         corepack pnpm --filter @atmos/web build,
         corepack pnpm typecheck,
       ]

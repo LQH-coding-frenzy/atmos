@@ -43,12 +43,15 @@ ECCC end-use licence v2.1.1 (August 2026) were rechecked on that date.
   endpoints omit SPC SEL tornado-watch wording. It is described as informational, not an
   emergency-alert service. No database state, secrets, paid resources, automatic notifications,
   or production release are included.
+- Playwright server-side page data comes from a deterministic local E2E gateway fixture, so browser
+  tests do not depend on live forecast dates or upstream weather availability. The test-only rewrite
+  is enabled only by the Playwright environment and is absent from normal deployments.
 
 ## Local validation
 
 - Focused Vitest: 71 tests passed across the warning adapter/server route, gateway contracts, and analytics.
-- Playwright: 29 tests passed across the severe-weather UI and dashboard using `CI=1` so the
-  configured test Supabase environment was used.
+- Playwright: 41 tests passed across the full browser suite using `CI=1`, with a deterministic local
+  dashboard gateway fixture and the configured test Supabase environment.
 - Gateway Wrangler dry-run, repository typecheck, and Next.js production build passed.
 - ESLint passed for changed TypeScript files. Prettier formatting was applied to changed source
   and documentation files.

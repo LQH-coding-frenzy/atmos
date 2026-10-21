@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { dashboardSchema } from '@atmos/contracts';
 
 test('explores weather chart series and hourly, seven-day and sixteen-day ranges', async ({
   page,
@@ -71,6 +72,7 @@ test('explores weather chart series and hourly, seven-day and sixteen-day ranges
       updatedAt: '2026-09-01T10:00:00.000Z',
     },
   };
+  expect(dashboardSchema.safeParse(payload).success).toBe(true);
   await page.route('**/api/v1/weather/dashboard?**', async (route) => {
     if (route.request().method() === 'OPTIONS') {
       await route.fulfill({
@@ -83,9 +85,13 @@ test('explores weather chart series and hourly, seven-day and sixteen-day ranges
       });
       return;
     }
-    weatherRequests++;
     await route.fulfill({ json: payload, headers: { 'Access-Control-Allow-Origin': '*' } });
+    weatherRequests++;
   });
+  await page.addInitScript((snapshot) => {
+    window.localStorage.setItem('atmos.offline.last-dashboard', JSON.stringify(snapshot));
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
+  }, payload);
   await page.goto('/');
   await page.getByRole('button', { name: 'Refresh weather' }).click();
   await expect.poll(() => weatherRequests).toBe(1);

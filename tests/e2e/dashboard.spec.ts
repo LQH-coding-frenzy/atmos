@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { dashboardSchema } from '@atmos/contracts';
 
 async function openWeatherTool(page: Page, name: string) {
   const dialog = page.getByRole('dialog', { name: 'Weather tools' });
@@ -128,10 +129,26 @@ test('shows expanded model measurements and a compatible extended outlook withou
       updatedAt: '2026-09-01T10:15:00.000Z',
     },
   };
+  expect(dashboardSchema.safeParse(response).success).toBe(true);
   await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+    if (route.request().method() === 'OPTIONS') {
+      await route.fulfill({
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'x-atmos-version-key, cloudflare-workers-version-key',
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: response, headers: { 'Access-Control-Allow-Origin': '*' } });
     requests++;
-    await route.fulfill({ json: response });
   });
+  await page.addInitScript((snapshot) => {
+    window.localStorage.setItem('atmos.offline.last-dashboard', JSON.stringify(snapshot));
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
+  }, response);
   await page.goto('/');
   await page.getByRole('button', { name: 'Refresh weather' }).click();
   await expect(page.locator('.hero-temperature')).toContainText('20');

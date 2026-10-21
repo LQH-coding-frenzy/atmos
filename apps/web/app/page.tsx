@@ -86,7 +86,10 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
   const location = selectedLocation(await searchParams);
   const dashboard = await getDashboard(
     location,
-    serverGatewayOrigin(process.env.VERCEL_ENV, process.env.ATMOS_GATEWAY_URL),
+    serverGatewayOrigin(
+      process.env.VERCEL_ENV,
+      process.env.ATMOS_SERVER_GATEWAY_URL ?? process.env.ATMOS_GATEWAY_URL,
+    ),
   );
 
   if (!dashboard) {
