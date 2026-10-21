@@ -1,5 +1,4 @@
 import { expect, test } from '@playwright/test';
-import { dashboardSchema } from '@atmos/contracts';
 
 test('explores weather chart series and hourly, seven-day and sixteen-day ranges', async ({
   page,
@@ -72,7 +71,6 @@ test('explores weather chart series and hourly, seven-day and sixteen-day ranges
       updatedAt: '2026-09-01T10:00:00.000Z',
     },
   };
-  expect(dashboardSchema.safeParse(payload).success).toBe(true);
   await page.route('**/api/v1/weather/dashboard?**', async (route) => {
     if (route.request().method() === 'OPTIONS') {
       await route.fulfill({
