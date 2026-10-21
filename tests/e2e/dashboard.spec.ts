@@ -5,8 +5,9 @@ async function openWeatherTool(page: Page, name: string) {
   if (!(await dialog.isVisible())) {
     await page.getByRole('button', { name: 'Open weather tools' }).click();
   }
-  const summary = dialog.locator('.tool-list > details > summary').filter({ hasText: name });
-  if ((await summary.locator('..').getAttribute('open')) === null) await summary.click();
+  const summary = dialog.locator('.tool-list > details > summary').getByText(name, { exact: true });
+  const panel = summary.locator('..');
+  if ((await panel.getAttribute('open')) === null) await summary.click();
 }
 
 test('renders the responsive live-weather dashboard', async ({ page }) => {
@@ -128,9 +129,24 @@ test('shows expanded model measurements and a compatible extended outlook withou
     },
   };
   await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+    if (route.request().method() === 'OPTIONS') {
+      await route.fulfill({
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': 'x-atmos-version-key, cloudflare-workers-version-key',
+        },
+      });
+      return;
+    }
+    await route.fulfill({ json: response, headers: { 'Access-Control-Allow-Origin': '*' } });
     requests++;
-    await route.fulfill({ json: response });
   });
+  await page.addInitScript((snapshot) => {
+    window.localStorage.setItem('atmos.offline.last-dashboard', JSON.stringify(snapshot));
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
+  }, response);
   await page.goto('/');
   await page.getByRole('button', { name: 'Refresh weather' }).click();
   await expect(page.locator('.hero-temperature')).toContainText('20');

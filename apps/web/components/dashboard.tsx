@@ -38,6 +38,7 @@ import { AirQualityPanel } from './air-quality-panel';
 import { InAppAlertsPanel } from './in-app-alerts-panel';
 import { PreferencesPanel, type ThemePreference } from './preferences-panel';
 import { WeatherComparisonPanel } from './weather-comparison-panel';
+import { SevereWeatherPanel } from './severe-weather-panel';
 import {
   forecastTrendAvailable,
   forecastTrendMetricLabels,
@@ -478,6 +479,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
                 onLocationsChange={setSavedLocations}
               />
               <AirQualityPanel gatewayOrigin={gatewayOrigin} location={dashboard.location} />
+              <SevereWeatherPanel location={dashboard.location} />
               <WeatherComparisonPanel
                 current={dashboard}
                 gatewayOrigin={gatewayOrigin}

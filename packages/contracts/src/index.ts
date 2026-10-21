@@ -42,6 +42,75 @@ export const weatherRadarTimelineSchema = z
   });
 export type WeatherRadarTimeline = z.infer<typeof weatherRadarTimelineSchema>;
 
+export const severeWeatherSourceSchema = z.enum(['nws', 'eccc']);
+export type SevereWeatherSource = z.infer<typeof severeWeatherSourceSchema>;
+
+export const severeWeatherRequestSchema = z.object({
+  latitude: z.number().gte(-90).lte(90),
+  longitude: z.number().gte(-180).lte(180),
+  country: z.string().max(64),
+});
+export type SevereWeatherRequest = z.infer<typeof severeWeatherRequestSchema>;
+
+export const severeWeatherAlertSchema = z.object({
+  id: z.string().min(1).max(1024),
+  event: z.string().min(1).max(512),
+  headline: z.string().max(2048).nullable(),
+  severity: z.string().max(128).nullable(),
+  urgency: z.string().max(128).nullable(),
+  certainty: z.string().max(128).nullable(),
+  area: z.string().max(16_384),
+  publishedAt: z.string().max(64).nullable(),
+  effectiveAt: z.string().max(64).nullable(),
+  onsetAt: z.string().max(64).nullable(),
+  expiresAt: z.string().max(64).nullable(),
+  endsAt: z.string().max(64).nullable(),
+  description: z.string().max(32_768).nullable(),
+  instruction: z.string().max(16_384).nullable(),
+  sourceUrl: z.string().url().max(2048),
+});
+export type SevereWeatherAlert = z.infer<typeof severeWeatherAlertSchema>;
+
+export const severeWeatherResponseSchema = z
+  .object({
+    coverage: z.enum(['supported', 'unsupported']),
+    source: severeWeatherSourceSchema.nullable(),
+    alerts: z.array(severeWeatherAlertSchema).max(20),
+    meta: z.object({
+      checkedAt: z.string().datetime({ offset: true }),
+      cached: z.boolean(),
+      stale: z.boolean(),
+      truncated: z.boolean(),
+    }),
+  })
+  .superRefine((response, context) => {
+    if (
+      response.coverage === 'unsupported' &&
+      (response.source !== null || response.alerts.length)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['coverage'],
+        message: 'Unsupported locations cannot contain source warning results.',
+      });
+    }
+    if (response.coverage === 'supported' && response.source === null) {
+      context.addIssue({
+        code: 'custom',
+        path: ['source'],
+        message: 'Supported locations require an official source.',
+      });
+    }
+    if (response.meta.stale && !response.meta.cached) {
+      context.addIssue({
+        code: 'custom',
+        path: ['meta', 'stale'],
+        message: 'Stale warning results must come from cache.',
+      });
+    }
+  });
+export type SevereWeatherResponse = z.infer<typeof severeWeatherResponseSchema>;
+
 export const openWeatherMapLayerSchema = z.enum([
   'precipitation_new',
   'clouds_new',

@@ -83,9 +83,13 @@ test('explores weather chart series and hourly, seven-day and sixteen-day ranges
       });
       return;
     }
-    weatherRequests++;
     await route.fulfill({ json: payload, headers: { 'Access-Control-Allow-Origin': '*' } });
+    weatherRequests++;
   });
+  await page.addInitScript((snapshot) => {
+    window.localStorage.setItem('atmos.offline.last-dashboard', JSON.stringify(snapshot));
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, value: false });
+  }, payload);
   await page.goto('/');
   await page.getByRole('button', { name: 'Refresh weather' }).click();
   await expect.poll(() => weatherRequests).toBe(1);
