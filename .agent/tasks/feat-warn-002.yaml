@@ -1,7 +1,7 @@
 task:
   id: FEAT-WARN-002
   title: Integrate approved NWS and ECCC warning feeds
-  status: REVIEW
+  status: DONE
   objective: Add an on-demand official warning center for U.S. NWS and Canadian ECCC service areas, with source/coverage disclosure and explicit unsupported regions.
   depends_on: [FEAT-WARN-001, EDGE-004, CACHE-001, PERF-001, WX-004, WEB-012]
   external_policy_checks:

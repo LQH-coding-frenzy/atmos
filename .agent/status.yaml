@@ -1,5 +1,5 @@
 project: atmos
-updated: 2026-10-20
+updated: 2026-10-21
 scope:
   profile: CV_SHOWCASE
   production_hardening: IN_PROGRESS
@@ -47,7 +47,7 @@ tasks:
   HIST-ANALYTICS-001: DONE
   FEAT-ANOM-001: DONE
   FEAT-WARN-001: DONE
-  FEAT-WARN-002: REVIEW
+  FEAT-WARN-002: DONE
   WEB-001: DONE
   WEB-002: DONE
   SUPA-001: DONE

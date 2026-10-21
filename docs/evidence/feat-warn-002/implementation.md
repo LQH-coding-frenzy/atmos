@@ -1,7 +1,8 @@
 # FEAT-WARN-002 — official warning center
 
-Status: **warning processing is implemented and validated in the existing Vercel/Next.js server
-runtime after the Worker CPU gate failed.** Production release remains separately gated.
+Status: **DONE locally.** Warning processing is implemented and validated in the existing
+Vercel/Next.js server runtime after the Worker CPU gate failed. Production release remains
+separately gated.
 
 ## Approved source scope
 
@@ -77,5 +78,5 @@ CPU p50 `1,837 µs` (`1.837 ms`), p95 `9,196 µs` (`9.196 ms`), and p99 `26,330 
 The measured p95 exceeds Atmos's 7 ms placement gate; warning fetch and normalization were moved
 to the existing Vercel/Next.js runtime. Staging Worker version
 `330f6348-0d81-411b-aed4-a90a8adb8aee` is the post-move baseline with the warning route removed.
-PR [#320](https://github.com/LQH-coding-frenzy/atmos/pull/320) is open; its protected checks and
-Vercel preview passed. No production release was performed.
+PR [#320](https://github.com/LQH-coding-frenzy/atmos/pull/320) passed protected checks and its
+Vercel preview. The owner authorized merging the PR; no production release workflow was dispatched.
