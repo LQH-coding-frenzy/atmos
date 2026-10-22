@@ -2,7 +2,7 @@
 document: Atmos DevSecOps Master Plan
 version: 2.1.0
 status: cv-showcase-scope
-last_updated: 2026-10-19
+last_updated: 2026-10-22
 validation:
   last_validated: 2026-08-31
   result: GO
@@ -3308,6 +3308,8 @@ DONE
 | FEAT-LOC-001 | saved locations | FUNC-002, RLS-002 | feature |
 | FEAT-LOC-UI-001 | authenticated saved-locations dashboard UI | AUTH-001, FEAT-LOC-001, ROUTE-001, WEB-002 | feature |
 | FEAT-LOC-002 | account-synced saved-place favorites, categories/order/default, local recents, and coordinate entry | FEAT-LOC-UI-001, AUTH-002, RLS-002, ROUTE-001, WEB-012 | feature |
+| FEAT-PROFILE-001 | account-synced display name, units, theme and timezone preferences (owner-selected group O; roles deferred) | AUTH-002, FUNC-002, RLS-002, ROUTE-001, WEB-012 | profile/preferences UI and authenticated API |
+| FEAT-ROLE-001 | expose trusted owner/user role and one-time owner bootstrap (owner-selected group O; no in-app role manager) | AUTH-002, FUNC-002, RLS-002, ROUTE-001, WEB-012, FEAT-PROFILE-001 | Auth metadata role and dry-run bootstrap |
 | FEAT-GEO-001 | user-controlled browser geolocation | EDGE-004, WEB-002, WX-004 | feature |
 | FEAT-CHART-001 | charts | WEB-002 | feature |
 | FEAT-CHART-002 | full weather chart series, ranges, annotations, daily/hourly zoom | FEAT-CHART-001, FEAT-WX-002, FEAT-AQI-TIMELINE-001, WEB-012 | feature |
@@ -3329,6 +3331,9 @@ DONE
 | ALERT-001 | alert rule schema/RLS | DB-001, RLS-001 | alert model |
 | ALERT-002 | evaluator Edge Function | ALERT-001, WX-003 | evaluation |
 | ALERT-INAPP-001 | authenticated in-app alert rules and current status | ALERT-001, ALERT-002, DOM-002, FEAT-LOC-UI-001, FUNC-002, ROUTE-001, WEB-002 | feature |
+| ALERT-INAPP-002 | configure weekday, active-window and cooldown settings for in-app-only rules (owner-selected group K; no delivery) | ALERT-INAPP-001, FEAT-WX-002, FEAT-AQI-TIMELINE-001, FEAT-WARN-002, AUTH-002, RLS-002, ROUTE-001, WEB-012 | configurable rule schedules |
+| ALERT-INAPP-003 | evaluate expanded weather, AQI and official-warning conditions on demand for in-app rules (owner-selected group K; no delivery) | ALERT-INAPP-002, FEAT-WX-002, FEAT-AQI-TIMELINE-001, FEAT-WARN-002, AUTH-002, RLS-002, ROUTE-001, WEB-012 | truthful expanded in-app rule status |
+| FEAT-CAL-001 | add a day-selectable forecast calendar with hourly, sun, AQI, planner, and scheduled-rule context (owner-selected group F) | FEAT-WX-002, FEAT-AQI-TIMELINE-001, FEAT-PLAN-002, ALERT-INAPP-003, AUTH-002, FEAT-LOC-UI-001, ROUTE-001, WEB-012 | weather calendar |
 | FEAT-WARN-001 | research and document free official severe-warning feed coverage, access terms and unsupported regions | WX-004, EDGE-004, CACHE-001, PERF-001, WEB-012 | source/coverage evidence |
 | FEAT-WARN-002 | integrate approved official warning feeds through a bounded gateway route with honest regional coverage | FEAT-WARN-001, EDGE-004, CACHE-001, PERF-001, WX-004 | official warning center |
 | CRON-001 | Supabase Cron trigger | ALERT-002 | schedule |

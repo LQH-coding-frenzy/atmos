@@ -22,6 +22,7 @@ import { versionAffinityHeaders } from '../lib/version-affinity';
 type ActivityPlannerProps = Pick<Dashboard, 'hourly' | 'location'> & {
   gatewayOrigin: string;
   units: UnitSystem;
+  displayTimezone: string;
 };
 
 const plannerDimensionLabels: Record<PlannerDimension, string> = {
@@ -60,7 +61,13 @@ function fromDisplayPrecipitation(value: number, units: UnitSystem) {
   return units === 'imperial' ? value * 25.4 : value;
 }
 
-export function ActivityPlanner({ hourly, location, gatewayOrigin, units }: ActivityPlannerProps) {
+export function ActivityPlanner({
+  hourly,
+  location,
+  gatewayOrigin,
+  units,
+  displayTimezone,
+}: ActivityPlannerProps) {
   const [activity, setActivity] = useState<PlannerActivityKind | 'custom'>('running');
   const [customName, setCustomName] = useState('My outdoor activity');
   const [customThresholds, setCustomThresholds] = useState<PlannerThresholds>({
@@ -89,13 +96,13 @@ export function ActivityPlanner({ hourly, location, gatewayOrigin, units }: Acti
   const time = new Intl.DateTimeFormat('en', {
     hour: 'numeric',
     minute: '2-digit',
-    timeZone: location.timezone,
+    timeZone: displayTimezone,
   });
   const date = new Intl.DateTimeFormat('en', {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
-    timeZone: location.timezone,
+    timeZone: displayTimezone,
   });
 
   async function loadAirQualityTimeline() {

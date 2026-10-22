@@ -4,7 +4,10 @@ import { secureHeaders } from 'npm:hono@4.13.5/secure-headers';
 import { createClient } from 'npm:@supabase/supabase-js@2.114.0';
 import { createCorrelation } from '../_shared/correlation.ts';
 import { validateAccountDeletionRequest } from '../_shared/account-deletion.mjs';
-import { databaseDependencyIsHealthy } from '../_shared/dependency-health.ts';
+import {
+  databaseDependencyIsHealthy,
+  defaultSupabasePublishableKey,
+} from '../_shared/dependency-health.ts';
 import { exportOtlpTrace } from '../_shared/otel.ts';
 import {
   parseAlertRuleEnabledUpdate,
@@ -16,6 +19,8 @@ import {
   parseWeatherSnapshotInsert,
 } from '../_shared/weather-snapshot.ts';
 import { parseReplaceSavedLocationPreferences } from '../_shared/saved-location-preferences.ts';
+import { parseProfilePreferencesUpdate } from '../_shared/profile-preferences.ts';
+import { appRoleFromMetadata } from '../_shared/app-role.ts';
 
 type Bindings = {
   CORS_ORIGIN?: string;
@@ -132,19 +137,56 @@ app.get('/version', (context) =>
   context.json({ release: context.env.RELEASE_ID ?? Deno.env.get('RELEASE_ID') ?? 'local' }),
 );
 
+async function readBoundedJson(request: Request, maximumBytes: number): Promise<unknown> {
+  const contentLength = request.headers.get('content-length');
+  if (contentLength && Number(contentLength) > maximumBytes) return undefined;
+  const reader = request.body?.getReader();
+  if (!reader) return undefined;
+
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maximumBytes) {
+        await reader.cancel();
+        return undefined;
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return undefined;
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
 app.get('/api/v1/me', async (context) => {
+  context.header('cache-control', 'private, no-store');
   const authorization = context.req.header('authorization');
   if (!authorization) {
     return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
-  if (!supabaseUrl || !supabaseAnonKey) {
+  const publishableKey = defaultSupabasePublishableKey(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS'));
+  if (!supabaseUrl || !publishableKey) {
     return error(context, 'PROFILE_UNAVAILABLE', 'Profile is unavailable.', 503);
   }
 
-  const client = createClient(supabaseUrl, supabaseAnonKey, {
+  const client = createClient(supabaseUrl, publishableKey, {
     global: { headers: { Authorization: authorization } },
   });
   const { data: userData, error: userError } = await client.auth.getUser();
@@ -154,14 +196,106 @@ app.get('/api/v1/me', async (context) => {
 
   const [{ data: profile, error: profileError }, { data: preferences, error: preferencesError }] =
     await Promise.all([
-      client.from('profiles').select('id, display_name, created_at, updated_at').single(),
-      client.from('user_preferences').select('units, timezone, theme, updated_at').single(),
+      client
+        .from('profiles')
+        .select('id, display_name, created_at, updated_at')
+        .eq('id', userData.user.id)
+        .single(),
+      client
+        .from('user_preferences')
+        .select('units, timezone, theme, updated_at')
+        .eq('user_id', userData.user.id)
+        .single(),
     ]);
   if (profileError || preferencesError) {
     return error(context, 'PROFILE_UNAVAILABLE', 'Profile is unavailable.', 503);
   }
 
-  return context.json({ profile, preferences });
+  return context.json({
+    role: appRoleFromMetadata(userData.user.app_metadata),
+    profile,
+    preferences,
+  });
+});
+
+app.patch('/api/v1/me', async (context) => {
+  context.header('cache-control', 'private, no-store');
+  if (!context.req.header('authorization')) {
+    return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+  }
+  if (
+    !Deno.env.get('SUPABASE_URL') ||
+    !defaultSupabasePublishableKey(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS'))
+  ) {
+    return error(context, 'PROFILE_UNAVAILABLE', 'Profile is unavailable.', 503);
+  }
+
+  const authenticated = await authenticatedClient(context);
+  if (!authenticated) return error(context, 'UNAUTHORIZED', 'Authentication is required.', 401);
+
+  const update = parseProfilePreferencesUpdate(await readBoundedJson(context.req.raw, 4096));
+  if (!update) {
+    return error(
+      context,
+      'INVALID_PROFILE_UPDATE',
+      'Valid profile and preference fields are required.',
+      400,
+    );
+  }
+
+  const updatedAt = new Date().toISOString();
+  if (update.display_name !== undefined) {
+    const { data, error: updateError } = await authenticated.client
+      .from('profiles')
+      .update({ display_name: update.display_name, updated_at: updatedAt })
+      .eq('id', authenticated.user.id)
+      .select('id')
+      .maybeSingle();
+    if (updateError || !data) {
+      return error(context, 'PROFILE_UNAVAILABLE', 'Profile is unavailable.', 503);
+    }
+  }
+
+  const hasPreferenceUpdates =
+    update.units !== undefined || update.timezone !== undefined || update.theme !== undefined;
+  if (hasPreferenceUpdates) {
+    const { data, error: updateError } = await authenticated.client
+      .from('user_preferences')
+      .update({
+        ...(update.units === undefined ? {} : { units: update.units }),
+        ...(update.timezone === undefined ? {} : { timezone: update.timezone }),
+        ...(update.theme === undefined ? {} : { theme: update.theme }),
+        updated_at: updatedAt,
+      })
+      .eq('user_id', authenticated.user.id)
+      .select('user_id')
+      .maybeSingle();
+    if (updateError || !data) {
+      return error(context, 'PROFILE_UNAVAILABLE', 'Profile is unavailable.', 503);
+    }
+  }
+
+  const [{ data: profile, error: profileError }, { data: preferences, error: preferencesError }] =
+    await Promise.all([
+      authenticated.client
+        .from('profiles')
+        .select('id, display_name, created_at, updated_at')
+        .eq('id', authenticated.user.id)
+        .single(),
+      authenticated.client
+        .from('user_preferences')
+        .select('units, timezone, theme, updated_at')
+        .eq('user_id', authenticated.user.id)
+        .single(),
+    ]);
+  if (profileError || preferencesError) {
+    return error(context, 'PROFILE_UNAVAILABLE', 'Profile is unavailable.', 503);
+  }
+  return context.json({
+    role: appRoleFromMetadata(authenticated.user.app_metadata),
+    profile,
+    preferences,
+  });
 });
 
 app.delete('/api/v1/account', async (context) => {
@@ -214,7 +348,7 @@ app.delete('/api/v1/account', async (context) => {
 async function authenticatedClient(context: Context) {
   const authorization = context.req.header('authorization');
   const url = Deno.env.get('SUPABASE_URL');
-  const key = Deno.env.get('SUPABASE_ANON_KEY');
+  const key = defaultSupabasePublishableKey(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS'));
   if (!authorization || !url || !key) return undefined;
   const client = createClient(url, key, { global: { headers: { Authorization: authorization } } });
   const { data } = await client.auth.getUser();

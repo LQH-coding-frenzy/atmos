@@ -1380,6 +1380,7 @@ body:has(.weather-tools-dialog[open]) {
   .severe-weather-popover,
   .in-app-alerts-popover,
   .preferences-popover,
+  .weather-calendar-popover,
   .weather-comparison-popover
 ) {
   display: grid;
@@ -1394,6 +1395,7 @@ body:has(.weather-tools-dialog[open]) {
     .severe-weather-popover,
     .in-app-alerts-popover,
     .preferences-popover,
+    .weather-calendar-popover,
     .weather-comparison-popover
   )
   h2 {
@@ -1409,6 +1411,7 @@ body:has(.weather-tools-dialog[open]) {
     .severe-weather-popover,
     .in-app-alerts-popover,
     .preferences-popover,
+    .weather-calendar-popover,
     .weather-comparison-popover
   )
   p {
@@ -1417,11 +1420,23 @@ body:has(.weather-tools-dialog[open]) {
   font-size: 12px;
   line-height: 1.65;
 }
-:is(.saved-location-auth-form, .account-delete-form, .password-recovery-form, .in-app-alert-form) {
+:is(
+  .saved-location-auth-form,
+  .account-delete-form,
+  .password-recovery-form,
+  .in-app-alert-form,
+  .preferences-account-form
+) {
   display: grid;
   gap: 9px;
 }
-:is(.saved-location-auth-form, .account-delete-form, .password-recovery-form, .in-app-alert-form)
+:is(
+    .saved-location-auth-form,
+    .account-delete-form,
+    .password-recovery-form,
+    .in-app-alert-form,
+    .preferences-account-form
+  )
   label {
   color: var(--muted);
   font-size: 12px;
@@ -1432,6 +1447,7 @@ body:has(.weather-tools-dialog[open]) {
     .account-delete-form,
     .password-recovery-form,
     .in-app-alert-form,
+    .preferences-account-form,
     .saved-location-rename-form
   )
   :is(input, select) {
@@ -1444,7 +1460,13 @@ body:has(.weather-tools-dialog[open]) {
   background: var(--surface-low);
   color: var(--ink);
 }
-:is(.saved-location-auth-form, .password-recovery-form, .in-app-alert-form) > button,
+:is(
+    .saved-location-auth-form,
+    .password-recovery-form,
+    .in-app-alert-form,
+    .preferences-account-form
+  )
+  > button,
 .save-current-location,
 .record-observation-button,
 .weather-comparison-switch,
@@ -1463,6 +1485,20 @@ body:has(.weather-tools-dialog[open]) {
 }
 .saved-location-auth-form button {
   margin-top: 5px;
+}
+.preferences-account-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.preferences-account-status button {
+  min-height: 40px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-low);
+  color: var(--ink);
 }
 .saved-location-mode-toggle {
   display: inline-flex;
@@ -2567,6 +2603,169 @@ body:has(.weather-tools-dialog[open]) {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+.in-app-alert-weekdays {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.in-app-alert-weekdays legend {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.in-app-alert-weekday-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px 8px;
+}
+.in-app-alert-weekday-option {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 11px;
+}
+.in-app-alert-weekday-option input[type='checkbox'] {
+  width: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.in-app-alert-schedule-fields {
+  display: grid;
+  gap: 8px;
+}
+.in-app-alert-schedule-fields > div {
+  display: grid;
+  gap: 5px;
+}
+.in-app-alert-schedule {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.weather-calendar-days {
+  display: grid;
+  max-height: 260px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  overflow-y: auto;
+  padding: 2px;
+}
+.weather-calendar-days button {
+  display: grid;
+  min-width: 0;
+  min-height: 72px;
+  align-content: start;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--surface-low);
+  color: var(--ink);
+  text-align: left;
+}
+.weather-calendar-days button[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.weather-calendar-days time {
+  color: var(--muted);
+  font-size: 10px;
+}
+.weather-calendar-days strong,
+.weather-calendar-days span {
+  overflow-wrap: anywhere;
+  font-size: 10px;
+}
+.weather-calendar-day {
+  display: grid;
+  gap: 12px;
+  padding-top: 6px;
+}
+.weather-calendar-day-heading,
+.weather-calendar-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.weather-calendar-day-heading h3,
+.weather-calendar-section h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.weather-calendar-day-heading > span {
+  color: var(--muted);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+.weather-calendar-day-summary {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.weather-calendar-section {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.weather-calendar-section-heading {
+  flex-wrap: wrap;
+}
+.weather-calendar-section-heading select {
+  min-width: 130px;
+  min-height: 40px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-low);
+  color: var(--ink);
+}
+.weather-calendar-hours,
+.weather-calendar-rules {
+  display: grid;
+  max-height: 280px;
+  gap: 7px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.weather-calendar-hours details,
+.weather-calendar-rules li {
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-low);
+}
+.weather-calendar-hours summary {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.weather-calendar-hours summary time,
+.weather-calendar-rules li {
+  color: var(--muted);
+  font-size: 11px;
+}
+.weather-calendar-hours summary strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+.weather-calendar-hours .weather-measurements {
+  margin-top: 10px;
 }
 .in-app-alert-rules {
   display: grid;

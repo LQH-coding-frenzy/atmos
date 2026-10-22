@@ -1,0 +1,116 @@
+task:
+  id: FEAT-ROLE-001
+  title: Expose trusted owner/user role and one-time bootstrap
+  status: DONE
+  objective: Read the authenticated user's trusted app_metadata.atmos_role and provide a guarded, one-time bootstrap path for the single initial owner.
+
+  depends_on: [AUTH-002, FUNC-002, RLS-002, ROUTE-001, WEB-012, FEAT-PROFILE-001]
+
+  external_policy_checks:
+    - Reuse the already owner-configured PROJECT_SECRET_KEY; do not create, rotate, read, or print its value.
+    - The bootstrap CLI defaults to dry-run and requires an explicit project-ref confirmation plus --apply to mutate Auth metadata.
+    - The one-time apply must not be run concurrently; the code task will not execute it.
+    - No hosted Auth metadata mutation, deployment, or production change is part of this task.
+
+  runtime_placement:
+    allowed: [supabase-edge-function, vercel-nextjs]
+    selected: supabase-edge-function
+    reason: The displayed role is derived from Auth's server-verified user object; owner bootstrap uses Auth Admin only from a local server-side CLI.
+
+  scope:
+    include:
+      - packages/contracts/src/index.ts
+      - packages/contracts/src/index.test.ts
+      - supabase/functions/api-v1/index.ts
+      - supabase/functions/_shared/app-role.ts
+      - supabase/functions/_shared/app-role.test.ts
+      - apps/web/components/preferences-panel.tsx
+      - apps/web/scripts/bootstrap-owner.mjs
+      - apps/web/scripts/bootstrap-owner.test.mjs
+      - tests/e2e/profile-preferences.spec.ts
+      - docs/auth.md
+      - docs/adr/0004-application-role-authority.md
+      - docs/design/feature-completion-roadmap.md
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - .agent/status.yaml
+      - .agent/tasks/feat-role-001.yaml
+      - docs/evidence/feat-role-001/implementation.md
+    exclude:
+      - In-app role management, promotion/demotion, multiple owners, or an admin tier.
+      - Reading role from user_metadata, OAuth profile fields, email, Cloudflare identity, request bodies, or browser state.
+      - SQL migrations, database role tables, Auth Hooks, grants, or RLS policy changes.
+      - Running the owner bootstrap CLI, changing hosted Auth metadata, deploying, or making production changes.
+
+  inputs:
+    required_config:
+      - SUPABASE_URL
+      - PROJECT_SECRET_KEY
+      - owner-confirmed Supabase Auth user UUID supplied only at bootstrap time
+      - expected Supabase project ref supplied only at bootstrap time
+    required_secrets:
+      - PROJECT_SECRET_KEY (existing server-only key; never read or printed)
+
+  outputs:
+    files:
+      - supabase/functions/api-v1/index.ts
+      - supabase/functions/_shared/app-role.ts
+      - apps/web/components/preferences-panel.tsx
+      - apps/web/scripts/bootstrap-owner.mjs
+      - apps/web/scripts/bootstrap-owner.test.mjs
+      - tests/e2e/profile-preferences.spec.ts
+    terraform_resources: []
+    database_changes:
+      [
+        no SQL schema changes; the Auth app_metadata write only occurs after a separate approved CLI --apply,
+      ]
+    deployed_units: []
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert the additive role response/UI; with no bootstrap run, no Auth metadata or database rollback is needed.
+
+  validation:
+    commands:
+      - corepack pnpm exec vitest run packages/contracts/src/index.test.ts supabase/functions/_shared/app-role.test.ts
+      - corepack pnpm --filter @atmos/web exec node --test scripts/bootstrap-owner.test.mjs
+      - corepack pnpm test:db
+      - corepack pnpm exec playwright test tests/e2e/profile-preferences.spec.ts --workers=1
+      - deno check --node-modules-dir=auto supabase/functions/api-v1/index.ts supabase/functions/_shared/app-role.ts
+      - corepack pnpm exec eslint packages/contracts/src/index.ts packages/contracts/src/index.test.ts supabase/functions/api-v1/index.ts supabase/functions/_shared/app-role.ts supabase/functions/_shared/app-role.test.ts apps/web/components/preferences-panel.tsx apps/web/scripts/bootstrap-owner.mjs apps/web/scripts/bootstrap-owner.test.mjs tests/e2e/profile-preferences.spec.ts --max-warnings=0
+      - corepack pnpm typecheck
+      - corepack pnpm --filter @atmos/web build
+    expected:
+      - Only app_metadata.atmos_role values owner and user are recognized; absent or unknown values fail closed to user.
+      - The role in GET/PATCH /api/v1/me comes from auth.getUser(), never user_metadata or client input.
+      - The account UI displays role but provides no role-changing controls; all missing roles remain users.
+      - The bootstrap is dry-run by default, requires a UUID and exact project-ref confirmation to apply, refuses a second owner, and preserves existing app_metadata.
+      - The bootstrap is not executed and the owner UUID is not embedded in source or evidence.
+      - Existing RLS remains per-user; owner does not gain cross-user data access.
+
+  security_checks:
+    - Use Auth Admin only in the explicit local bootstrap CLI with the existing current PROJECT_SECRET_KEY; reject legacy service_role credentials.
+    - Never accept roles from user_metadata, profile PATCH, browser state, or request payloads.
+    - Do not log Auth user IDs, email addresses, JWTs, credentials, or app_metadata.
+    - Keep the role bootstrap single-owner and fail closed if any owner already exists.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+
+  telemetry:
+    metrics: [existing API request telemetry only]
+    logs: [no role identity, user ID, email, metadata, or credential values]
+    traces: [existing request correlation]
+
+  evidence:
+    - docs/evidence/feat-role-001/implementation.md
+    - package, bootstrap, database, and browser test results
+
+  rollback:
+    strategy: Revert role response/UI; no schema change or bootstrap is performed. If a future owner-approved bootstrap is applied, reverse it with a separately authorized server-side Auth Admin update.
+
+  human_approval:
+    required: true
+    reason: The code task does not mutate Auth; running the --apply bootstrap changes hosted Auth app_metadata and requires a separate explicit owner approval and confirmed user UUID/project ref.

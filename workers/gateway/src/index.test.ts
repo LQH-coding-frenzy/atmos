@@ -271,6 +271,37 @@ describe('gateway', () => {
     await expect(response.text()).resolves.toBe('ok');
   });
 
+  it('forwards authenticated profile updates without changing the caller payload', async () => {
+    const fetcher = vi.fn(async (request: Request) => {
+      expect(request.method).toBe('PATCH');
+      expect(request.headers.get('authorization')).toBe('Bearer user-token');
+      expect(request.headers.get('content-type')).toContain('application/json');
+      await expect(request.json()).resolves.toEqual({
+        display_name: 'Weather user',
+        timezone: 'Europe/Paris',
+      });
+      return Response.json({ ok: true });
+    });
+    vi.stubGlobal('fetch', fetcher);
+
+    const response = await app.request(
+      'http://localhost/api/v1/me',
+      {
+        method: 'PATCH',
+        headers: {
+          authorization: 'Bearer user-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ display_name: 'Weather user', timezone: 'Europe/Paris' }),
+      },
+      { SUPABASE_FUNCTION_URL: 'https://project.supabase.co/functions/v1/api-v1' },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ ok: true });
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it('returns a sanitized response when no function is configured', async () => {
     const response = await app.request('http://localhost/api/v1/me');
 

@@ -1,5 +1,5 @@
 project: atmos
-updated: 2026-10-21
+updated: 2026-10-22
 scope:
   profile: CV_SHOWCASE
   production_hardening: IN_PROGRESS
@@ -76,6 +76,9 @@ tasks:
   ALERT-002: DONE
   ALERT-003: DONE
   ALERT-INAPP-001: DONE
+  ALERT-INAPP-002: DONE
+  ALERT-INAPP-003: DONE
+  FEAT-CAL-001: DONE
   AZ-001: DONE
   AZ-OIDC-001: DONE
   AZ-TF-OIDC-001: DONE
@@ -137,3 +140,5 @@ tasks:
   WEB-010: DONE
   WEB-011: DONE
   WEB-012: DONE
+  FEAT-PROFILE-001: DONE
+  FEAT-ROLE-001: DONE

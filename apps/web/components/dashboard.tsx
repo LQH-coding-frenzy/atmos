@@ -5,8 +5,10 @@ import {
   type Dashboard as DashboardData,
   type LocationSearchResult,
   type UnitSystem,
+  type ThemePreference,
   type SavedLocation,
   type WeatherCondition,
+  timezonePreferenceSchema,
 } from '@atmos/contracts';
 import { formatTemperature, formatWindSpeed } from '@atmos/domain';
 import {
@@ -36,9 +38,10 @@ import { SavedLocationsPanel } from './saved-locations-panel';
 import { WeatherHistoryPanel } from './weather-history-panel';
 import { AirQualityPanel } from './air-quality-panel';
 import { InAppAlertsPanel } from './in-app-alerts-panel';
-import { PreferencesPanel, type ThemePreference } from './preferences-panel';
+import { PreferencesPanel } from './preferences-panel';
 import { WeatherComparisonPanel } from './weather-comparison-panel';
 import { SevereWeatherPanel } from './severe-weather-panel';
+import { WeatherCalendarPanel } from './weather-calendar-panel';
 import {
   forecastTrendAvailable,
   forecastTrendMetricLabels,
@@ -120,6 +123,7 @@ function formatTimestamp(value: string, timezone: string): string {
 export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
   const [units, setUnits] = useState<UnitSystem>('metric');
   const [theme, setTheme] = useState<ThemePreference>('system');
+  const [timezonePreference, setTimezonePreference] = useState('auto');
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [mapView, setMapView] = useState(false);
   const [mapPanelOpen, setMapPanelOpen] = useState(true);
@@ -149,6 +153,8 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
   const [connectivityReady, setConnectivityReady] = useState(false);
   const [refreshStatus, setRefreshStatus] = useState<'idle' | 'refreshing' | 'failed'>('idle');
   const currentTemperature = temperature(dashboard.current.temperatureC, units);
+  const displayTimezone =
+    timezonePreference === 'auto' ? dashboard.location.timezone : timezonePreference;
   const LocationHeading = mapView ? 'h2' : 'h1';
   currentLocationRef.current = dashboard.location;
   const outlook = dashboard.extendedDaily ?? dashboard.daily;
@@ -171,6 +177,10 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
       if (storedTheme === 'system' || storedTheme === 'light' || storedTheme === 'dark') {
         setTheme(storedTheme);
       }
+      const storedTimezone = timezonePreferenceSchema.safeParse(
+        window.localStorage.getItem('atmos.timezone'),
+      );
+      if (storedTimezone.success) setTimezonePreference(storedTimezone.data);
     } catch {
       // Preferences remain available for this session if local storage is disabled.
     }
@@ -186,10 +196,11 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
     try {
       window.localStorage.setItem('atmos.units', units);
       window.localStorage.setItem('atmos.theme', theme);
+      window.localStorage.setItem('atmos.timezone', timezonePreference);
     } catch {
       // Do not interrupt weather controls when browser storage is unavailable.
     }
-  }, [preferencesReady, theme, units]);
+  }, [preferencesReady, theme, timezonePreference, units]);
 
   useEffect(() => {
     locationSearchRef.current = window.location.search;
@@ -478,6 +489,11 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
                 onSelect={selectLocation}
                 onLocationsChange={setSavedLocations}
               />
+              <WeatherCalendarPanel
+                gatewayOrigin={gatewayOrigin}
+                dashboard={dashboard}
+                units={units}
+              />
               <AirQualityPanel gatewayOrigin={gatewayOrigin} location={dashboard.location} />
               <SevereWeatherPanel location={dashboard.location} />
               <WeatherComparisonPanel
@@ -501,7 +517,15 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
                 hourly={dashboard.hourly}
                 stale={dashboard.meta.stale}
               />
-              <PreferencesPanel theme={theme} onThemeChange={setTheme} />
+              <PreferencesPanel
+                gatewayOrigin={gatewayOrigin}
+                units={units}
+                theme={theme}
+                timezonePreference={timezonePreference}
+                onUnitsChange={setUnits}
+                onThemeChange={setTheme}
+                onTimezoneChange={setTimezonePreference}
+              />
             </WeatherTools>
             <a
               className="user-management-link"
@@ -515,7 +539,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
           </nav>
         </header>
         <div className="dashboard-intro">
-          <p>{formatDashboardDate(dashboard.current.observedAt, dashboard.location.timezone)}</p>
+          <p>{formatDashboardDate(dashboard.current.observedAt, displayTimezone)}</p>
           <span>
             <span className="status-dot" />
             {dashboard.meta.stale ? 'Cached forecast' : 'Your daily outlook'}
@@ -607,7 +631,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
               </div>
               <p className="weather-freshness">
                 Observed <br />
-                {formatTimestamp(dashboard.current.observedAt, dashboard.location.timezone)}
+                {formatTimestamp(dashboard.current.observedAt, displayTimezone)}
               </p>
             </div>
             <div className="current-summary">
@@ -659,13 +683,13 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
               <CurrentMeasurements
                 current={dashboard.current}
                 day={dashboard.daily[0]}
-                timezone={dashboard.location.timezone}
+                timezone={displayTimezone}
                 units={units}
               />
             </details>
             <div className="hourly-heading">
               <h2>The next 12 hours</h2>
-              <span>Local time</span>
+              <span>{timezonePreference === 'auto' ? 'Local time' : 'Your timezone'}</span>
             </div>
             <div className="hourly-row" aria-label="Hourly forecast">
               {dashboard.hourly.map((hour, index) => (
@@ -675,12 +699,12 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
                   type="button"
                   aria-expanded={selectedHourTime === hour.time}
                   aria-controls={`hourly-detail-${index}`}
-                  aria-label={`${selectedHourTime === hour.time ? 'Hide' : 'Show'} details for ${formatHour(hour.time, dashboard.location.timezone)} hourly forecast`}
+                  aria-label={`${selectedHourTime === hour.time ? 'Hide' : 'Show'} details for ${formatHour(hour.time, displayTimezone)} hourly forecast`}
                   onClick={() =>
                     setSelectedHourTime((selected) => (selected === hour.time ? null : hour.time))
                   }
                 >
-                  <span>{formatHour(hour.time, dashboard.location.timezone)}</span>
+                  <span>{formatHour(hour.time, displayTimezone)}</span>
                   <WeatherIcon condition={hour.condition} size={18} />
                   <strong>{temperature(hour.temperatureC, units)}°</strong>
                 </button>
@@ -690,10 +714,10 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
               <section
                 className="forecast-detail hourly-detail"
                 id={`hourly-detail-${selectedHourIndex}`}
-                aria-label={`Hourly forecast details for ${formatTimestamp(selectedHour.time, dashboard.location.timezone)}`}
+                aria-label={`Hourly forecast details for ${formatTimestamp(selectedHour.time, displayTimezone)}`}
               >
                 <div className="forecast-detail-heading">
-                  <strong>{formatTimestamp(selectedHour.time, dashboard.location.timezone)}</strong>
+                  <strong>{formatTimestamp(selectedHour.time, displayTimezone)}</strong>
                   <span>{conditionLabel(selectedHour.condition)}</span>
                 </div>
                 <div className="forecast-detail-stats">
@@ -795,7 +819,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
                 metric={activeMetric}
                 range={chartRange}
                 units={units}
-                timezone={dashboard.location.timezone}
+                timezone={displayTimezone}
               />
             </div>
           </article>
@@ -908,11 +932,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
                           </strong>
                         </div>
                       </div>
-                      <DailyMeasurements
-                        day={day}
-                        units={units}
-                        timezone={dashboard.location.timezone}
-                      />
+                      <DailyMeasurements day={day} units={units} timezone={displayTimezone} />
                     </section>
                   ) : null}
                 </div>
@@ -926,6 +946,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
             units={units}
             hourly={dashboard.hourly}
             location={dashboard.location}
+            displayTimezone={displayTimezone}
           />
 
           {isOnline && dashboard.meta.stale ? (

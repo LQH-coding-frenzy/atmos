@@ -22,6 +22,42 @@ relies on the caller-scoped client and database RLS policies. The browser never 
 key. The dashboard's public weather journey remains available without authentication. Recent place
 selections remain in a bounded, clearable browser-local list, separate from account data.
 
+## Owner/user role source
+
+The account API derives the optional `owner`/`user` role from the Auth-server-verified
+`app_metadata.atmos_role`; a missing or unrecognized role is treated as `user`. `user_metadata`, OAuth
+profile fields, email, Cloudflare identity, request bodies, and browser state are not authorization
+sources. Existing RLS still restricts user-owned rows to their owner; the `owner` app role does not
+grant cross-user data access.
+
+Role assignment is bootstrap-only: one initial owner, no in-app role manager, and no role promotion
+or demotion endpoint. `apps/web/scripts/bootstrap-owner.mjs` defaults to a read-only dry run. It
+requires an exact owner-confirmed Supabase Auth UUID and a project-ref confirmation; `--apply` is
+required before it can assign `app_metadata.atmos_role=owner`. It uses the existing server-only
+`PROJECT_SECRET_KEY`, refuses a second owner, and preserves other `app_metadata` fields. Do not run
+the mutation until the owner separately approves the target project and confirms the Auth UUID. Run
+the one-time operation once, not concurrently. A browser session must refresh before it sees the
+updated Auth metadata.
+
+Future owner bootstrap procedure:
+
+1. The owner confirms the exact Auth UUID and the intended project ref from the Supabase Auth account.
+2. Provide `SUPABASE_URL` and the existing `PROJECT_SECRET_KEY` to the local process from a secure
+   environment; never pass or print the key as a command-line argument.
+3. Run the default dry run with the confirmed UUID and project ref:
+
+   ```text
+   corepack pnpm --filter @atmos/web exec node scripts/bootstrap-owner.mjs --user-id <AUTH_UUID> --project-ref <PROJECT_REF>
+   ```
+
+4. Review the dry-run result. Only after separate explicit owner approval, repeat the same command
+   with `--apply`. The script refuses a mismatched project ref or an existing owner and is not safe
+   to run concurrently.
+
+The owner reported running this procedure successfully on 2026-10-22. The agent did not access the
+secret or independently verify the Auth record. Any future ownership transfer remains a separate,
+explicitly approved operation.
+
 ## Self-service account deletion
 
 Account deletion requires a recent sign-in, exact email confirmation, and typing `DELETE`. The

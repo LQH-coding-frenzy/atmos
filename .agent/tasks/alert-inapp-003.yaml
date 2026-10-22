@@ -1,0 +1,107 @@
+task:
+  id: ALERT-INAPP-003
+  title: Evaluate expanded weather, AQI, and official-warning conditions on demand
+  status: DONE
+  objective: Let in-app rules use the completed full-weather, AQI, and official-warning data without background evaluation or delivery.
+
+  depends_on:
+    [
+      ALERT-INAPP-002,
+      FEAT-WX-002,
+      FEAT-AQI-TIMELINE-001,
+      FEAT-WARN-002,
+      AUTH-002,
+      RLS-002,
+      ROUTE-001,
+      WEB-012,
+    ]
+
+  external_policy_checks:
+    - Reuse the already approved on-demand AQI and NWS/ECCC routes; no new provider, credentials, or paid tier.
+    - Auxiliary provider data loads only when the user opens the Alerts panel and a saved/selected rule requires it.
+    - No hosted schema change, production release, or background delivery.
+
+  runtime_placement:
+    allowed: [supabase-edge-function, vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Rule evaluation remains browser/on-demand work; AQI uses its existing bounded Worker route and official warnings use the existing Next.js route.
+
+  scope:
+    include:
+      - packages/domain/src/index.ts
+      - packages/domain/src/index.test.ts
+      - supabase/functions/_shared/alert-rules.ts
+      - supabase/functions/_shared/alert-rules.test.ts
+      - apps/web/components/in-app-alerts-panel.tsx
+      - tests/e2e/dashboard.spec.ts
+      - .agent/status.yaml
+      - .agent/tasks/alert-inapp-003.yaml
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/design/feature-completion-roadmap.md
+      - docs/evidence/alert-inapp-003/implementation.md
+    exclude:
+      - Email/push notifications, queues, cron, scheduled jobs, or persistent alert-event writes.
+      - New schema, migration, table, grant, RLS policy, Worker route, or provider adapter.
+      - Automatic provider fanout on page render or dashboard refresh.
+      - Multi-condition rule composition or new client role/permission behavior.
+
+  inputs:
+    required_config: [existing gateway origin, existing Supabase browser publishable configuration]
+    required_secrets: []
+
+  outputs:
+    files:
+      - packages/domain/src/index.ts
+      - supabase/functions/_shared/alert-rules.ts
+      - apps/web/components/in-app-alerts-panel.tsx
+      - tests/e2e/dashboard.spec.ts
+    terraform_resources: []
+    database_changes: [none; existing alert_rules conditions JSON and RLS are reused]
+    deployed_units: []
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert supported condition parsing/evaluation and the on-demand data reads; persisted rules remain readable and no schema rollback is needed.
+
+  validation:
+    commands:
+      - corepack pnpm exec vitest run supabase/functions/_shared/alert-rules.test.ts packages/domain/src/index.test.ts
+      - corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts --grep "authenticates, saves the current place" --workers=1
+      - deno check --node-modules-dir=auto supabase/functions/_shared/alert-rules.ts
+      - corepack pnpm exec eslint packages/domain/src/index.ts packages/domain/src/index.test.ts supabase/functions/_shared/alert-rules.ts supabase/functions/_shared/alert-rules.test.ts apps/web/components/in-app-alerts-panel.tsx tests/e2e/dashboard.spec.ts --max-warnings=0
+      - corepack pnpm typecheck
+      - corepack pnpm --filter @atmos/domain build
+      - corepack pnpm --filter @atmos/web build
+    expected:
+      - Existing current/forecast weather conditions remain supported, with added rainfall, snowfall, gust, UV, visibility, AQI, PM2.5, freeze-risk, extreme-heat, and official-warning occurrence handling.
+      - AQI and warning requests are on-demand, bounded by the existing response contracts, and not issued when no relevant alert is selected/enabled.
+      - Unsupported coverage, unavailable AQI, or failed warning data is not reported as “no alert”.
+      - In-app status is local/on-demand only; no scheduled or external delivery occurs.
+
+  security_checks:
+    - Keep RLS-scoped rule CRUD and server-derived user_id unchanged.
+    - Keep notification_channels fixed to in-app and reject untrusted ownership or role fields.
+    - Do not log coordinates, rule payloads, AQI values, warning text, user IDs, or credentials.
+    - Preserve honest stale/unavailable/unsupported source states.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+
+  telemetry:
+    metrics: [existing weather and API request telemetry only]
+    logs: [sanitized failures only; no rule/weather/warning payloads]
+    traces: [existing request correlation]
+
+  evidence:
+    - docs/evidence/alert-inapp-003/implementation.md
+    - contract, domain, parser, and browser test results
+
+  rollback:
+    strategy: Revert only the additive rule condition/data-evaluation code; no durable schema or notification work is introduced.
+
+  human_approval:
+    required: false
+    reason: Uses only previously approved on-demand sources, existing user-owned RLS, and no remote mutation or background service.
