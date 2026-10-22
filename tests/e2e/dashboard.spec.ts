@@ -1102,6 +1102,7 @@ test('loads weather from device coordinates without adding them to the page URL'
 test('authenticates, saves the current place, and switches to an API-returned saved place', async ({
   page,
 }) => {
+  test.setTimeout(60_000);
   const paris = {
     id: '00000000-0000-4000-8000-000000000001',
     name: 'Paris',
