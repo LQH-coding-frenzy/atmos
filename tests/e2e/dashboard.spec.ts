@@ -1486,11 +1486,15 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   expect(placePreferences.defaultLocationId).toBe(savedBerlin?.id);
   expect(placePreferences.orderedLocationIds[0]).toBe(savedBerlin?.id);
 
+  const requestsBeforeReturningToParis = browserWeatherQueries.length;
   await page
     .getByRole('list', { name: 'Your saved places' })
     .getByRole('button', { name: 'Paris', exact: true })
     .click();
-  await expect(page.locator('.location-name')).toHaveText('Paris');
+  await expect
+    .poll(() => browserWeatherQueries.length, { timeout: 15_000 })
+    .toBeGreaterThan(requestsBeforeReturningToParis);
+  await expect(page.locator('.location-name')).toHaveText('Paris', { timeout: 15_000 });
   await expect(page).toHaveURL('/');
 
   await openWeatherTool(page, 'Saved places');
