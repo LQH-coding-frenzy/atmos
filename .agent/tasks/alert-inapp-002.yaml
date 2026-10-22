@@ -1,0 +1,115 @@
+task:
+  id: ALERT-INAPP-002
+  title: Configure schedules and cooldown for in-app alert rules
+  status: DONE
+  objective: Let signed-in users configure weekdays, an optional active date-time window, and cooldown when creating in-app-only alert rules.
+
+  depends_on:
+    [
+      ALERT-INAPP-001,
+      FEAT-WX-002,
+      FEAT-AQI-TIMELINE-001,
+      FEAT-WARN-002,
+      AUTH-002,
+      RLS-002,
+      ROUTE-001,
+      WEB-012,
+    ]
+
+  external_policy_checks:
+    - No new alert vendor, notification channel, paid service, or provider request.
+    - Existing alert_rules schedule JSON and per-user RLS are reused; no hosted schema change.
+    - Cooldown is stored for future delivery semantics only; this task does not add scheduled/background delivery.
+
+  runtime_placement:
+    allowed: [supabase-edge-function, vercel-nextjs]
+    selected: supabase-edge-function
+    reason: Rule schedule settings are persisted through existing authenticated CRUD and caller-scoped RLS; current status remains on-demand in the dashboard.
+
+  scope:
+    include:
+      - packages/contracts/src/index.ts
+      - packages/contracts/src/index.test.ts
+      - packages/domain/src/index.ts
+      - packages/domain/src/index.test.ts
+      - supabase/functions/_shared/alert-rules.ts
+      - supabase/functions/_shared/alert-rules.test.ts
+      - supabase/functions/api-v1/index.ts
+      - apps/web/components/in-app-alerts-panel.tsx
+      - apps/web/app/globals.css
+      - tests/e2e/dashboard.spec.ts
+      - .agent/status.yaml
+      - .agent/tasks/alert-inapp-002.yaml
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/design/feature-completion-roadmap.md
+      - docs/evidence/alert-inapp-002/implementation.md
+    exclude:
+      - Email, push, queue, cron, or scheduled delivery.
+      - New condition metrics or multi-condition rule composition.
+      - New tables/columns, migrations, grants, or RLS changes.
+      - Worker routes or background processing.
+
+  inputs:
+    required_config:
+      [existing authenticated api-v1 and Supabase browser publishable-key configuration]
+    required_secrets: []
+
+  outputs:
+    files:
+      - packages/contracts/src/index.ts
+      - packages/domain/src/index.ts
+      - supabase/functions/_shared/alert-rules.ts
+      - supabase/functions/api-v1/index.ts
+      - apps/web/components/in-app-alerts-panel.tsx
+      - tests/e2e/dashboard.spec.ts
+    terraform_resources: []
+    database_changes: [none; use the existing alert_rules JSON schedule field and RLS]
+    deployed_units: []
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert schedule controls and parser changes; existing rules retain their stored schedule JSON and prior default behavior.
+
+  validation:
+    commands:
+      - corepack pnpm exec vitest run supabase/functions/_shared/alert-rules.test.ts packages/domain/src/index.test.ts packages/contracts/src/index.test.ts
+      - corepack pnpm exec playwright test tests/e2e/dashboard.spec.ts --workers=1
+      - deno check --node-modules-dir=auto supabase/functions/api-v1/index.ts supabase/functions/_shared/alert-rules.ts
+      - corepack pnpm exec eslint packages/contracts/src/index.ts packages/contracts/src/index.test.ts packages/domain/src/index.ts packages/domain/src/index.test.ts supabase/functions/_shared/alert-rules.ts supabase/functions/_shared/alert-rules.test.ts supabase/functions/api-v1/index.ts apps/web/components/in-app-alerts-panel.tsx tests/e2e/dashboard.spec.ts --max-warnings=0
+      - corepack pnpm typecheck
+      - corepack pnpm --filter @atmos/domain build
+      - corepack pnpm --filter @atmos/web build
+    expected:
+      - New rules persist a validated weekday mask, optional offset-aware start/end instants, and cooldown from 1 to 10080 minutes.
+      - The in-app status uses the configured weekdays in the selected location timezone and optional active window.
+      - The cooldown is shown/stored but does not suppress on-demand status; no background delivery is added.
+      - Old clients that omit schedule retain all-weekday and 60-minute defaults.
+      - Only the authenticated user's rules can be read or changed.
+
+  security_checks:
+    - Keep user_id derived from verified Auth identity; preserve existing RLS allow/deny behavior.
+    - Validate weekdays, duplicate entries, cooldown bounds, ISO timestamps, and start-before-end server-side.
+    - Keep notification_channels fixed to in-app and reject unsupported update fields.
+    - Do not log conditions, schedule values, user IDs, or rule payloads.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+
+  telemetry:
+    metrics: [existing API request telemetry only]
+    logs: [sanitized errors only; no user rule/schedule values]
+    traces: [existing request correlation]
+
+  evidence:
+    - docs/evidence/alert-inapp-002/implementation.md
+    - package, database, and browser test results
+
+  rollback:
+    strategy: Revert the UI/API schedule configuration; no schema rollback or delivery cleanup is needed.
+
+  human_approval:
+    required: false
+    reason: Uses existing user-owned alert rules and RLS; introduces no schema change, provider, external resource, or delivery path.

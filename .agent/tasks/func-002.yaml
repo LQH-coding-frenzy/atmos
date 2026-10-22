@@ -19,7 +19,7 @@ task:
       ]
     exclude: [new schema, service-role use, remote deployment]
   inputs:
-    required_config: [SUPABASE_URL, SUPABASE_ANON_KEY]
+    required_config: [SUPABASE_URL, SUPABASE_PUBLISHABLE_KEYS]
     required_secrets: []
   outputs:
     files:

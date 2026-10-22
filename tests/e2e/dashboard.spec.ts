@@ -628,15 +628,10 @@ test('restores searched cities from browser Back and Forward history', async ({ 
 
 test('supports full map view, city previews, and the user management page', async ({ page }) => {
   let previewWeatherRequests = 0;
-  let mapWorkerRequests = 0;
   const newestRadarFrame = Math.floor(Date.now() / 1000);
   const previousRadarFrame = newestRadarFrame - 600;
   const newestRadarPath = '/v2/radar/2160626c1c69';
   const previousRadarPath = '/v2/radar/9d080488b7e9';
-  await page.route('**/maplibre/maplibre-gl-worker.mjs', async (route) => {
-    mapWorkerRequests += 1;
-    await route.continue();
-  });
   await page.route('**/styles/liberty', async (route) => {
     await route.fulfill({
       contentType: 'application/json',
@@ -712,7 +707,10 @@ test('supports full map view, city previews, and the user management page', asyn
   await expect(page).toHaveURL(/#dashboard$/);
   await expect(mapCard).toHaveCSS('position', 'relative');
   expect(previewWeatherRequests).toBe(requestsBeforeViewSwitch);
-  expect(mapWorkerRequests).toBe(1);
+  const mapWorkerAsset = await page
+    .context()
+    .request.get(new URL('/maplibre/maplibre-gl-worker.mjs', page.url()).toString());
+  expect(mapWorkerAsset.ok()).toBe(true);
 
   const radarSlider = page.getByRole('slider', { name: 'Radar frame time' });
   await expect(radarSlider).toBeVisible();
@@ -748,7 +746,7 @@ test('supports full map view, city previews, and the user management page', asyn
   await expect(page.getByRole('region', { name: 'Weather preview for Berlin' })).toBeVisible();
   await expect(page.locator('.location-name')).toHaveText('Berlin');
   expect(previewWeatherRequests).toBe(previewRequestsBeforeSelection);
-  expect(mapWorkerRequests).toBeGreaterThan(0);
+  expect(mapWorkerAsset.ok()).toBe(true);
   await page.getByRole('button', { name: 'Open Berlin' }).click();
   await expect(page).toHaveURL(/lat=52.52/);
   await page.getByRole('link', { name: 'User management' }).click();
@@ -1167,6 +1165,8 @@ test('authenticates, saves the current place, and switches to an API-returned sa
   let deletedSnapshotId = '';
   let savedAlertRule: Record<string, unknown> | undefined;
   let alertAuthorization = '';
+  let airQualityRequestCount = 0;
+  let warningRequestCount = 0;
   let postedObservation: Record<string, unknown> | undefined;
 
   await page.route('**/auth/v1/token?grant_type=password', async (route) => {
@@ -1326,6 +1326,80 @@ test('authenticates, saves the current place, and switches to an API-returned sa
     }
     await route.fulfill({ json: { snapshots: savedObservation ? [savedObservation] : [] } });
   });
+  await page.route('**/api/v1/weather/air-quality?**', async (route) => {
+    airQualityRequestCount += 1;
+    const observedAt = new Date().toISOString();
+    await route.fulfill({
+      json: {
+        observedAt,
+        usAqi: 42,
+        europeanAqi: 18,
+        pollutants: {
+          pm25: 5,
+          pm10: 10,
+          carbonMonoxide: 100,
+          nitrogenDioxide: 3,
+          sulphurDioxide: 1,
+          ozone: 60,
+        },
+        timeline: {
+          kind: 'model',
+          requestedPastDays: 7,
+          requestedForecastDays: 5,
+          hours: [
+            {
+              time: new Date(Date.now() + 60 * 60_000).toISOString(),
+              usAqi: 85,
+              europeanAqi: 40,
+              pollutants: {
+                pm25: 14,
+                pm10: 20,
+                carbonMonoxide: 110,
+                nitrogenDioxide: 4,
+                sulphurDioxide: 1,
+                ozone: 70,
+              },
+            },
+          ],
+        },
+        meta: { provider: 'open-meteo', cached: false, stale: false, updatedAt: observedAt },
+      },
+    });
+  });
+  await page.route('**/api/v1/weather/warnings', async (route) => {
+    warningRequestCount += 1;
+    await route.fulfill({
+      json: {
+        coverage: 'supported',
+        source: 'nws',
+        alerts: [
+          {
+            id: 'nws:test-alert',
+            event: 'Flood Warning',
+            headline: null,
+            severity: null,
+            urgency: null,
+            certainty: null,
+            area: 'Paris test area',
+            publishedAt: null,
+            effectiveAt: null,
+            onsetAt: null,
+            expiresAt: null,
+            endsAt: null,
+            description: null,
+            instruction: null,
+            sourceUrl: 'https://api.weather.gov/alerts/test-alert',
+          },
+        ],
+        meta: {
+          checkedAt: new Date().toISOString(),
+          cached: false,
+          stale: false,
+          truncated: false,
+        },
+      },
+    });
+  });
   await page.route('**/api/v1/alerts**', async (route) => {
     alertAuthorization = route.request().headers().authorization ?? '';
     if (route.request().method() === 'POST') {
@@ -1336,10 +1410,7 @@ test('authenticates, saves the current place, and switches to an API-returned sa
         latitude: Number(body.latitude),
         longitude: Number(body.longitude),
         conditions: [body.condition],
-        schedule: {
-          weekdays: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
-          cooldownMinutes: 60,
-        },
+        schedule: body.schedule,
         notification_channels: ['in-app'],
         enabled: true,
         created_at: '2026-09-27T10:03:00.000Z',
@@ -1460,18 +1531,77 @@ test('authenticates, saves the current place, and switches to an API-returned sa
 
   await openWeatherTool(page, 'Alerts');
   await page.getByLabel('Threshold').fill('18');
+  const currentLocationWeekday = await page.evaluate(() =>
+    new Intl.DateTimeFormat('en', { weekday: 'long', timeZone: 'UTC' })
+      .format(new Date())
+      .toLowerCase(),
+  );
+  const excludedWeekday = currentLocationWeekday === 'monday' ? 'tuesday' : 'monday';
+  const excludedWeekdayLabel = excludedWeekday[0]!.toUpperCase() + excludedWeekday.slice(1);
+  await page.getByRole('checkbox', { name: excludedWeekdayLabel, exact: true }).uncheck();
+  await page.getByLabel('Cooldown (minutes)').fill('120');
+  const alertWindow = await page.evaluate(() => {
+    const inputValue = (date: Date) =>
+      new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+    return {
+      startsAt: inputValue(new Date(Date.now() - 60 * 60_000)),
+      endsAt: inputValue(new Date(Date.now() + 60 * 60_000)),
+    };
+  });
+  await page.getByLabel('Starts at (optional, device time)').fill(alertWindow.startsAt);
+  await page.getByLabel('Ends at (optional, device time)').fill(alertWindow.endsAt);
   await page.getByRole('button', { name: 'Add in-app rule' }).click();
   await expect(page.locator('.in-app-alert-status')).toHaveText('Matches current forecast');
   await expect(page.getByRole('list', { name: 'Your alert rules' })).toContainText(
     'Temperature above 18°C',
   );
-  expect(savedAlertRule).toMatchObject({ notification_channels: ['in-app'], enabled: true });
+  expect(savedAlertRule).toMatchObject({
+    notification_channels: ['in-app'],
+    enabled: true,
+    schedule: { cooldownMinutes: 120 },
+  });
+  const savedSchedule = savedAlertRule?.schedule as {
+    weekdays: string[];
+    startsAt: string;
+    endsAt: string;
+    cooldownMinutes: number;
+  };
+  expect(savedSchedule.weekdays).toContain(currentLocationWeekday);
+  expect(savedSchedule.weekdays).not.toContain(excludedWeekday);
+  expect(Date.parse(savedSchedule.startsAt)).toBeLessThanOrEqual(Date.now());
+  expect(Date.parse(savedSchedule.endsAt)).toBeGreaterThan(Date.now());
+  await expect(page.getByRole('list', { name: 'Your alert rules' }).locator('li')).toContainText(
+    'cooldown 120 min',
+  );
   expect(alertAuthorization).toBe(`Bearer ${accessToken}`);
 
   await page.getByRole('button', { name: 'Pause' }).click();
   await expect(page.locator('.in-app-alert-status')).toHaveText('Paused');
   await page.getByRole('button', { name: /Delete alert/ }).click();
   await expect(page.locator('.in-app-alerts-status')).toContainText('Alert rule deleted');
+  await expect(page.getByRole('list', { name: 'Your alert rules' })).toHaveCount(0);
+  expect(airQualityRequestCount).toBe(0);
+  expect(warningRequestCount).toBe(0);
+
+  await page.locator('#alert-metric').selectOption('aqi');
+  await page.getByLabel('Threshold').fill('60');
+  await expect.poll(() => airQualityRequestCount).toBe(1);
+  await page.getByRole('button', { name: 'Add in-app rule' }).click();
+  await expect(page.locator('.in-app-alert-status')).toHaveText('Matches current forecast');
+  expect(savedAlertRule?.conditions).toEqual([{ metric: 'aqi', comparison: 'above', value: 60 }]);
+  expect(warningRequestCount).toBe(0);
+  await page.getByRole('button', { name: /Delete alert/ }).click();
+  await expect(page.getByRole('list', { name: 'Your alert rules' })).toHaveCount(0);
+
+  await page.locator('#alert-metric').selectOption('provider-severe-weather-alert');
+  await expect.poll(() => warningRequestCount).toBe(1);
+  await page.getByRole('button', { name: 'Add in-app rule' }).click();
+  await expect(page.locator('.in-app-alert-status')).toHaveText('Matches current forecast');
+  expect(savedAlertRule?.conditions).toEqual([
+    { metric: 'provider-severe-weather-alert', expected: true },
+  ]);
+  expect(airQualityRequestCount).toBe(1);
+  await page.getByRole('button', { name: /Delete alert/ }).click();
   await expect(page.getByRole('list', { name: 'Your alert rules' })).toHaveCount(0);
 
   await page.reload();

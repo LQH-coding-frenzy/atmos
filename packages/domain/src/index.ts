@@ -1,4 +1,11 @@
-import type { AirQualityHour, CurrentWeather, HourlyForecast, UnitSystem } from '@atmos/contracts';
+import type {
+  AirQuality,
+  AirQualityHour,
+  CurrentWeather,
+  HourlyForecast,
+  SevereWeatherResponse,
+  UnitSystem,
+} from '@atmos/contracts';
 
 export const plannerActivityKinds = [
   'running',
@@ -533,14 +540,33 @@ export type InAppAlertWeather = {
   current: Pick<
     CurrentWeather,
     'temperatureC' | 'apparentTemperatureC' | 'windSpeedKph' | 'condition'
-  >;
-  hourly: readonly Pick<HourlyForecast, 'precipitationProbability' | 'condition'>[];
+  > &
+    Partial<CurrentWeather>;
+  hourly: readonly (Pick<HourlyForecast, 'precipitationProbability' | 'condition'> &
+    Partial<HourlyForecast>)[];
   timezone: string;
+  airQuality?: AirQuality;
+  officialWarnings?: Pick<SevereWeatherResponse, 'coverage' | 'alerts'>;
 };
+
+function maxAvailable(values: readonly (number | null | undefined)[]) {
+  const available = values.filter(
+    (value): value is number => typeof value === 'number' && Number.isFinite(value),
+  );
+  return available.length ? Math.max(...available) : undefined;
+}
+
+function minAvailable(values: readonly (number | null | undefined)[]) {
+  const available = values.filter(
+    (value): value is number => typeof value === 'number' && Number.isFinite(value),
+  );
+  return available.length ? Math.min(...available) : undefined;
+}
 
 function inAppConditionMatches(
   condition: AlertCondition,
   weather: InAppAlertWeather,
+  now: Date,
 ): boolean | undefined {
   if ('expected' in condition) {
     const occurred = (() => {
@@ -551,17 +577,40 @@ function inAppConditionMatches(
             weather.hourly.some((hour) => hour.condition === 'thunderstorm')
           );
         case 'freeze-risk':
-          return weather.current.temperatureC <= 0 || weather.current.apparentTemperatureC <= 0;
+          return (
+            weather.current.temperatureC <= 0 ||
+            weather.current.apparentTemperatureC <= 0 ||
+            weather.hourly.some(
+              (hour) =>
+                (hour.temperatureC ?? Infinity) <= 0 ||
+                (hour.apparentTemperatureC ?? Infinity) <= 0,
+            )
+          );
         case 'extreme-heat':
-          return weather.current.temperatureC >= 35;
+          return (
+            weather.current.temperatureC >= 35 ||
+            weather.hourly.some(
+              (hour) =>
+                (hour.temperatureC ?? -Infinity) >= 35 ||
+                (hour.apparentTemperatureC ?? -Infinity) >= 35,
+            )
+          );
         case 'provider-severe-weather-alert':
-          return undefined;
+          if (!weather.officialWarnings || weather.officialWarnings.coverage === 'unsupported') {
+            return undefined;
+          }
+          return weather.officialWarnings.alerts.length > 0;
       }
     })();
-    return occurred === condition.expected;
+    return occurred === undefined ? undefined : occurred === condition.expected;
   }
 
   let value: number | undefined;
+  const nextDay = now.getTime() + 24 * 60 * 60_000;
+  const airQualityHours = (weather.airQuality?.timeline?.hours ?? []).filter((hour) => {
+    const timestamp = Date.parse(hour.time);
+    return timestamp >= now.getTime() && timestamp <= nextDay;
+  });
   switch (condition.metric) {
     case 'temperature':
       value = weather.current.temperatureC;
@@ -570,12 +619,60 @@ function inAppConditionMatches(
       value = weather.current.apparentTemperatureC;
       break;
     case 'rain-probability':
-      value = weather.hourly.length
-        ? Math.max(...weather.hourly.map((hour) => hour.precipitationProbability))
-        : undefined;
+      value = maxAvailable(weather.hourly.map((hour) => hour.precipitationProbability));
+      break;
+    case 'rainfall':
+      value = maxAvailable([weather.current.rainMm, ...weather.hourly.map((hour) => hour.rainMm)]);
+      break;
+    case 'snowfall':
+      value = maxAvailable([
+        typeof weather.current.snowfallCm === 'number'
+          ? weather.current.snowfallCm * 10
+          : undefined,
+        ...weather.hourly.map((hour) =>
+          typeof hour.snowfallCm === 'number' ? hour.snowfallCm * 10 : undefined,
+        ),
+      ]);
       break;
     case 'wind':
-      value = weather.current.windSpeedKph;
+      value = maxAvailable([
+        weather.current.windSpeedKph,
+        ...weather.hourly.map((hour) => hour.windSpeedKph),
+      ]);
+      break;
+    case 'gust':
+      value = maxAvailable([
+        weather.current.windGustKph,
+        ...weather.hourly.map((hour) => hour.windGustKph),
+      ]);
+      break;
+    case 'uv':
+      value = maxAvailable([
+        weather.current.hourlyEstimates?.uvIndex,
+        ...weather.hourly.map((hour) => hour.uvIndex),
+      ]);
+      break;
+    case 'aqi':
+      value = maxAvailable([
+        weather.airQuality?.usAqi,
+        ...airQualityHours.map((hour) => hour.usAqi),
+      ]);
+      break;
+    case 'pm2.5':
+      value = maxAvailable([
+        weather.airQuality?.pollutants.pm25,
+        ...airQualityHours.map((hour) => hour.pollutants.pm25),
+      ]);
+      break;
+    case 'visibility':
+      value = minAvailable([
+        typeof weather.current.hourlyEstimates?.visibilityM === 'number'
+          ? weather.current.hourlyEstimates.visibilityM / 1000
+          : undefined,
+        ...weather.hourly.map((hour) =>
+          typeof hour.visibilityM === 'number' ? hour.visibilityM / 1000 : undefined,
+        ),
+      ]);
       break;
     default:
       return undefined;
@@ -590,6 +687,15 @@ export function evaluateInAppAlertStatus(
   now = new Date(),
 ): InAppAlertStatus {
   if (!rule.enabled) return 'disabled';
+  const nowTimestamp = now.getTime();
+  const startsAt = rule.schedule.startsAt ? Date.parse(rule.schedule.startsAt) : undefined;
+  const endsAt = rule.schedule.endsAt ? Date.parse(rule.schedule.endsAt) : undefined;
+  if (
+    (startsAt !== undefined && (!Number.isFinite(startsAt) || nowTimestamp < startsAt)) ||
+    (endsAt !== undefined && (!Number.isFinite(endsAt) || nowTimestamp >= endsAt))
+  ) {
+    return 'outside-schedule';
+  }
   const weekday = new Intl.DateTimeFormat('en', {
     weekday: 'long',
     timeZone: weather.timezone,
@@ -597,7 +703,9 @@ export function evaluateInAppAlertStatus(
     .format(now)
     .toLowerCase() as Weekday;
   if (!rule.schedule.weekdays.includes(weekday)) return 'outside-schedule';
-  const matches = rule.conditions.map((condition) => inAppConditionMatches(condition, weather));
+  const matches = rule.conditions.map((condition) =>
+    inAppConditionMatches(condition, weather, now),
+  );
   if (matches.some((match) => match === undefined)) return 'unsupported';
   return matches.every((match) => match) ? 'triggered' : 'monitoring';
 }

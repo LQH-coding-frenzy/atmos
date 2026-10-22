@@ -1,0 +1,111 @@
+task:
+  id: FEAT-PROFILE-001
+  title: Add account-synced profile and display preferences
+  status: DONE
+  objective: Let an authenticated user edit their display name and sync units, theme, and display timezone across devices.
+
+  depends_on: [AUTH-002, FUNC-002, RLS-002, ROUTE-001, WEB-012]
+
+  external_policy_checks:
+    - Reuse the existing SUPABASE_PUBLISHABLE_KEYS configuration; stop if unavailable instead of falling back to a legacy anon key or creating a secret.
+    - No hosted resource mutation or production release.
+
+  runtime_placement:
+    allowed: [supabase-edge-function, vercel-nextjs]
+    selected: supabase-edge-function
+    reason: Profile reads and updates are authenticated database operations and must remain behind the caller JWT and existing RLS policies.
+
+  scope:
+    include:
+      - packages/contracts/src/index.ts
+      - packages/contracts/src/index.test.ts
+      - supabase/functions/api-v1/index.ts
+      - supabase/functions/_shared/profile-preferences.ts
+      - supabase/functions/_shared/profile-preferences.test.ts
+      - apps/web/components/preferences-panel.tsx
+      - apps/web/components/dashboard.tsx
+      - apps/web/components/activity-planner.tsx
+      - apps/web/app/globals.css
+      - workers/gateway/src/index.test.ts
+      - tests/e2e/profile-preferences.spec.ts
+      - .agent/status.yaml
+      - .agent/tasks/feat-profile-001.yaml
+      - .agent/tasks/func-002.yaml
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/design/feature-completion-roadmap.md
+      - docs/evidence/feat-profile-001/implementation.md
+    exclude:
+      - Owner/user role assignment, role UI, admin roles, or client-controlled privileges; defer to a separate task. The trusted source is recorded in ADR 0004, but no initial owner UUID has been confirmed or assigned.
+      - New columns, tables, migrations, RPCs, grants, or RLS policy changes.
+      - Direct browser database access or privileged Supabase credentials.
+      - Production deployment or hosted database changes.
+
+  inputs:
+    required_config:
+      - SUPABASE_URL
+      - SUPABASE_PUBLISHABLE_KEYS
+      - NEXT_PUBLIC_SUPABASE_URL
+      - NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+      - ATMOS_GATEWAY_URL
+    required_secrets: []
+
+  outputs:
+    files:
+      - supabase/functions/api-v1/index.ts
+      - supabase/functions/_shared/profile-preferences.ts
+      - apps/web/components/preferences-panel.tsx
+      - apps/web/components/dashboard.tsx
+      - apps/web/components/activity-planner.tsx
+      - tests/e2e/profile-preferences.spec.ts
+    terraform_resources: []
+    database_changes: [none; reuse profiles and user_preferences with existing own-row RLS]
+    deployed_units: []
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert the API/UI changes; no schema or durable-shape rollback is required.
+
+  validation:
+    commands:
+      - corepack pnpm exec vitest run packages/contracts/src/index.test.ts supabase/functions/_shared/profile-preferences.test.ts
+      - corepack pnpm exec vitest run workers/gateway/src/index.test.ts
+      - corepack pnpm test:db
+      - corepack pnpm exec playwright test tests/e2e/profile-preferences.spec.ts --workers=1
+      - deno check --node-modules-dir=auto supabase/functions/api-v1/index.ts supabase/functions/_shared/profile-preferences.ts
+      - corepack pnpm exec eslint packages/contracts/src/index.ts packages/contracts/src/index.test.ts supabase/functions/api-v1/index.ts supabase/functions/_shared/profile-preferences.ts supabase/functions/_shared/profile-preferences.test.ts apps/web/components/preferences-panel.tsx apps/web/components/dashboard.tsx apps/web/components/activity-planner.tsx workers/gateway/src/index.test.ts tests/e2e/profile-preferences.spec.ts --max-warnings=0
+      - corepack pnpm typecheck
+      - corepack pnpm --filter @atmos/web build
+    expected:
+      - Only the authenticated caller's profile/preferences are read or updated; unknown role/ownership fields are rejected.
+      - Existing user-owned RLS policies remain unchanged and no migration is added.
+      - Signed-in users can save display name, units, theme and an IANA timezone; auto follows the selected location timezone.
+      - The browser sends the user JWT through the existing gateway; no privileged key or client-supplied user ID is used.
+      - Signed-out units and theme remain device-local.
+
+  security_checks:
+    - Use the configured publishable key plus verified caller JWT; do not use SUPABASE_ANON_KEY or PROJECT_SECRET_KEY for ordinary profile operations.
+    - Derive row identifiers only from auth.getUser(); reject unknown request fields, including role and user_id.
+    - Preserve existing RLS/grants; no personal data or credentials are logged.
+    - Keep request payloads bounded and API errors sanitized.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+
+  telemetry:
+    metrics: [existing API request telemetry only]
+    logs: [no profile or preference values]
+    traces: [existing request correlation]
+
+  evidence:
+    - docs/evidence/feat-profile-001/implementation.md
+    - package, gateway, and browser test results
+
+  rollback:
+    strategy: Revert the profile API and settings UI; existing locally stored unit/theme behavior remains available and the database shape is unchanged.
+
+  human_approval:
+    required: false
+    reason: Owner selected the profile/preferences slice; role assignment is explicitly deferred, and this task makes no hosted or production changes.

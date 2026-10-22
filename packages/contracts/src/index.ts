@@ -3,6 +3,63 @@ import { z } from 'zod';
 export const unitSystemSchema = z.enum(['metric', 'imperial']);
 export type UnitSystem = z.infer<typeof unitSystemSchema>;
 
+export const themePreferenceSchema = z.enum(['system', 'light', 'dark']);
+export type ThemePreference = z.infer<typeof themePreferenceSchema>;
+
+export const appRoleSchema = z.enum(['owner', 'user']);
+export type AppRole = z.infer<typeof appRoleSchema>;
+
+function isValidTimezone(value: string) {
+  if (value === 'auto') return true;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const timezonePreferenceSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .refine(isValidTimezone, 'Use auto or a valid IANA timezone.');
+
+const profileDisplayNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((value) => [...value].length <= 80, 'Display name must be 80 characters or fewer.');
+
+export const profilePreferencesResponseSchema = z.object({
+  role: appRoleSchema.optional(),
+  profile: z.object({
+    id: z.string().uuid(),
+    display_name: profileDisplayNameSchema.nullable(),
+    created_at: z.string().datetime({ offset: true }),
+    updated_at: z.string().datetime({ offset: true }),
+  }),
+  preferences: z.object({
+    units: unitSystemSchema,
+    timezone: timezonePreferenceSchema,
+    theme: themePreferenceSchema,
+    updated_at: z.string().datetime({ offset: true }),
+  }),
+});
+export type ProfilePreferencesResponse = z.infer<typeof profilePreferencesResponseSchema>;
+
+export const profilePreferencesUpdateSchema = z
+  .object({
+    display_name: profileDisplayNameSchema.optional(),
+    units: unitSystemSchema.optional(),
+    timezone: timezonePreferenceSchema.optional(),
+    theme: themePreferenceSchema.optional(),
+  })
+  .strict()
+  .refine((update) => Object.keys(update).length > 0, 'At least one field is required.');
+export type ProfilePreferencesUpdate = z.infer<typeof profilePreferencesUpdateSchema>;
+
 export const locationSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -276,12 +333,38 @@ export const alertWeekdaySchema = z.enum([
   'sunday',
 ]);
 
-export const alertScheduleSchema = z.object({
-  startsAt: z.string().optional(),
-  endsAt: z.string().optional(),
-  weekdays: z.array(alertWeekdaySchema).max(7),
-  cooldownMinutes: z.number().int().min(1).max(10080),
-});
+export const alertScheduleSchema = z
+  .object({
+    startsAt: z.string().datetime({ offset: true }).optional(),
+    endsAt: z.string().datetime({ offset: true }).optional(),
+    weekdays: z
+      .array(alertWeekdaySchema)
+      .min(1)
+      .max(7)
+      .superRefine((days, context) => {
+        if (new Set(days).size !== days.length) {
+          context.addIssue({
+            code: 'custom',
+            message: 'Scheduled weekdays must be unique.',
+          });
+        }
+      }),
+    cooldownMinutes: z.number().int().min(1).max(10080),
+  })
+  .strict()
+  .superRefine((schedule, context) => {
+    if (
+      schedule.startsAt &&
+      schedule.endsAt &&
+      Date.parse(schedule.startsAt) >= Date.parse(schedule.endsAt)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['endsAt'],
+        message: 'The schedule end must be after its start.',
+      });
+    }
+  });
 
 export const alertRuleSchema = z.object({
   id: z.string().uuid(),
@@ -313,6 +396,7 @@ export const createAlertRuleRequestSchema = z.object({
   latitude: z.number().gte(-90).lte(90),
   longitude: z.number().gte(-180).lte(180),
   condition: alertConditionSchema,
+  schedule: alertScheduleSchema.optional(),
 });
 
 export const updateAlertRuleRequestSchema = z.object({

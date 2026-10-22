@@ -1,0 +1,109 @@
+task:
+  id: FEAT-CAL-001
+  title: Add a day-selectable weather calendar
+  status: DONE
+  objective: Give users a calendar-style forecast selector with day-specific hourly weather, sunlight, AQI, planner scoring, and scheduled in-app rule context.
+
+  depends_on:
+    [
+      FEAT-WX-002,
+      FEAT-AQI-TIMELINE-001,
+      FEAT-PLAN-002,
+      ALERT-INAPP-003,
+      AUTH-002,
+      FEAT-LOC-UI-001,
+      ROUTE-001,
+      WEB-012,
+    ]
+
+  external_policy_checks:
+    - Reuse the existing 16-day dashboard forecast and on-demand AQI timeline; do not add a provider or background polling.
+    - Read alert rules through the existing caller-JWT gateway route and RLS.
+    - No hosted resource mutation, paid resource, or production release.
+
+  runtime_placement:
+    allowed: [vercel-nextjs]
+    selected: vercel-nextjs
+    reason: Calendar selection, filtering, planner scoring, and detail rendering are browser UI; existing data APIs provide bounded forecasts, AQI, and user-owned rules on explicit interaction.
+
+  scope:
+    include:
+      - apps/web/components/weather-calendar-panel.tsx
+      - apps/web/components/dashboard.tsx
+      - apps/web/app/globals.css
+      - apps/web/lib/weather-calendar.ts
+      - apps/web/lib/weather-calendar.test.ts
+      - tests/e2e/weather-calendar.spec.ts
+      - .agent/status.yaml
+      - .agent/tasks/feat-cal-001.yaml
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/design/feature-completion-roadmap.md
+      - docs/evidence/feat-cal-001/implementation.md
+    exclude:
+      - Database/schema/RLS changes or new persisted calendar state.
+      - Historical backfill, email/push delivery, cron, queues, or background polling.
+      - New weather/AQI/warning provider adapters or new paid services.
+      - Alert-condition editing or role management.
+
+  inputs:
+    required_config:
+      [
+        existing ATMOS_GATEWAY_URL,
+        existing Supabase browser public configuration for authenticated rule context,
+      ]
+    required_secrets: []
+
+  outputs:
+    files:
+      - apps/web/components/weather-calendar-panel.tsx
+      - apps/web/lib/weather-calendar.ts
+      - apps/web/components/dashboard.tsx
+      - tests/e2e/weather-calendar.spec.ts
+    terraform_resources: []
+    database_changes: [none; reads existing forecast contracts and user-owned alert_rules]
+    deployed_units: []
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Remove the calendar panel and date-selection helpers; no persisted state or API contract changes are required.
+
+  validation:
+    commands:
+      - corepack pnpm exec vitest run apps/web/lib/weather-calendar.test.ts packages/domain/src/index.test.ts
+      - corepack pnpm exec playwright test tests/e2e/weather-calendar.spec.ts --workers=1
+      - corepack pnpm exec eslint apps/web/components/weather-calendar-panel.tsx apps/web/components/dashboard.tsx apps/web/lib/weather-calendar.ts apps/web/lib/weather-calendar.test.ts tests/e2e/weather-calendar.spec.ts --max-warnings=0
+      - corepack pnpm typecheck
+      - corepack pnpm --filter @atmos/web build
+    expected:
+      - Calendar days come from the selected location's available daily forecast; unavailable hourly/AQI data is explicit, never zero-filled.
+      - Selecting a date shows that day's available hourly values and sun/daylight context.
+      - AQI timeline loads only after the calendar is opened and its model coverage is disclosed.
+      - Planner scoring uses the selected day's hourly window and displays coverage/missing dimensions.
+      - Authenticated rule context uses the caller JWT and existing RLS, and shows schedules for the selected location day without claiming scheduled delivery.
+
+  security_checks:
+    - Keep saved rule reads behind the existing gateway with the authenticated caller JWT; do not query Supabase directly from the browser.
+    - Do not log coordinates, user IDs, rule conditions, or provider payloads.
+    - Keep provider requests bounded and user-triggered; no request fanout on page render.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+
+  telemetry:
+    metrics: [existing bounded weather and API route metrics only]
+    logs: [existing sanitized failures; no calendar/rule payloads]
+    traces: [existing request correlation]
+
+  evidence:
+    - docs/evidence/feat-cal-001/implementation.md
+    - package and browser test results
+
+  rollback:
+    strategy: Revert the calendar UI/helper; no database or background state is added.
+
+  human_approval:
+    required: false
+    reason: Uses existing public forecast/AQI routes and caller-scoped alert reads without hosted mutation or additional resources.

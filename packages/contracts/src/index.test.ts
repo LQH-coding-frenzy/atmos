@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   airQualitySchema,
+  appRoleSchema,
   alertRuleResponseSchema,
   alertRulesResponseSchema,
   createAlertRuleRequestSchema,
@@ -19,6 +20,8 @@ import {
   hourlyForecastSchema,
   extendedDailyForecastSchema,
   replaceSavedLocationPreferencesSchema,
+  profilePreferencesResponseSchema,
+  profilePreferencesUpdateSchema,
   severeWeatherRequestSchema,
   severeWeatherResponseSchema,
 } from './index';
@@ -85,6 +88,59 @@ describe('locationInputSchema', () => {
     expect(() =>
       locationInputSchema.parse({ latitude: 91, longitude: 13, timezone: 'Europe/Berlin' }),
     ).toThrow();
+  });
+});
+
+describe('profile and preference API contracts', () => {
+  const profile = {
+    id: '00000000-0000-4000-8000-000000000001',
+    display_name: 'Atmos user',
+    created_at: '2026-09-01T10:00:00.000Z',
+    updated_at: '2026-09-01T10:00:00.000Z',
+  };
+  const preferences = {
+    units: 'metric',
+    timezone: 'auto',
+    theme: 'system',
+    updated_at: '2026-09-01T10:00:00.000Z',
+  } as const;
+
+  it('accepts the current caller profile and a trimmed partial update', () => {
+    expect(profilePreferencesResponseSchema.parse({ role: 'owner', profile, preferences })).toEqual(
+      {
+        role: 'owner',
+        profile,
+        preferences,
+      },
+    );
+    expect(profilePreferencesResponseSchema.parse({ profile, preferences }).role).toBeUndefined();
+    expect(
+      profilePreferencesUpdateSchema.parse({
+        display_name: '  Weather user  ',
+        timezone: ' Europe/Paris ',
+      }),
+    ).toEqual({ display_name: 'Weather user', timezone: 'Europe/Paris' });
+  });
+
+  it('rejects empty, invalid, and privilege/ownership-bearing updates', () => {
+    for (const update of [
+      {},
+      { display_name: '   ' },
+      { display_name: '😀'.repeat(81) },
+      { timezone: 'not/a-real-timezone' },
+      { units: 'kelvin' },
+      { theme: 'auto' },
+      { display_name: 'Allowed', user_id: profile.id },
+      { role: 'owner' },
+    ]) {
+      expect(profilePreferencesUpdateSchema.safeParse(update).success).toBe(false);
+    }
+  });
+
+  it('recognizes only owner and user application roles', () => {
+    expect(appRoleSchema.parse('owner')).toBe('owner');
+    expect(appRoleSchema.parse('user')).toBe('user');
+    expect(appRoleSchema.safeParse('admin').success).toBe(false);
   });
 });
 
@@ -478,5 +534,42 @@ describe('in-app alert rule API contracts', () => {
       }),
     ).toThrow();
     expect(() => updateAlertRuleRequestSchema.parse({ enabled: 'yes' })).toThrow();
+  });
+
+  it('validates custom alert weekdays, absolute windows, and cooldown bounds', () => {
+    const schedule = {
+      weekdays: ['monday', 'thursday'],
+      startsAt: '2026-09-28T08:00:00.000Z',
+      endsAt: '2026-09-30T18:00:00.000Z',
+      cooldownMinutes: 120,
+    };
+    expect(
+      createAlertRuleRequestSchema.parse({
+        location_id: rule.location_id,
+        latitude: rule.latitude,
+        longitude: rule.longitude,
+        condition,
+        schedule,
+      }).schedule,
+    ).toEqual(schedule);
+
+    for (const invalidSchedule of [
+      { ...schedule, weekdays: ['monday', 'monday'] },
+      { ...schedule, weekdays: [] },
+      { ...schedule, startsAt: 'next monday' },
+      { ...schedule, startsAt: '2026-09-30T18:00:00.000Z' },
+      { ...schedule, cooldownMinutes: 0 },
+      { ...schedule, cooldownMinutes: 10081 },
+    ]) {
+      expect(() =>
+        createAlertRuleRequestSchema.parse({
+          location_id: rule.location_id,
+          latitude: rule.latitude,
+          longitude: rule.longitude,
+          condition,
+          schedule: invalidSchedule,
+        }),
+      ).toThrow();
+    }
   });
 });
