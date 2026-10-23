@@ -1,0 +1,112 @@
+task:
+  id: PERF-002
+  title: Remediate expanded weather/AQI Worker CPU p95 over budget
+  status: IN_PROGRESS
+  objective: Identify and reduce Worker CPU for expanded weather and AQI request paths so an exact-version candidate meets the 7 ms p95 gate without changing response semantics, paid tier, or CPU threshold.
+
+  depends_on:
+    [
+      PERF-001,
+      FEAT-WX-002,
+      FEAT-AQI-TIMELINE-001,
+      FEAT-CAL-001,
+      ROUTE-001,
+      OBS-007,
+      REL-003,
+      REL-006,
+    ]
+
+  external_policy_checks:
+    - Current post-release telemetry reports CPU p95 above the 7 ms internal gate; do not claim the gate passes until an exact candidate is measured.
+    - Keep the Workers Free plan and existing Open-Meteo non-commercial/weighted-call budget; do not raise CPU limits or add paid services.
+    - Any candidate upload, bounded provider workload, production route/traffic change, or rollback requires separate explicit owner approval.
+    - Use only sanitized analytics; do not log raw URLs, query strings, coordinates, provider payloads, user IDs, emails, JWTs, or credentials.
+
+  runtime_placement:
+    allowed: [cloudflare-worker, vercel-nextjs]
+    selected: cloudflare-worker
+    reason: The measured over-budget runtime is the existing gateway Worker. First isolate and optimize its expanded provider normalization; if the exact candidate remains over budget, move the richer transformation to the existing Next.js server runtime rather than raising the threshold.
+
+  scope:
+    include:
+      - packages/provider-openmeteo/src/index.ts
+      - packages/provider-openmeteo/src/full-weather.test.ts
+      - packages/provider-openmeteo/src/air-quality-timeline.test.ts
+      - workers/gateway/src/index.ts
+      - workers/gateway/src/index.test.ts
+      - tests/e2e/weather-calendar.spec.ts
+      - tests/e2e/air-quality-timeline.spec.ts
+      - .agent/status.yaml
+      - .agent/tasks/perf-002.yaml
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/design/feature-completion-roadmap.md
+      - docs/evidence/perf-002/implementation.md
+    exclude:
+      - Database schema, migrations, grants, policies, or user-data changes.
+      - Raising the 7 ms budget, upgrading Workers plans, or adding paid resources.
+      - Production promotion, rollback, or traffic shifting as part of local implementation.
+      - Unbounded load tests, additional providers, secrets, queues, cron, or background work.
+
+  inputs:
+    required_config:
+      - Existing provider contracts and cache behavior.
+      - Existing Cloudflare Analytics GraphQL access for exact-version CPU verification after separate approval.
+    required_secrets: []
+
+  outputs:
+    files:
+      - packages/provider-openmeteo/src/index.ts
+      - packages/provider-openmeteo/src/full-weather.test.ts
+      - packages/provider-openmeteo/src/air-quality-timeline.test.ts
+      - workers/gateway/src/index.ts
+      - workers/gateway/src/index.test.ts
+    terraform_resources: []
+    database_changes: [none]
+    deployed_units: [none unless an isolated candidate is separately approved]
+
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Retain the current and previous immutable Worker/function releases; no persisted schema changes are introduced.
+
+  validation:
+    commands:
+      - corepack pnpm exec vitest run packages/provider-openmeteo packages/contracts workers/gateway/src/index.test.ts
+      - corepack pnpm exec vitest run packages/provider-openmeteo/src/full-weather.test.ts packages/provider-openmeteo/src/air-quality-timeline.test.ts
+      - corepack pnpm typecheck
+      - corepack pnpm exec eslint packages/provider-openmeteo workers/gateway/src apps/web/components/weather-calendar-panel.tsx apps/web/components/air-quality-timeline.tsx --max-warnings=0
+      - corepack pnpm --filter @atmos/gateway build
+      - corepack pnpm --filter @atmos/web build
+      - corepack pnpm exec playwright test tests/e2e/weather-calendar.spec.ts tests/e2e/air-quality-timeline.spec.ts --workers=1
+    expected:
+      - Existing 7-day and 16-day response contracts, nullable/unavailable data, timezone/DST behavior, and old cached responses remain compatible.
+      - Cache-hit and cache-miss CPU costs are measured separately; do not infer route CPU from wall duration or sampled Worker Tail.
+      - Cloudflare Analytics GraphQL is filtered to the exact candidate Worker version and bounded UTC window; candidate p95 is at or below 7 ms with a sufficient bounded sample and no Worker errors before ordinary traffic exposure.
+      - Insufficient samples or p95 above 7 ms means HOLD; if optimization is insufficient, use the approved Next.js placement rather than weakening the gate.
+      - No user data, provider payload, token, or credential is logged or returned in evidence.
+
+  security_checks:
+    - Preserve public input validation, cache isolation, CORS, and sanitized error behavior.
+    - No PII or provider payload logging.
+    - Existing protected scans and contract tests pass.
+
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+
+  telemetry:
+    metrics: [exact Worker version CPU p50/p95/p99, request count, error count, cache status]
+    logs: [sanitized failures only; no raw request or provider payloads]
+    traces: [existing request correlation]
+
+  evidence:
+    - docs/evidence/preflight/2026-10-22.md
+    - docs/evidence/perf-002/implementation.md
+
+  rollback:
+    strategy: Revert the CPU optimization or placement change; retain prior immutable Worker and Supabase function versions; no database rollback is needed.
+
+  human_approval:
+    required: true
+    reason: Any candidate upload, generated provider workload, production promotion, traffic shift, or rollback requires a separate explicit owner decision.

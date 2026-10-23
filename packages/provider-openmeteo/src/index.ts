@@ -258,15 +258,25 @@ function toIso(time: number): string {
   return new Date(time * 1_000).toISOString();
 }
 
-function localDate(time: number, timezone: string): string {
-  const parts = new Intl.DateTimeFormat('en', {
+function localDateFormatter(timezone: string): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat('en', {
     timeZone: timezone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).formatToParts(new Date(time * 1_000));
-  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${byType.year}-${byType.month}-${byType.day}`;
+  });
+}
+
+function localDate(time: number, formatter: Intl.DateTimeFormat): string {
+  let year = '';
+  let month = '';
+  let day = '';
+  for (const part of formatter.formatToParts(new Date(time * 1_000))) {
+    if (part.type === 'year') year = part.value;
+    else if (part.type === 'month') month = part.value;
+    else if (part.type === 'day') day = part.value;
+  }
+  return `${year}-${month}-${day}`;
 }
 
 function forecastDate(firstDate: string, index: number) {
@@ -281,17 +291,22 @@ function forecastDate(firstDate: string, index: number) {
 function dailyHourlyMeans(
   times: readonly number[],
   fromIndex: number,
-  timezone: string,
+  formatter: Intl.DateTimeFormat,
   series: Readonly<Record<string, readonly (number | null)[] | undefined>>,
 ) {
   const samples = new Map<
     string,
     Record<string, { sum: number; count: number; maximum: number }>
   >();
+  const seriesEntries = Object.entries(series);
   for (let index = fromIndex; index < times.length; index++) {
-    const date = localDate(times[index]!, timezone);
-    const values = samples.get(date) ?? {};
-    for (const [name, array] of Object.entries(series)) {
+    const date = localDate(times[index]!, formatter);
+    let values = samples.get(date);
+    if (!values) {
+      values = {};
+      samples.set(date, values);
+    }
+    for (const [name, array] of seriesEntries) {
       const value = array?.[index];
       if (value === null || value === undefined) continue;
       const aggregate = values[name] ?? { sum: 0, count: 0, maximum: -Infinity };
@@ -300,7 +315,6 @@ function dailyHourlyMeans(
       aggregate.maximum = Math.max(aggregate.maximum, value);
       values[name] = aggregate;
     }
-    samples.set(date, values);
   }
   return samples;
 }
@@ -493,14 +507,17 @@ export class OpenMeteoProvider
             visibilityM: data.hourly.visibility?.[currentHour],
             uvIndex: data.hourly.uv_index?.[currentHour],
           };
-    const hourlyByLocalDate = dailyHourlyMeans(data.hourly.time, firstForecastHour, data.timezone, {
+    // Reuse one formatter across the hourly samples; constructing an Intl formatter inside
+    // the per-hour loop made extended-forecast cache misses needlessly CPU-heavy on Workers.
+    const dateFormatter = localDateFormatter(data.timezone);
+    const hourlyByLocalDate = dailyHourlyMeans(data.hourly.time, firstForecastHour, dateFormatter, {
       apparentTemperature: data.hourly.apparent_temperature,
       humidity: data.hourly.relative_humidity_2m,
       pressure: data.hourly.surface_pressure,
       clouds: data.hourly.cloud_cover,
       visibility: data.hourly.visibility,
     });
-    const firstForecastDate = localDate(data.daily.time[0]!, data.timezone);
+    const firstForecastDate = localDate(data.daily.time[0]!, dateFormatter);
     const days = Array.from(data.daily.time.keys(), (index) => {
       const date = forecastDate(firstForecastDate, index);
       const aggregate = hourlyByLocalDate.get(date);

@@ -1,5 +1,5 @@
 project: atmos
-updated: 2026-10-22
+updated: 2026-10-23
 scope:
   profile: CV_SHOWCASE
   production_hardening: IN_PROGRESS
@@ -59,6 +59,7 @@ tasks:
   EDGE-004: DONE
   CACHE-001: DONE
   PERF-001: DONE
+  PERF-002: IN_PROGRESS
   LOAD-001: DONE
   OBS-001: DONE
   OBS-002: DONE
