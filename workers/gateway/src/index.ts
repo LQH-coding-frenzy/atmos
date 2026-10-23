@@ -10,10 +10,12 @@ import {
 } from '@atmos/contracts';
 import type {
   AirQuality,
+  AirQualityInput,
   AirQualityProvider,
   Dashboard,
   LocationSearchProvider,
   LocationSearchResult,
+  LocationInput,
   WeatherRadarTimeline,
   WeatherProvider,
 } from '@atmos/contracts';
@@ -32,6 +34,8 @@ type Bindings = {
   OPENWEATHER_API_KEY?: string;
   RELEASE_ID?: string;
   SUPABASE_FUNCTION_URL?: string;
+  WEATHER_TRANSFORM_TOKEN?: string;
+  WEATHER_TRANSFORM_ORIGIN?: string;
   REQUEST_ANALYTICS?: RequestAnalyticsDataset;
   CF_VERSION_METADATA?: { id: string; tag?: string; timestamp: string };
 };
@@ -49,6 +53,7 @@ type WeatherCache = Pick<Cache, 'match' | 'put'>;
 
 const weatherCacheTtlSeconds = 300;
 const airQualityCacheTtlSeconds = 300;
+const weatherTransformTokenMinimumLength = 32;
 const weatherRadarCacheTtlSeconds = 300;
 const weatherMapTileCacheTtlSeconds = 300;
 const openWeatherTileRequestsPerWindow = 50;
@@ -125,6 +130,69 @@ function weatherCacheKeys(url: string, input: ReturnType<typeof weatherInput>) {
     fresh: new Request(freshUrl, { method: 'GET' }),
     stale: new Request(staleUrl, { method: 'GET' }),
   };
+}
+
+function usesNextWeatherTransform(env: Bindings | undefined) {
+  return Boolean(
+    env?.WEATHER_TRANSFORM_ORIGIN &&
+    canonicalReleaseId(env.RELEASE_ID, env.CF_VERSION_METADATA?.tag),
+  );
+}
+
+async function fetchNextWeatherTransform<T>(
+  env: Bindings | undefined,
+  path: '/api/v1/weather/dashboard' | '/api/v1/weather/air-quality',
+  input: LocationInput | AirQualityInput,
+  requestId: string,
+  traceparent: string,
+): Promise<T> {
+  const originValue = env?.WEATHER_TRANSFORM_ORIGIN;
+  const serviceToken = env?.WEATHER_TRANSFORM_TOKEN;
+  if (!originValue || !serviceToken || serviceToken.length < weatherTransformTokenMinimumLength) {
+    throw new Error('Server weather transform is not configured');
+  }
+
+  const origin = new URL(originValue);
+  if (
+    origin.protocol !== 'https:' ||
+    origin.hostname !== 'rainify.dpdns.org' ||
+    origin.port ||
+    origin.username ||
+    origin.password ||
+    origin.pathname !== '/' ||
+    origin.search ||
+    origin.hash
+  ) {
+    throw new Error('Server weather transform origin is invalid');
+  }
+
+  const response = await fetch(new URL(path, origin), {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      authorization: `Bearer ${serviceToken}`,
+      'content-type': 'application/json',
+      'x-request-id': requestId,
+      traceparent,
+    },
+    body: JSON.stringify(input),
+    redirect: 'error',
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw new Error('Server weather transform returned a non-success status');
+  }
+  if (!response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
+    await response.body?.cancel();
+    throw new Error('Server weather transform returned an invalid content type');
+  }
+
+  const result: unknown = await response.json();
+  if (typeof result !== 'object' || result === null || Array.isArray(result)) {
+    throw new Error('Server weather transform returned an invalid response');
+  }
+  return result as T;
 }
 
 function airQualityInput(context: { req: { query: (name: string) => string | undefined } }) {
@@ -441,7 +509,15 @@ export function createApp(
     const providerStartedAt = performance.now();
     context.set('analyticsProvider', 'open-meteo');
     try {
-      dashboard = await weatherProvider.getDashboard(input);
+      dashboard = usesNextWeatherTransform(context.env)
+        ? await fetchNextWeatherTransform<Dashboard>(
+            context.env,
+            '/api/v1/weather/dashboard',
+            input,
+            context.get('requestId'),
+            context.get('traceparent'),
+          )
+        : await weatherProvider.getDashboard(input);
     } catch (error) {
       console.warn(
         JSON.stringify({
@@ -550,7 +626,9 @@ export function createApp(
       );
     }
 
-    if (!weatherProvider.getAirQuality) {
+    const useNextTransform =
+      input.includeTimeline === true && usesNextWeatherTransform(context.env);
+    if (!useNextTransform && !weatherProvider.getAirQuality) {
       return gatewayError(
         context,
         'AIR_QUALITY_UNAVAILABLE',
@@ -563,15 +641,25 @@ export function createApp(
     const providerStartedAt = performance.now();
     context.set('analyticsProvider', 'open-meteo');
     try {
-      const airQuality = await coalescedAirQuality(key, () =>
-        weatherProvider.getAirQuality!(input),
-      );
-      const parsed = airQualitySchema.safeParse(airQuality);
-      if (!parsed.success || (input.includeTimeline && !parsed.data.timeline)) {
-        throw new Error('Air-quality response has an invalid shape');
-      }
+      const airQuality = await coalescedAirQuality(key, async () => {
+        if (useNextTransform) {
+          return fetchNextWeatherTransform<AirQuality>(
+            context.env,
+            '/api/v1/weather/air-quality',
+            input,
+            context.get('requestId'),
+            context.get('traceparent'),
+          );
+        }
+        const result = await weatherProvider.getAirQuality!(input);
+        const parsed = airQualitySchema.safeParse(result);
+        if (!parsed.success || (input.includeTimeline && !parsed.data.timeline)) {
+          throw new Error('Air-quality response has an invalid shape');
+        }
+        return parsed.data;
+      });
 
-      const response = context.json(parsed.data);
+      const response = context.json(airQuality);
       response.headers.set(
         'cache-control',
         `public, max-age=${airQualityCacheTtlSeconds}, s-maxage=${airQualityCacheTtlSeconds}`,
@@ -582,7 +670,7 @@ export function createApp(
           airQualityCache.put(
             cacheKeys.fresh,
             Response.json(
-              { ...parsed.data, meta: { ...parsed.data.meta, cached: true, stale: false } },
+              { ...airQuality, meta: { ...airQuality.meta, cached: true, stale: false } },
               {
                 headers: {
                   'cache-control': `public, max-age=${airQualityCacheTtlSeconds}, s-maxage=${airQualityCacheTtlSeconds}`,
@@ -593,7 +681,7 @@ export function createApp(
           airQualityCache.put(
             cacheKeys.stale,
             Response.json(
-              { ...parsed.data, meta: { ...parsed.data.meta, cached: true, stale: true } },
+              { ...airQuality, meta: { ...airQuality.meta, cached: true, stale: true } },
               {
                 headers: {
                   'cache-control': `public, max-age=0, s-maxage=${staleWeatherCacheTtlSeconds}`,

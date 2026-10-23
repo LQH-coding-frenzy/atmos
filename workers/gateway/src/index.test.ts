@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MockWeatherProvider } from '@atmos/provider-openmeteo';
 import { app, createApp } from './index';
 
+const testWeatherTransformToken = 'test-only-'.repeat(4);
+
 describe('gateway', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -358,6 +360,181 @@ describe('gateway', () => {
       timezone: 'Europe/Berlin',
       units: 'metric',
     });
+  });
+
+  it('moves versioned dashboard normalization to the configured Next.js runtime', async () => {
+    const getDashboard = vi.fn(
+      new MockWeatherProvider().getDashboard.bind(new MockWeatherProvider()),
+    );
+    const proxy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      expect(request.url).toBe('https://rainify.dpdns.org/api/v1/weather/dashboard');
+      expect(request.method).toBe('POST');
+      expect(request.headers.get('content-type')).toBe('application/json');
+      expect(request.headers.get('authorization')).toBe(`Bearer ${testWeatherTransformToken}`);
+      expect(request.headers.get('cookie')).toBeNull();
+      expect(request.headers.get('x-request-id')).toBe('worker_proxy_test-1');
+      expect(request.headers.get('traceparent')).toBe(
+        '00-1234567890abcdef1234567890abcdef-1234567890abcdef-01',
+      );
+      await expect(request.clone().json()).resolves.toEqual({
+        latitude: 52.52,
+        longitude: 13.405,
+        timezone: 'Europe/Berlin',
+        units: 'metric',
+      });
+      const dashboard = await new MockWeatherProvider().getDashboard({
+        latitude: 52.52,
+        longitude: 13.405,
+        timezone: 'Europe/Berlin',
+        units: 'metric',
+      });
+      return Response.json({
+        ...dashboard,
+        meta: { ...dashboard.meta, provider: 'open-meteo' },
+      });
+    });
+    vi.stubGlobal('fetch', proxy);
+    const weatherApp = createApp({ getDashboard });
+
+    const response = await weatherApp.request(
+      'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405&timezone=Europe%2FBerlin&units=metric',
+      {
+        headers: {
+          authorization: 'Bearer private-user-token',
+          cookie: 'private=session',
+          'x-request-id': 'worker_proxy_test-1',
+          traceparent: '00-1234567890abcdef1234567890abcdef-1234567890abcdef-01',
+        },
+      },
+      {
+        WEATHER_TRANSFORM_ORIGIN: 'https://rainify.dpdns.org',
+        WEATHER_TRANSFORM_TOKEN: testWeatherTransformToken,
+        CF_VERSION_METADATA: {
+          id: '7cf6db10-8f5e-4cb2-a70c-34a1d3f28193',
+          tag: 'abcdef012345',
+          timestamp: '2026-10-23T00:00:00.000Z',
+        },
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-cache')).toBe('MISS');
+    await expect(response.json()).resolves.toMatchObject({
+      location: { name: 'Berlin', latitude: 52.52, longitude: 13.405 },
+      meta: { provider: 'open-meteo', cached: false },
+    });
+    expect(proxy).toHaveBeenCalledOnce();
+    expect(getDashboard).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when a versioned transform release lacks its service token', async () => {
+    const getDashboard = vi.fn(
+      new MockWeatherProvider().getDashboard.bind(new MockWeatherProvider()),
+    );
+    const weatherApp = createApp({ getDashboard });
+
+    const response = await weatherApp.request(
+      'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405',
+      undefined,
+      {
+        WEATHER_TRANSFORM_ORIGIN: 'https://rainify.dpdns.org',
+        CF_VERSION_METADATA: {
+          id: '7cf6db10-8f5e-4cb2-a70c-34a1d3f28193',
+          tag: 'abcdef012345',
+          timestamp: '2026-10-23T00:00:00.000Z',
+        },
+      },
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'WEATHER_UNAVAILABLE' },
+    });
+    expect(getDashboard).not.toHaveBeenCalled();
+  });
+
+  it('moves only versioned AQI timeline normalization to Next.js', async () => {
+    const airQuality = {
+      observedAt: '2026-10-23T10:00:00.000Z',
+      usAqi: 42,
+      europeanAqi: 18,
+      pollutants: {
+        pm25: 7.2,
+        pm10: 12.4,
+        carbonMonoxide: 120,
+        nitrogenDioxide: 4.3,
+        sulphurDioxide: 1.1,
+        ozone: 65,
+      },
+      timeline: {
+        kind: 'model',
+        requestedPastDays: 7,
+        requestedForecastDays: 5,
+        hours: [
+          {
+            time: '2026-10-23T10:00:00.000Z',
+            usAqi: 42,
+            europeanAqi: 18,
+            pollutants: {
+              pm25: 7.2,
+              pm10: 12.4,
+              carbonMonoxide: 120,
+              nitrogenDioxide: 4.3,
+              sulphurDioxide: 1.1,
+              ozone: 65,
+            },
+          },
+        ],
+      },
+      meta: {
+        provider: 'open-meteo',
+        cached: false,
+        stale: false,
+        updatedAt: '2026-10-23T10:00:00.000Z',
+      },
+    };
+    const provider = new MockWeatherProvider();
+    const getAirQuality = vi.fn();
+    const proxy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      expect(request.url).toBe('https://rainify.dpdns.org/api/v1/weather/air-quality');
+      expect(request.method).toBe('POST');
+      await expect(request.json()).resolves.toEqual({
+        latitude: 52.52,
+        longitude: 13.405,
+        includeTimeline: true,
+      });
+      return Response.json(airQuality);
+    });
+    vi.stubGlobal('fetch', proxy);
+    const airQualityApp = createApp({
+      getDashboard: provider.getDashboard.bind(provider),
+      getAirQuality,
+    });
+
+    const response = await airQualityApp.request(
+      'http://localhost/api/v1/weather/air-quality?lat=52.52&lon=13.405&view=timeline',
+      undefined,
+      {
+        WEATHER_TRANSFORM_ORIGIN: 'https://rainify.dpdns.org',
+        WEATHER_TRANSFORM_TOKEN: testWeatherTransformToken,
+        CF_VERSION_METADATA: {
+          id: '7cf6db10-8f5e-4cb2-a70c-34a1d3f28193',
+          tag: 'abcdef012345',
+          timestamp: '2026-10-23T00:00:00.000Z',
+        },
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-cache')).toBe('MISS');
+    await expect(response.json()).resolves.toMatchObject({
+      timeline: { kind: 'model', requestedPastDays: 7, requestedForecastDays: 5 },
+      meta: { cached: false, stale: false },
+    });
+    expect(proxy).toHaveBeenCalledOnce();
+    expect(getAirQuality).not.toHaveBeenCalled();
   });
 
   it('normalizes and caches recent RainViewer frames behind the gateway contract', async () => {
