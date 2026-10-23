@@ -39,6 +39,16 @@ corepack pnpm exec supabase functions deploy api-<release-id> --project-ref oxgw
 
 Set `CORS_ORIGIN` in the production Supabase secret store. Supply the candidate function URL to its Worker version through an ephemeral secrets file, with stable referencing `api-v1` and candidate referencing `api-<release-id>`. Delete the local secrets file immediately after the upload.
 
+For PERF-002 releases, the Worker-to-Next.js weather transform also requires a shared
+`WEATHER_TRANSFORM_TOKEN` secret on the Worker and matching `ATMOS_WEATHER_TRANSFORM_TOKEN` in the
+Vercel environment. Keep the token out of Wrangler `vars`, source, command arguments, and logs. Its
+creation/configuration requires separate owner approval; an absent or invalid token makes the
+versioned Worker transform fail closed. Existing Worker secrets are retained additively across
+version uploads, so configure the approved Worker secret before uploading a PERF-002 candidate.
+Deploy and verify the Next.js handler and its server-only token configuration on Vercel before
+uploading the Worker candidate; the normal Worker release workflow must still remain behind its
+separate promotion approval.
+
 Require exact `/health` and `/version` responses from both function URLs before the Worker deployment.
 
 ## Bootstrap stable

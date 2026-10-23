@@ -20,12 +20,13 @@ task:
     - Current post-release telemetry reports CPU p95 above the 7 ms internal gate; do not claim the gate passes until an exact candidate is measured.
     - Keep the Workers Free plan and existing Open-Meteo non-commercial/weighted-call budget; do not raise CPU limits or add paid services.
     - Any candidate upload, bounded provider workload, production route/traffic change, or rollback requires separate explicit owner approval.
+    - The Worker-to-Next.js service credential must be owner-approved and configured separately; do not create or rotate it in this local remediation.
     - Use only sanitized analytics; do not log raw URLs, query strings, coordinates, provider payloads, user IDs, emails, JWTs, or credentials.
 
   runtime_placement:
     allowed: [cloudflare-worker, vercel-nextjs]
-    selected: cloudflare-worker
-    reason: The measured over-budget runtime is the existing gateway Worker. First isolate and optimize its expanded provider normalization; if the exact candidate remains over budget, move the richer transformation to the existing Next.js server runtime rather than raising the threshold.
+    selected: vercel-nextjs
+    reason: The partial exact-version CPU sample observed p95 above the gate, though it was too small to be conclusive. Keep the Worker as a thin validated/cached gateway and move expanded weather and AQI-timeline normalization to the existing Next.js server runtime rather than raising the threshold.
 
   scope:
     include:
@@ -34,10 +35,17 @@ task:
       - packages/provider-openmeteo/src/air-quality-timeline.test.ts
       - workers/gateway/src/index.ts
       - workers/gateway/src/index.test.ts
+      - workers/gateway/wrangler.jsonc
+      - apps/web/app/api/v1/weather/dashboard/route.ts
+      - apps/web/app/api/v1/weather/air-quality/route.ts
+      - apps/web/lib/weather-route-handlers.ts
+      - apps/web/lib/weather-route-handlers.test.ts
+      - apps/web/lib/weather-runtime.ts
       - tests/e2e/weather-calendar.spec.ts
       - tests/e2e/air-quality-timeline.spec.ts
       - .agent/status.yaml
       - .agent/tasks/perf-002.yaml
+      - docs/operations/production-worker-canary.md
       - docs/architecture/atmos-devsecops-master-plan.md
       - docs/design/feature-completion-roadmap.md
       - docs/evidence/perf-002/implementation.md
@@ -45,13 +53,15 @@ task:
       - Database schema, migrations, grants, policies, or user-data changes.
       - Raising the 7 ms budget, upgrading Workers plans, or adding paid resources.
       - Production promotion, rollback, or traffic shifting as part of local implementation.
-      - Unbounded load tests, additional providers, secrets, queues, cron, or background work.
+      - Creating/configuring secrets (the transform token remains a separate owner gate), queues, cron, or background work.
+      - Unbounded load tests or additional providers.
 
   inputs:
     required_config:
       - Existing provider contracts and cache behavior.
       - Existing Cloudflare Analytics GraphQL access for exact-version CPU verification after separate approval.
-    required_secrets: []
+    required_secrets:
+      - Shared weather-transform service token (Cloudflare Worker `WEATHER_TRANSFORM_TOKEN`; Vercel `ATMOS_WEATHER_TRANSFORM_TOKEN`)
 
   outputs:
     files:
@@ -60,6 +70,12 @@ task:
       - packages/provider-openmeteo/src/air-quality-timeline.test.ts
       - workers/gateway/src/index.ts
       - workers/gateway/src/index.test.ts
+      - workers/gateway/wrangler.jsonc
+      - apps/web/app/api/v1/weather/dashboard/route.ts
+      - apps/web/app/api/v1/weather/air-quality/route.ts
+      - apps/web/lib/weather-route-handlers.ts
+      - apps/web/lib/weather-route-handlers.test.ts
+      - apps/web/lib/weather-runtime.ts
     terraform_resources: []
     database_changes: [none]
     deployed_units: [none unless an isolated candidate is separately approved]
@@ -73,8 +89,9 @@ task:
     commands:
       - corepack pnpm exec vitest run packages/provider-openmeteo packages/contracts workers/gateway/src/index.test.ts
       - corepack pnpm exec vitest run packages/provider-openmeteo/src/full-weather.test.ts packages/provider-openmeteo/src/air-quality-timeline.test.ts
+      - corepack pnpm exec vitest run apps/web/lib/weather-route-handlers.test.ts
       - corepack pnpm typecheck
-      - corepack pnpm exec eslint packages/provider-openmeteo workers/gateway/src apps/web/components/weather-calendar-panel.tsx apps/web/components/air-quality-timeline.tsx --max-warnings=0
+      - corepack pnpm exec eslint packages/provider-openmeteo workers/gateway/src apps/web/app/api/v1/weather apps/web/lib/weather-route-handlers.ts apps/web/lib/weather-runtime.ts apps/web/components/weather-calendar-panel.tsx apps/web/components/air-quality-timeline.tsx --max-warnings=0
       - corepack pnpm --filter @atmos/gateway build
       - corepack pnpm --filter @atmos/web build
       - corepack pnpm exec playwright test tests/e2e/weather-calendar.spec.ts tests/e2e/air-quality-timeline.spec.ts --workers=1
@@ -87,6 +104,8 @@ task:
 
   security_checks:
     - Preserve public input validation, cache isolation, CORS, and sanitized error behavior.
+    - Authenticate Worker-to-Next.js requests with the shared service token; never forward browser credentials.
+    - Bound server-route JSON bodies; do not forward coordinates in query strings or log request bodies/provider payloads.
     - No PII or provider payload logging.
     - Existing protected scans and contract tests pass.
 
@@ -109,4 +128,4 @@ task:
 
   human_approval:
     required: true
-    reason: Any candidate upload, generated provider workload, production promotion, traffic shift, or rollback requires a separate explicit owner decision.
+    reason: Creating or configuring the shared service token, any candidate upload or generated provider workload, production promotion, traffic shift, or rollback requires a separate explicit owner decision.
