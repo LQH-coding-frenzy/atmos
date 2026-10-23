@@ -43,3 +43,31 @@ the repository.
 No production telemetry was collected after this local edit. Any isolated Worker candidate,
 bounded provider workload, or promotion remains a separate owner approval gate. Do not treat local
 typecheck/build results as proof that Cloudflare CPU p95 is below 7 ms.
+
+## Candidate CPU measurement procedure — planned, not executed
+
+The regular `Release Edge Runtime` workflow promotes its Worker to 100% after smoke, so it is not
+the CPU-measurement workflow. After PERF-002 is reviewed and merged, use the existing REL-003 hold
+procedure from `docs/operations/production-worker-canary.md`, with separate owner approval before
+any remote action:
+
+1. Recheck `main`, derive the release ID from that exact SHA, and capture the currently stable
+   Worker version ID and release tag. Confirm the retained Supabase function and additive schema are
+   healthy; do not apply or repair migrations as part of this procedure.
+2. Build/deploy the version-matched backend candidate if required by the protected release process,
+   then upload the Worker candidate with its Supabase function URL in the existing ephemeral secret
+   file procedure. Do not print or persist credentials.
+3. Create a two-version deployment with stable at 100% and candidate at 0%. Do not dispatch the
+   auto-promoting release workflow, shift ordinary traffic, or run rollback automatically.
+4. Smoke only the zero-percent candidate with the version-override header. For CPU measurement,
+   obtain a separate owner-approved bounded workload that isolates the candidate and distinguishes
+   cache-hit from cache-miss dashboard requests. Account for weighted Open-Meteo calls before any
+   miss requests; send no traffic until that scope is approved.
+5. Query Cloudflare `workersInvocationsAdaptive` for the exact `scriptName`, candidate
+   `scriptVersion`, `isPreview=0`, and bounded UTC interval. Record request count, errors, CPU
+   p50/p95/p99, cache/workload context, and the exact version. Tail output and wall-time WAE metrics
+   are not CPU percentile evidence. Mark insufficient sampling as HOLD.
+6. Keep the candidate at 0% if the p95 exceeds 7 ms or sampling is insufficient. A passing sample
+   does not authorize promotion; require a separate owner decision before any 100% deployment.
+
+No candidate, workload, traffic change, or rollout was run while preparing this procedure.
