@@ -2,7 +2,7 @@
 document: Atmos DevSecOps Master Plan
 version: 2.1.0
 status: cv-showcase-scope
-last_updated: 2026-10-22
+last_updated: 2026-10-23
 validation:
   last_validated: 2026-08-31
   result: GO
@@ -3304,6 +3304,7 @@ DONE
 | EDGE-004 | public weather route | EDGE-002, WX-003, WX-004 | API |
 | CACHE-001 | Cache API weather caching | EDGE-004 | cache layer |
 | PERF-001 | Worker CPU measurement gate | EDGE-004 | perf evidence |
+| PERF-002 | Remediate expanded-weather/AQI Worker CPU p95 over budget | PERF-001, FEAT-WX-002, FEAT-AQI-TIMELINE-001, FEAT-CAL-001, ROUTE-001, OBS-007, REL-003, REL-006 | exact-version candidate CPU p95 <= 7 ms |
 | ROUTE-001 | Worker -> versioned Supabase proxy | FUNC-001, EDGE-002 | split runtime |
 | FEAT-LOC-001 | saved locations | FUNC-002, RLS-002 | feature |
 | FEAT-LOC-UI-001 | authenticated saved-locations dashboard UI | AUTH-001, FEAT-LOC-001, ROUTE-001, WEB-002 | feature |
