@@ -30,6 +30,7 @@ task:
 
   scope:
     include:
+      - packages/contracts/package.json
       - packages/provider-openmeteo/src/index.ts
       - packages/provider-openmeteo/src/full-weather.test.ts
       - packages/provider-openmeteo/src/air-quality-timeline.test.ts
@@ -48,6 +49,7 @@ task:
       - tests/e2e/air-quality-timeline.spec.ts
       - .agent/status.yaml
       - .agent/tasks/perf-002.yaml
+      - pnpm-lock.yaml
       - docs/operations/production-worker-canary.md
       - docs/architecture/atmos-devsecops-master-plan.md
       - docs/design/feature-completion-roadmap.md
@@ -68,6 +70,7 @@ task:
 
   outputs:
     files:
+      - packages/contracts/package.json
       - packages/provider-openmeteo/src/index.ts
       - packages/provider-openmeteo/src/full-weather.test.ts
       - packages/provider-openmeteo/src/air-quality-timeline.test.ts
@@ -82,6 +85,7 @@ task:
       - apps/web/lib/weather-route-handlers.ts
       - apps/web/lib/weather-route-handlers.test.ts
       - apps/web/lib/weather-runtime.ts
+      - pnpm-lock.yaml
     terraform_resources: []
     database_changes: [none]
     deployed_units: [none unless an isolated candidate is separately approved]
