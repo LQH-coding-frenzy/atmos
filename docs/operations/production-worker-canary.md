@@ -88,6 +88,10 @@ Cloudflare-Workers-Version-Overrides: atmos-gateway="<candidate-version-id>"
 
 Require candidate `/health`, `/version`, weather, and unauthenticated protected-route smoke to pass. The override applies only while the candidate is part of the current deployment.
 
+For PERF-002 candidates, also require override-only `GET /health/transform` to pass before weather
+traffic. This probe verifies the authenticated Worker-to-Next.js path without calling Open-Meteo; it
+fails closed when the tagged Worker has no valid transform origin or service token.
+
 ## Rollback
 
 If candidate smoke fails, deploy the stable version alone at 100 percent. Keep both Supabase functions and the additive schema. REL-007 owns function and version cleanup after the rollback window.

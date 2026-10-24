@@ -84,6 +84,43 @@ describe('gateway', () => {
     });
   });
 
+  it('checks Next.js transform connectivity without invoking a weather provider', async () => {
+    const provider = new MockWeatherProvider();
+    const getDashboard = vi.fn(provider.getDashboard.bind(provider));
+    const proxy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      expect(request.url).toBe('https://rainify.dpdns.org/api/v1/weather/transform-health');
+      expect(request.method).toBe('POST');
+      expect(request.headers.get('authorization')).toBe(`Bearer ${testWeatherTransformToken}`);
+      expect(request.headers.get('cookie')).toBeNull();
+      await expect(request.clone().json()).resolves.toEqual({});
+      return Response.json({ status: 'ok' });
+    });
+    vi.stubGlobal('fetch', proxy);
+    const writeDataPoint = vi.fn();
+    const app = createApp({ getDashboard });
+
+    const response = await app.request('http://localhost/health/transform', undefined, {
+      WEATHER_TRANSFORM_ORIGIN: 'https://rainify.dpdns.org',
+      WEATHER_TRANSFORM_TOKEN: testWeatherTransformToken,
+      REQUEST_ANALYTICS: { writeDataPoint },
+      CF_VERSION_METADATA: {
+        id: '7cf6db10-8f5e-4cb2-a70c-34a1d3f28193',
+        tag: 'abcdef012345',
+        timestamp: '2026-10-23T00:00:00.000Z',
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    await expect(response.json()).resolves.toEqual({ status: 'ok' });
+    expect(proxy).toHaveBeenCalledOnce();
+    expect(getDashboard).not.toHaveBeenCalled();
+    expect(writeDataPoint.mock.calls[0]?.[0]).toMatchObject({
+      blobs: ['abcdef012345', 'health_transform', '2xx', 'BYPASS', 'none', 'none'],
+    });
+  });
+
   it('fails dependency health closed without exposing upstream diagnostics', async () => {
     const fetcher = vi
       .fn()

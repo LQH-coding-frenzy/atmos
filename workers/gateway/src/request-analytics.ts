@@ -40,6 +40,7 @@ function cacheStatus(value: string | undefined) {
 export function requestRouteGroup(method: string, path: string) {
   if (path === '/health') return 'health';
   if (path === '/health/dependencies') return 'health_dependencies';
+  if (path === '/health/transform') return 'health_transform';
   if (path === '/version') return 'version';
   if (path === '/api/v1/weather/dashboard') return 'weather_dashboard';
   if (path === '/api/v1/weather/air-quality') return 'air_quality';

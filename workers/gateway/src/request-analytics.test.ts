@@ -36,6 +36,7 @@ describe('request analytics', () => {
     expect(requestRouteGroup('GET', '/api/v1/weather/dashboard')).toBe('weather_dashboard');
     expect(requestRouteGroup('GET', '/api/v1/weather/air-quality')).toBe('air_quality');
     expect(requestRouteGroup('GET', '/health/dependencies')).toBe('health_dependencies');
+    expect(requestRouteGroup('GET', '/health/transform')).toBe('health_transform');
     expect(requestRouteGroup('POST', '/api/v1/locations')).toBe('api_proxy');
     expect(requestRouteGroup('GET', '/users/private-value')).toBe('not_found');
     expect(backendReleaseFromUrl('https://project.supabase.co/functions/v1/api-abcdef012345')).toBe(
