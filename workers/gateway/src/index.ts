@@ -77,6 +77,7 @@ type WeatherTransformFailureClass =
   | 'invalid_origin'
   | 'network_error'
   | 'timeout'
+  | 'upstream_3xx'
   | 'upstream_4xx'
   | 'upstream_5xx'
   | 'invalid_content_type'
@@ -213,7 +214,7 @@ async function fetchNextWeatherTransform<T>(
         traceparent,
       },
       body: JSON.stringify(input),
-      redirect: 'error',
+      redirect: 'manual',
       signal: AbortSignal.timeout(10_000),
     });
   } catch (error) {
@@ -223,7 +224,15 @@ async function fetchNextWeatherTransform<T>(
   }
   if (!response.ok) {
     await response.body?.cancel();
-    throw new WeatherTransformError(response.status >= 500 ? 'upstream_5xx' : 'upstream_4xx');
+    const failureClass: WeatherTransformFailureClass =
+      response.status >= 500
+        ? 'upstream_5xx'
+        : response.status >= 400
+          ? 'upstream_4xx'
+          : response.status >= 300 || response.type === 'opaqueredirect'
+            ? 'upstream_3xx'
+            : 'invalid_response';
+    throw new WeatherTransformError(failureClass);
   }
   if (!response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
     await response.body?.cancel();
