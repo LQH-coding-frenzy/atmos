@@ -454,6 +454,52 @@ describe('gateway', () => {
     expect(getDashboard).not.toHaveBeenCalled();
   });
 
+  it('logs only the coarse upstream status class for transform failures', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const provider = new MockWeatherProvider();
+    const getDashboard = vi.fn(provider.getDashboard.bind(provider));
+    let requestIndex = 0;
+    const proxy = vi.fn(async () =>
+      Response.json(
+        { error: 'private provider details and token' },
+        { status: requestIndex++ === 0 ? 401 : 503 },
+      ),
+    );
+    vi.stubGlobal('fetch', proxy);
+    const weatherApp = createApp({ getDashboard });
+    const env = {
+      WEATHER_TRANSFORM_ORIGIN: 'https://rainify.dpdns.org',
+      WEATHER_TRANSFORM_TOKEN: testWeatherTransformToken,
+      CF_VERSION_METADATA: {
+        id: '7cf6db10-8f5e-4cb2-a70c-34a1d3f28193',
+        tag: 'abcdef012345',
+        timestamp: '2026-10-23T00:00:00.000Z',
+      },
+    };
+    for (const lat of ['52.52', '52.53']) {
+      const response = await weatherApp.request(
+        `http://localhost/api/v1/weather/dashboard?lat=${lat}&lon=13.405`,
+        undefined,
+        env,
+      );
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: 'WEATHER_UNAVAILABLE' },
+      });
+    }
+
+    expect(proxy).toHaveBeenCalledTimes(2);
+    expect(getDashboard).not.toHaveBeenCalled();
+    expect(warning).toHaveBeenCalledTimes(2);
+    const events = warning.mock.calls.map(([value]) => JSON.parse(value ?? '{}'));
+    expect(events.map((event) => event.failure_class)).toEqual(['upstream_4xx', 'upstream_5xx']);
+    for (const event of events) {
+      expect(event.event).toBe('weather_provider_failed');
+      expect(JSON.stringify(event)).not.toContain('private provider details');
+      expect(JSON.stringify(event)).not.toContain(testWeatherTransformToken);
+    }
+  });
+
   it('moves only versioned AQI timeline normalization to Next.js', async () => {
     const airQuality = {
       observedAt: '2026-10-23T10:00:00.000Z',
