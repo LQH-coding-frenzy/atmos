@@ -2,11 +2,11 @@
 
 Date: 2026-10-24
 
-Status: **IN_PROGRESS — candidate rolled back after full-traffic CPU regression**. The exact-version
-candidate passed bounded cache-miss/cache-hit sampling and pre-promotion release gates, but its
+Status: **IN_PROGRESS — stable at 100%; candidate held at 0% for diagnosis**. The exact-version
+candidate passed bounded pre-promotion cache-miss/cache-hit sampling and release gates, but its
 post-exposure CPU p95 exceeded 7 ms with a sufficient sample. The retained stable Worker is restored
-at 100%; further remediation is required before another promotion. No database or provider-plan
-change occurred.
+at 100%; a local cache-miss serialization optimization is under review before another candidate
+upload. No database or provider-plan change occurred.
 
 ## Baseline
 
@@ -336,7 +336,38 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
 - Under the owner's rollback authorization, Wrangler's documented rollback primitive restored
   stable Worker `2da40785-0b9e-430c-bdac-c9ad6254ff68` / release `96434d008bd2` to 100% at
   `2026-10-24T16:56:20.670Z`, deployment `cd43ba33-690d-41fc-922e-73c3e30d8de0`. The post-rollback
-  smoke passed; the candidate is no longer receiving traffic.
-- Current state: PERF-002 **IN_PROGRESS**. Do not re-promote candidate
-  `4aca9ef3-87b9-40ac-8980-4ed4723d1982` until the mixed-route CPU regression is diagnosed and a
-  sufficient exact-version sample is at or below 7 ms. No database or paid-resource changes occurred.
+  smoke passed. The candidate was later attached at 0% for route-isolated diagnosis; stable remained
+  at 100% in deployment `3e1a3c28-546f-4ec2-af72-3319b8ef5630`.
+- Current state: PERF-002 **IN_PROGRESS**. Do not re-promote a candidate until the miss-path
+  optimization is merged/deployed and a sufficient exact-version CPU sample is at or below 7 ms. No
+  database or paid-resource changes occurred.
+
+## Route diagnosis and local cache-miss optimization — 2026-10-24
+
+- Read-only WAE route-group rows from the failed 100% window included `weather_dashboard` MISS events
+  at `15:48:29`, `15:49:59`, and `16:03:29` UTC. The exact-version CPU query had above-budget adaptive
+  buckets immediately adjacent to those events at `15:48:28` (`11.580 ms`), `15:49:59` (`9.001 ms`),
+  and `16:03:27` (`23.052 ms`). This correlation points to the weather cache-miss path; the dashboard
+  hit samples remained substantially lower.
+- With the candidate held at 0%, five-request route-isolated probes returned HTTP 200 for `/health`,
+  `/health/transform`, `/version`, and `/health/dependencies`, and HTTP 401 for `/api/v1/me`. Exact
+  version CPU samples were: health p95 `5.107 ms`; transform-health first sample p95 `18.519 ms`,
+  then a warmed sample p95 `3.824 ms`; version p95 `4.887 ms`; dependency-health first sample p95
+  `7.542 ms`, with a later two-invocation sample p95 `5.789 ms`. The warm operational paths are not
+  sufficient to explain the sustained production regression; the first transform sample indicates
+  an additional cold/first-call cost to investigate.
+- A bounded dashboard MISS followed by four HITs returned HTTP 200 throughout. The short exact-version
+  window had six analytics invocations, 0 errors, and p95 CPU `7.244 ms`; WAE sampled five weather
+  dashboard HIT events for that interval, so this small probe is not treated as a conclusive miss
+  percentile. The potential provider usage was at most 5 weighted units.
+- Source review identified repeated serialization on every dashboard/AQI cache miss: the large
+  normalized payload was serialized for the client response and again for both fresh and stale cache
+  variants. The Worker now serializes the non-metadata payload once and appends the small cache-state
+  metadata variants for the client/fresh/stale responses. This preserves response/cache metadata and
+  applies to both dashboard and AQI miss paths.
+- New Worker tests assert that dashboard and AQI cache misses serialize the full payload once while
+  preserving their distinct cache metadata. Validation passed: 41 focused Worker tests, repository
+  typecheck, targeted ESLint, Prettier, `git diff --check`, and the gateway dry-run build.
+- The optimization is local to the open PR and is not serving production. Stable remains at 100% and
+  the unoptimized candidate is held at 0%; re-upload and exact-version CPU verification are required
+  after the code is reviewed and merged.
