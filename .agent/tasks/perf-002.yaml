@@ -91,7 +91,7 @@ task:
     terraform_resources: []
     database_changes: [none]
     deployed_units:
-      - Isolated Cloudflare Worker candidate 4aca9ef3-87b9-40ac-8980-4ed4723d1982 at 0%; stable remains at 100%
+      - Cloudflare Worker 4aca9ef3-87b9-40ac-8980-4ed4723d1982 at 100%; previous stable 2da40785-0b9e-430c-bdac-c9ad6254ff68 retained at 0% for rollback
 
   compatibility:
     requires_expand_contract: false

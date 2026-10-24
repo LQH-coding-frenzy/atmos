@@ -2,10 +2,10 @@
 
 Date: 2026-10-24
 
-Status: **DONE — CPU gate passed; candidate remains at 0%**. The local optimization is merged and
-the exact-version candidate passed bounded cache-miss and cache-hit CPU sampling. The candidate is
-intentionally held at 0%; ordinary traffic remains on the stable version. No Worker
-promotion/rollback, database change, or provider-plan change occurred.
+Status: **DONE — exact-version CPU gate passed; candidate is at 100%**. The local optimization is
+merged, the exact-version candidate passed bounded cache-miss/cache-hit CPU sampling and release
+gates, and it is now serving ordinary traffic. The former stable version remains attached at 0% for
+rollback. No database or provider-plan change occurred.
 
 ## Baseline
 
@@ -252,11 +252,10 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
 
 ## Final bounded CPU evidence — 2026-10-24
 
-- Candidate Worker version `4aca9ef3-87b9-40ac-8980-4ed4723d1982`, tagged with merged `main`
-  commit `cba92d072d7f`, remains in deployment `0cbd4371-175f-43d4-8064-44edb5ceaed1` at 0%;
-  stable version `2da40785-0b9e-430c-bdac-c9ad6254ff68` remains at 100%. Read-only Wrangler
-  deployment inventory confirmed the split, and no `Release Edge Runtime` workflow was queued or
-  running. Ordinary `/version` remains on stable release `96434d008bd2`.
+- During the CPU-sampling phase, candidate Worker version `4aca9ef3-87b9-40ac-8980-4ed4723d1982`,
+  tagged with merged `main` commit `cba92d072d7f`, was held at 0% and stable version
+  `2da40785-0b9e-430c-bdac-c9ad6254ff68` remained at 100%. Its later owner-approved promotion is
+  recorded below.
 - The exact-version Cloudflare Analytics GraphQL query used
   `workersInvocationsAdaptive`, `scriptName=atmos-gateway`,
   `scriptVersion_in=[4aca9ef3-87b9-40ac-8980-4ed4723d1982]`, `isPreview=0`, and the bounded UTC
@@ -279,13 +278,49 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
   194 invocations, 0 platform errors, CPU p50 `1.229 ms`, p95 `2.135 ms`, and p99 `5.491 ms`.
 - For this candidate's bounded weather workload, the 69 misses, the initial successful miss, and
   the post-expiry miss represent at most 355 estimated weighted provider units; repeated cache hits
-  made no additional provider calls. Earlier failed candidate attempts remain documented above and
-  were stopped at the first failure. No response body, provider payload, raw request URL, or
+  made no additional provider calls. The post-promotion smoke below included one weather request,
+  conservatively adding at most 5 units. Earlier failed candidate attempts remain documented above
+  and were stopped at the first failure. No response body, provider payload, raw request URL, or
   coordinates were recorded.
 - Both cache-miss and cache-hit samples have at least 30 exact-version analytics invocations, zero
   platform errors, and CPU p95 below the unchanged 7 ms gate. All sampled candidate weather requests
   after the redirect-safe deployment returned HTTP 200. Earlier 503 failures occurred on prior
   candidates; their precise cause was not conclusively established.
-- Final state: PERF-002 **DONE** on measured CPU evidence. Keep the candidate at 0% pending any
-  separate owner decision; this evidence does not authorize promotion, rollback, or further
-  production traffic. No production traffic shift, database change, or paid-resource change occurred.
+- PERF-002 is **DONE** on measured CPU evidence. At the end of this sampling phase the candidate
+  remained at 0%; its later owner-approved production promotion is recorded next. No database change
+  or paid-resource change occurred.
+
+## Owner-approved production promotion and monitoring — 2026-10-24
+
+- The owner explicitly approved full promotion of the already measured candidate. Before promotion,
+  WAE release-gate run [40107720236](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40107720236)
+  returned `PASS`: stable 31 / candidate 371 weighted samples, 0% errors for both, p95 wall time
+  2,188 ms stable / 313 ms candidate. The configured limits were 2% error rate and 3,282 ms candidate
+  p95. Two earlier reads were `INSUFFICIENT_DATA` (stable 29, then 28); six bounded stable `/health`
+  probes returned HTTP 200 without provider calls before the passing read.
+- A fresh Grafana `probe_success{job=~"Atmos.*"}` evaluation immediately before promotion returned
+  `PASS` for all four production checks. A second evaluation at
+  `2026-10-24T15:42:16.908Z`, after promotion, also returned `PASS` for the frontend, edge,
+  dependencies, and weather checks; each latest sample was from `15:42:13.746Z` (about 3 seconds
+  old).
+- Wrangler deployed `2da40785-0b9e-430c-bdac-c9ad6254ff68@0` and
+  `4aca9ef3-87b9-40ac-8980-4ed4723d1982@100` at `2026-10-24T15:40:50.158Z`, deployment
+  `0db515e6-2017-4e74-8a46-53ccf4a36752`. No new Worker version or backend function was created;
+  the exact CPU-measured version was promoted. Stable remains attached at 0% for rollback.
+- Ordinary `/health`, `/health/transform`, and `/version` returned HTTP 200; `/version` reported
+  `cba92d072d7f`. The documented post-promotion smoke passed health, release identity, public
+  weather, and unauthenticated-route checks (HTTP 401 for the protected route).
+- Exact-version CPU analytics for `2026-10-24T14:44:00Z`–`2026-10-24T15:43:50.222Z` recorded 372
+  invocations, 0 platform errors, CPU p50 `1.328 ms`, p95 `4.251 ms`, and p99 `8.150 ms`. This
+  bounded window includes the pre-promotion override sample and the initial 100%-traffic period; it
+  is not presented as a production-only percentile.
+- The first post-promotion-only CPU snapshot (`15:40:50.158Z`–`15:42:48.869Z`) contained 7
+  invocations and 0 errors; one adaptive bucket reported p95 `10.170 ms`. That window is below the
+  30-invocation floor and is not treated as a reliable pass or fail. The larger exact-version window
+  above passes the CPU gate, the post-promotion WAE run below passes, and fresh synthetics are green.
+- Post-promotion WAE release-gate run
+  [40108324584](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40108324584) returned
+  `PASS`: stable 34 / candidate 377 weighted samples, 0% errors for both, p95 wall time 2,188 ms
+  stable / 313 ms candidate. No rollback was needed.
+- Current production state: candidate `4aca9ef3-87b9-40ac-8980-4ed4723d1982` at 100%, previous
+  stable `2da40785-0b9e-430c-bdac-c9ad6254ff68` at 0%. No database or paid-resource changes occurred.
