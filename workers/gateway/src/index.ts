@@ -72,6 +72,30 @@ const noWeatherCache: WeatherCache = {
   put: async () => undefined,
 };
 
+type WeatherTransformFailureClass =
+  | 'not_configured'
+  | 'invalid_origin'
+  | 'network_error'
+  | 'timeout'
+  | 'upstream_4xx'
+  | 'upstream_5xx'
+  | 'invalid_content_type'
+  | 'invalid_json'
+  | 'invalid_response';
+
+class WeatherTransformError extends Error {
+  constructor(readonly failureClass: WeatherTransformFailureClass) {
+    super('Server weather transform failed');
+  }
+}
+
+function sanitizedProviderFailure(error: unknown) {
+  if (error instanceof WeatherTransformError) {
+    return { failure_class: error.failureClass };
+  }
+  return { error_type: error instanceof Error ? error.name : 'unknown' };
+}
+
 function gatewayError(
   context: Context<GatewayEnvironment>,
   code: string,
@@ -149,7 +173,7 @@ async function fetchNextWeatherTransform<T>(
   const originValue = env?.WEATHER_TRANSFORM_ORIGIN;
   const serviceToken = env?.WEATHER_TRANSFORM_TOKEN;
   if (!originValue || !serviceToken || serviceToken.length < weatherTransformTokenMinimumLength) {
-    throw new Error('Server weather transform is not configured');
+    throw new WeatherTransformError('not_configured');
   }
 
   const origin = new URL(originValue);
@@ -163,34 +187,46 @@ async function fetchNextWeatherTransform<T>(
     origin.search ||
     origin.hash
   ) {
-    throw new Error('Server weather transform origin is invalid');
+    throw new WeatherTransformError('invalid_origin');
   }
 
-  const response = await fetch(new URL(path, origin), {
-    method: 'POST',
-    headers: {
-      accept: 'application/json',
-      authorization: `Bearer ${serviceToken}`,
-      'content-type': 'application/json',
-      'x-request-id': requestId,
-      traceparent,
-    },
-    body: JSON.stringify(input),
-    redirect: 'error',
-    signal: AbortSignal.timeout(10_000),
-  });
+  let response: Response;
+  try {
+    response = await fetch(new URL(path, origin), {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        authorization: `Bearer ${serviceToken}`,
+        'content-type': 'application/json',
+        'x-request-id': requestId,
+        traceparent,
+      },
+      body: JSON.stringify(input),
+      redirect: 'error',
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (error) {
+    throw new WeatherTransformError(
+      error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'network_error',
+    );
+  }
   if (!response.ok) {
     await response.body?.cancel();
-    throw new Error('Server weather transform returned a non-success status');
+    throw new WeatherTransformError(response.status >= 500 ? 'upstream_5xx' : 'upstream_4xx');
   }
   if (!response.headers.get('content-type')?.toLowerCase().includes('application/json')) {
     await response.body?.cancel();
-    throw new Error('Server weather transform returned an invalid content type');
+    throw new WeatherTransformError('invalid_content_type');
   }
 
-  const result: unknown = await response.json();
+  let result: unknown;
+  try {
+    result = await response.json();
+  } catch {
+    throw new WeatherTransformError('invalid_json');
+  }
   if (typeof result !== 'object' || result === null || Array.isArray(result)) {
-    throw new Error('Server weather transform returned an invalid response');
+    throw new WeatherTransformError('invalid_response');
   }
   return result as T;
 }
@@ -525,7 +561,7 @@ export function createApp(
           request_id: context.get('requestId'),
           trace_id: context.get('traceparent').split('-')[1],
           cache_status: staleResponse ? 'STALE' : 'MISS',
-          error_type: error instanceof Error ? error.name : 'unknown',
+          ...sanitizedProviderFailure(error),
         }),
       );
       if (staleResponse) {
@@ -708,7 +744,7 @@ export function createApp(
           request_id: context.get('requestId'),
           trace_id: context.get('traceparent').split('-')[1],
           cache_status: staleResponse ? 'STALE' : 'MISS',
-          error_type: error instanceof Error ? error.name : 'unknown',
+          ...sanitizedProviderFailure(error),
         }),
       );
       if (staleResponse) {

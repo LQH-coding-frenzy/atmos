@@ -1,11 +1,12 @@
 # PERF-002 — Expanded weather/AQI Worker CPU remediation
 
-Date: 2026-10-23
+Date: 2026-10-24
 
 Status: **IN_PROGRESS — candidate HOLD**. The local optimization is merged. An owner-approved
 isolated Worker candidate was deployed at 0% for bounded CPU sampling; ordinary traffic remains on
-the stable version. A follow-up Next.js placement is implemented locally but not deployed. No
-promotion, database change, provider-plan change, or production token was created or configured.
+the stable version. The Next.js placement and a versioned Worker candidate are deployed, but the
+candidate is still held at 0%. No Worker promotion/rollback, database change, or provider-plan change
+occurred.
 
 ## Baseline
 
@@ -100,8 +101,8 @@ After the partial CPU result, the owner approved a local-only move of the expand
   string, and do not forward browser authorization or cookies. The Next handler requires a shared
   service credential (`WEATHER_TRANSFORM_TOKEN` on the Worker and
   `ATMOS_WEATHER_TRANSFORM_TOKEN` on Vercel), uses a constant-time comparison, and logs no body,
-  coordinates, provider payload, or token. The token was **not** created or configured; its setup
-  requires separate explicit owner approval.
+  coordinates, provider payload, or token. At the end of this local-only phase, the token had not
+  yet been created or configured; its later owner-approved deployment is recorded below.
 - The Cloudflare candidate deployed for the earlier partial measurement was not replaced or
   updated. No Vercel release, Worker deployment, database action, provider traffic, or production
   route change occurred during this local follow-up. The candidate remains at 0% and stable remains
@@ -121,10 +122,59 @@ After the partial CPU result, the owner approved a local-only move of the expand
 | Calendar/AQI timeline Playwright E2E                        | Passed: 6 tests                           |
 | Prettier                                                    | Passed                                    |
 
-PERF-002 remains `IN_PROGRESS`: the initial candidate sample was too small and exceeded the 7 ms
-gate; cache-hit CPU was not measured. The new code is local-only and cannot use the Next.js transform
-until the owner-approved shared token is configured. Do not deploy or run another production CPU
-workload without separate approval.
+At the end of this local-only phase, PERF-002 remained `IN_PROGRESS`: the initial candidate sample
+was too small and exceeded the 7 ms gate, cache-hit CPU was not measured, and no token or deployment
+existed yet. The later Vercel deployment is recorded below; a new Worker candidate test still
+requires its Cloudflare token binding and separate bounded CPU evidence.
+
+## Owner-approved Next.js transform deployment — 2026-10-24
+
+- PR #323 was merged as `ee0e4172db3f107d452dc3b50556998aef2a185c`; the PR and main-branch security,
+  quality, database, and browser checks passed.
+- Protected Vercel production run
+  [40086346151](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40086346151) ran on that
+  exact `main` commit with `promote=true`. The exact deployment and production homepage smoke passed;
+  the workflow rollback-on-failure step was not triggered.
+- The sensitive Vercel Production variable `ATMOS_WEATHER_TRANSFORM_TOKEN` is configured, and the
+  corresponding Cloudflare `WEATHER_TRANSFORM_TOKEN` was included only in the versioned Worker
+  candidate. Neither value is recorded here.
+- The Vercel workflow's homepage smokes ran against the existing stable Worker; they did not target
+  the Worker candidate. Any homepage provider requests were not separately counted.
+- Candidate Worker version `fa421e5a-2982-4221-a6f1-2d575eb21c0d`, tagged `ee0e4172db3f`, was
+  added to deployment `449f7c5a-7453-43ea-a659-fa657351e4ce` at
+  `2026-10-24T11:13:50.38041Z`: stable version `2da40785-0b9e-430c-bdac-c9ad6254ff68` at 100%,
+  candidate at 0%. Override-only health/dependency/version smoke passed; ordinary `/version` remained
+  `96434d008bd2`.
+- The first candidate dashboard request returned HTTP 503 without an `x-cache` status at
+  `2026-10-24T11:16:08.757Z`. No response body, query, coordinates, or provider payload was recorded.
+  Count this as at most 5 weighted units. No more candidate requests were sent.
+- Exact-version Cloudflare `workersInvocationsAdaptive` for `2026-10-24T11:16:00Z`–
+  `2026-10-24T11:17:00Z` returned 1 invocation, 0 platform errors, and CPU p50/p95/p99 `7.359 ms`.
+  This is insufficient sampling and the observed p95 exceeds 7 ms. No cache-hit workload was sent.
+- The generated source token and ephemeral Worker secrets file were removed from the local temp
+  directory after upload. The sensitive Vercel variable and candidate-version secret remain
+  configured; neither value is recorded here.
+- Final read-only verification confirmed stable remains at 100%, candidate at 0%, and no Edge Runtime
+  workflow or Worker rollback occurred. The Vercel automatic rollback guard was not triggered because
+  its production smoke passed.
+
+PERF-002 remains `IN_PROGRESS` and **HOLD**: the new candidate also has a partial over-budget CPU
+signal and a 503. Cache-hit CPU is unmeasured. Do not promote or roll back; a further bounded test
+requires separate owner direction after diagnosing the Vercel/provider failure.
+
+## Local diagnostic follow-up — 2026-10-24
+
+- A sanitized Vercel log query returned only homepage entries and no weather-provider failure event.
+  This did not establish whether the candidate request failed service-token authorization, network
+  access, or the upstream provider; no payload, request URL, coordinates, or secret was inspected.
+- Worker transform failures now carry only a bounded `failure_class` (`upstream_4xx`,
+  `upstream_5xx`, network/timeout, or invalid response) into sanitized Worker logs. The response
+  remains the existing generic 503. Focused tests cover 4xx/5xx classification and verify that
+  upstream body/token text is not logged.
+- Local Worker tests (37), typecheck, targeted ESLint/Prettier, and `wrangler deploy --dry-run`
+  passed. This diagnostic change was **not** uploaded to Cloudflare.
+- No further candidate or provider requests were sent. The active deployment remains stable 100% /
+  candidate 0%; the CPU sample remains insufficient and above the gate. PERF-002 stays `IN_PROGRESS`.
 
 ## Owner-approved Vercel security release — 2026-10-23
 
@@ -135,6 +185,7 @@ workload without separate approval.
   [39972999116](https://github.com/LQH-coding-frenzy/atmos/actions/runs/39972999116) completed on
   that SHA; exact-candidate and production-domain smoke/security-header checks passed, and the public
   homepage returned HTTP 200. No Edge Runtime workflow was dispatched by this release.
-- PERF-002 remains `IN_PROGRESS`: its first candidate received a partial exact-version CPU sample
-  above the 7 ms gate, and local Next.js placement remediation is pending separate token setup and
-  candidate approval. Stable Worker release `96434d008bd2` remains at 100%.
+- PERF-002 remains `IN_PROGRESS`: both candidate samples were partial and above the 7 ms gate. The
+  Next.js transform is deployed and the shared service credential is bound to the 0%-candidate
+  version, but the candidate has not passed CPU/error sampling. Stable Worker release
+  `96434d008bd2` remains at 100%.
