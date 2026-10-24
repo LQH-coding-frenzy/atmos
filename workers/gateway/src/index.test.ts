@@ -495,12 +495,14 @@ describe('gateway', () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const provider = new MockWeatherProvider();
     const getDashboard = vi.fn(provider.getDashboard.bind(provider));
+    const statuses = [401, 302, 503] as const;
     let requestIndex = 0;
-    const proxy = vi.fn(async () =>
-      Response.json(
-        { error: 'private provider details and token' },
-        { status: requestIndex++ === 0 ? 401 : 503 },
-      ),
+    const proxy = vi.fn(
+      async () =>
+        new Response('private provider details and token', {
+          status: statuses[requestIndex++] ?? 503,
+          headers: { location: 'https://private.example/path?secret=hidden' },
+        }),
     );
     vi.stubGlobal('fetch', proxy);
     const weatherApp = createApp({ getDashboard });
@@ -513,7 +515,7 @@ describe('gateway', () => {
         timestamp: '2026-10-23T00:00:00.000Z',
       },
     };
-    for (const lat of ['52.52', '52.53']) {
+    for (const lat of ['52.52', '52.53', '52.54']) {
       const response = await weatherApp.request(
         `http://localhost/api/v1/weather/dashboard?lat=${lat}&lon=13.405`,
         undefined,
@@ -525,14 +527,20 @@ describe('gateway', () => {
       });
     }
 
-    expect(proxy).toHaveBeenCalledTimes(2);
+    expect(proxy).toHaveBeenCalledTimes(3);
     expect(getDashboard).not.toHaveBeenCalled();
-    expect(warning).toHaveBeenCalledTimes(2);
+    expect(warning).toHaveBeenCalledTimes(3);
     const events = warning.mock.calls.map(([value]) => JSON.parse(value ?? '{}'));
-    expect(events.map((event) => event.failure_class)).toEqual(['upstream_4xx', 'upstream_5xx']);
+    expect(events.map((event) => event.failure_class)).toEqual([
+      'upstream_4xx',
+      'upstream_3xx',
+      'upstream_5xx',
+    ]);
     for (const event of events) {
       expect(event.event).toBe('weather_provider_failed');
       expect(JSON.stringify(event)).not.toContain('private provider details');
+      expect(JSON.stringify(event)).not.toContain('private.example');
+      expect(JSON.stringify(event)).not.toContain('secret=hidden');
       expect(JSON.stringify(event)).not.toContain(testWeatherTransformToken);
     }
   });
