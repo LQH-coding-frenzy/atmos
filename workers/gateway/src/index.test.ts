@@ -545,6 +545,47 @@ describe('gateway', () => {
     }
   });
 
+  it('logs only the safe failure class for a transform network failure', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const provider = new MockWeatherProvider();
+    const getDashboard = vi.fn(provider.getDashboard.bind(provider));
+    const fetchFailure = new TypeError('private URL and bearer credential');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async () => {
+        throw fetchFailure;
+      }),
+    );
+    const weatherApp = createApp({ getDashboard });
+
+    const response = await weatherApp.request(
+      'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405',
+      undefined,
+      {
+        WEATHER_TRANSFORM_ORIGIN: 'https://rainify.dpdns.org',
+        WEATHER_TRANSFORM_TOKEN: testWeatherTransformToken,
+        CF_VERSION_METADATA: {
+          id: '7cf6db10-8f5e-4cb2-a70c-34a1d3f28193',
+          tag: 'abcdef012345',
+          timestamp: '2026-10-23T00:00:00.000Z',
+        },
+      },
+    );
+
+    expect(response.status).toBe(503);
+    expect(warning).toHaveBeenCalledOnce();
+    const event = JSON.parse(warning.mock.calls[0]?.[0] ?? '{}');
+    expect(event).toMatchObject({
+      event: 'weather_provider_failed',
+      failure_class: 'network_error',
+    });
+    expect(event).not.toHaveProperty('error_type');
+    expect(JSON.stringify(event)).not.toContain('private URL');
+    expect(JSON.stringify(event)).not.toContain('bearer credential');
+    expect(JSON.stringify(event)).not.toContain(testWeatherTransformToken);
+    expect(getDashboard).not.toHaveBeenCalled();
+  });
+
   it('moves only versioned AQI timeline normalization to Next.js', async () => {
     const airQuality = {
       observedAt: '2026-10-23T10:00:00.000Z',

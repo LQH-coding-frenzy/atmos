@@ -2,11 +2,10 @@
 
 Date: 2026-10-24
 
-Status: **IN_PROGRESS — candidate HOLD**. The local optimization is merged. An owner-approved
-isolated Worker candidate was deployed at 0% for bounded CPU sampling; ordinary traffic remains on
-the stable version. The Next.js placement and a versioned Worker candidate are deployed, but the
-candidate is still held at 0%. No Worker promotion/rollback, database change, or provider-plan change
-occurred.
+Status: **DONE — CPU gate passed; candidate remains at 0%**. The local optimization is merged and
+the exact-version candidate passed bounded cache-miss and cache-hit CPU sampling. The candidate is
+intentionally held at 0%; ordinary traffic remains on the stable version. No Worker
+promotion/rollback, database change, or provider-plan change occurred.
 
 ## Baseline
 
@@ -199,18 +198,43 @@ requires separate owner direction after diagnosing the Vercel/provider failure.
   weather request, so it is not a reliable percentile sample. No cache-hit workload was run.
 - Read-only checks confirmed the Vercel Production variable name is present, the E2E gateway rewrite
   is absent, and the candidate version manifest includes the transform-token binding name; no secret
-  values were read. Filtered Vercel runtime logs showed only homepage entries and no dashboard-route
-  failure event, so the source of the 503 remains undetermined.
-- The version-filtered Wrangler tail produced no matching event for the failure. Its text filter may
-  not include `console.warn`; this does not establish that the Worker emitted no diagnostic. The
-  ephemeral local token/secret files were removed after upload; the Vercel and candidate-version
-  secrets remain configured.
+  values were read. Direct read-only probes confirmed the Vercel route returns 405 for GET and 401
+  for an unauthenticated POST before provider work. Filtered Vercel logs showed those probes and
+  homepage entries, but no authenticated candidate-route event.
+- After separate owner approval, one additional version-override request returned HTTP 503 with no
+  `x-cache` status (request ID `e1756520-81fa-4233-9ef7-bb8af0aab422`); count it as at most 5
+  weighted units. Exact-version analytics for the surrounding five-minute window returned 1
+  invocation, 0 platform errors, and p50/p95/p99 `6.258 ms`. The sample is insufficient and the
+  application request still failed; no cache-hit workload or further requests were sent.
+- The version-filtered Wrangler tail did not return a failure-class event, so the Worker-to-Vercel
+  failure boundary remains unknown. The ephemeral local token/secret files were removed after
+  upload; the Vercel and candidate-version secrets remain configured.
+- After PR #327's redirect-safe change was merged, a new candidate
+  `4aca9ef3-87b9-40ac-8980-4ed4723d1982` was held at 0% in deployment
+  `0cbd4371-175f-43d4-8064-44edb5ceaed1`; stable remained at 100%. Its no-provider
+  `/health/transform` probe returned 200. A single dashboard request then returned HTTP 200 with
+  `x-cache: MISS` at `2026-10-24T14:44:55.732Z` (request ID
+  `c64095ac-ef13-48d6-84fd-143bd13d50a0`), for at most 5 weighted units.
+- Exact-version analytics for `2026-10-24T14:44:00Z`–`2026-10-24T14:45:00Z` returned 1 invocation,
+  0 platform errors, and p50/p95/p99 `7.136 ms`. This is not a reliable percentile and is slightly
+  above the 7 ms gate. No cache-hit workload was run. The redirect-safe path succeeded, but one
+  request cannot establish why earlier attempts returned 503 or whether the CPU gate passes.
+- After a separate bounded-test approval, 69 unique dashboard requests returned HTTP 200 with
+  `x-cache: MISS` during `2026-10-24T14:49:41.270Z`–`2026-10-24T14:51:07.546Z`; estimated provider
+  usage was 345 weighted units. Exact-version analytics reported 64 invocations, 0 platform errors,
+  CPU p50 `3.161 ms`, p95 `4.839 ms`, and p99 `6.962 ms` for the miss window.
+- The subsequent 100 repeated requests all returned HTTP 200 with `x-cache: HIT` during
+  `2026-10-24T14:55:09.662Z`–`2026-10-24T14:55:34.117Z`, with no additional provider calls. The
+  first one-minute analytics read reported only 16 invocations, 0 platform errors, CPU p50
+  `1.328 ms`, p95 `5.856 ms`, and p99 `5.856 ms`, below the 30-request analysis floor. A later
+  exact-window re-query is recorded in the final evidence section below.
+- The bounded miss/hit sample used 345 weighted units, below its approved budget. No more requests
+  were sent after this initial hit window.
 - Final verification confirmed stable 100% / candidate 0%, ordinary `/version` still
   `96434d008bd2`, and no Edge Runtime workflow or Worker rollback.
 
-PERF-002 remains `IN_PROGRESS` and **HOLD**. The diagnostic candidate still has an insufficient,
-over-budget sample; do not promote or send further production traffic without another explicit owner
-decision.
+At the time of this initial read, PERF-002 remained **HOLD** because the hit sample was not yet
+sufficient. The later read-only analytics re-query and bounded hit sample below resolve that hold.
 
 ## Owner-approved Vercel security release — 2026-10-23
 
@@ -221,6 +245,47 @@ decision.
   [39972999116](https://github.com/LQH-coding-frenzy/atmos/actions/runs/39972999116) completed on
   that SHA; exact-candidate and production-domain smoke/security-header checks passed, and the public
   homepage returned HTTP 200. No Edge Runtime workflow was dispatched by this release.
-- PERF-002 remains `IN_PROGRESS`: all candidate samples were partial and above the 7 ms gate. The
-  Next.js transform is deployed and the shared service credential is bound to the current 0%-candidate
-  version, but CPU/error sampling has not passed. Stable Worker release `96434d008bd2` remains at 100%.
+- PERF-002 remains `IN_PROGRESS`: candidate samples are partial and inconsistent, and an override
+  request returned HTTP 503. The Next.js transform is deployed and the shared service credential is
+  bound to the current 0%-candidate version, but CPU/error sampling has not passed. Stable Worker
+  release `96434d008bd2` remains at 100%.
+
+## Final bounded CPU evidence — 2026-10-24
+
+- Candidate Worker version `4aca9ef3-87b9-40ac-8980-4ed4723d1982`, tagged with merged `main`
+  commit `cba92d072d7f`, remains in deployment `0cbd4371-175f-43d4-8064-44edb5ceaed1` at 0%;
+  stable version `2da40785-0b9e-430c-bdac-c9ad6254ff68` remains at 100%. Read-only Wrangler
+  deployment inventory confirmed the split, and no `Release Edge Runtime` workflow was queued or
+  running. Ordinary `/version` remains on stable release `96434d008bd2`.
+- The exact-version Cloudflare Analytics GraphQL query used
+  `workersInvocationsAdaptive`, `scriptName=atmos-gateway`,
+  `scriptVersion_in=[4aca9ef3-87b9-40ac-8980-4ed4723d1982]`, `isPreview=0`, and the bounded UTC
+  windows listed below. CPU values are reported in milliseconds after converting Cloudflare's
+  microsecond values.
+- Cache-miss sample: 69 unique dashboard requests returned HTTP 200 with `x-cache: MISS` during
+  `2026-10-24T14:49:41.270Z`–`2026-10-24T14:51:07.546Z`; estimated provider usage was 345 weighted
+  units. Analytics recorded 64 invocations, 0 platform errors, CPU p50 `3.161 ms`, p95 `4.839 ms`,
+  and p99 `6.962 ms`. The client-response count and analytics invocation count differ; the
+  analytics sample itself exceeds the 30-invocation floor.
+- Initial cache-hit sample: 100 repeated requests returned HTTP 200 with `x-cache: HIT` during
+  `2026-10-24T14:55:09.662Z`–`2026-10-24T14:55:34.117Z`, with no provider calls. Re-querying that
+  exact interval returned 89 analytics invocations, 0 platform errors, CPU p50 `1.202 ms`, p95
+  `2.239 ms`, and p99 `7.082 ms`. This resolves the earlier immediate read of 16 invocations; both
+  the re-query and the later hit sample exceed the analysis floor.
+- After cache expiry, one repeat returned HTTP 200 with `x-cache: MISS` at
+  `2026-10-24T14:59:26.385Z` (request ID `32ef288b-d4a4-4970-84e7-d525f38d713f`), for at most 5
+  weighted units. The subsequent 199 repeats all returned HTTP 200 with `x-cache: HIT` during
+  `2026-10-24T15:01:36.824Z`–`15:02:34.716Z`, with no provider calls. Exact-window analytics recorded
+  194 invocations, 0 platform errors, CPU p50 `1.229 ms`, p95 `2.135 ms`, and p99 `5.491 ms`.
+- For this candidate's bounded weather workload, the 69 misses, the initial successful miss, and
+  the post-expiry miss represent at most 355 estimated weighted provider units; repeated cache hits
+  made no additional provider calls. Earlier failed candidate attempts remain documented above and
+  were stopped at the first failure. No response body, provider payload, raw request URL, or
+  coordinates were recorded.
+- Both cache-miss and cache-hit samples have at least 30 exact-version analytics invocations, zero
+  platform errors, and CPU p95 below the unchanged 7 ms gate. All sampled candidate weather requests
+  after the redirect-safe deployment returned HTTP 200. Earlier 503 failures occurred on prior
+  candidates; their precise cause was not conclusively established.
+- Final state: PERF-002 **DONE** on measured CPU evidence. Keep the candidate at 0% pending any
+  separate owner decision; this evidence does not authorize promotion, rollback, or further
+  production traffic. No production traffic shift, database change, or paid-resource change occurred.
