@@ -111,6 +111,23 @@ function logProviderFailure(
 }
 
 export function createWeatherRouteHandlers(provider: WeatherRouteProvider, expectedToken?: string) {
+  async function transformHealth(request: Request) {
+    const requestId = routeRequestId(request);
+    if (!isAuthorized(request, expectedToken)) {
+      return errorResponse(
+        requestId,
+        'UNAUTHORIZED',
+        'A valid service credential is required.',
+        401,
+      );
+    }
+
+    return Response.json(
+      { status: 'ok' },
+      { headers: { 'cache-control': 'no-store', 'x-request-id': requestId } },
+    );
+  }
+
   async function dashboard(request: Request) {
     const requestId = routeRequestId(request);
     if (!isAuthorized(request, expectedToken)) {
@@ -220,5 +237,5 @@ export function createWeatherRouteHandlers(provider: WeatherRouteProvider, expec
     }
   }
 
-  return { dashboard, airQuality };
+  return { dashboard, airQuality, transformHealth };
 }

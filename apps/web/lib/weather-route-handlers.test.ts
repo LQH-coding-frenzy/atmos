@@ -251,4 +251,27 @@ describe('Next.js weather transform handlers', () => {
     });
     expect(getDashboard).not.toHaveBeenCalled();
   });
+
+  it('checks the shared service credential without calling a provider', async () => {
+    const getDashboard = vi.fn(async () => dashboard);
+    const getAirQuality = vi.fn(async () => airQuality);
+    const handlers = createWeatherRouteHandlers({ getDashboard, getAirQuality }, serviceToken);
+    const authorized = new Request('https://rainify.dpdns.org/api/v1/weather/transform-health', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${serviceToken}`, 'x-request-id': 'transform_health-1' },
+    });
+    const denied = new Request('https://rainify.dpdns.org/api/v1/weather/transform-health', {
+      method: 'POST',
+      headers: { 'x-request-id': 'transform_health-2' },
+    });
+    const healthy = await handlers.transformHealth(authorized);
+    const unauthorized = await handlers.transformHealth(denied);
+
+    expect(healthy.status).toBe(200);
+    expect(healthy.headers.get('cache-control')).toBe('no-store');
+    await expect(healthy.json()).resolves.toEqual({ status: 'ok' });
+    expect(unauthorized.status).toBe(401);
+    expect(getDashboard).not.toHaveBeenCalled();
+    expect(getAirQuality).not.toHaveBeenCalled();
+  });
 });

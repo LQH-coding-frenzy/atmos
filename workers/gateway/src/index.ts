@@ -113,6 +113,14 @@ function dependencyHealthResponse(context: Context<GatewayEnvironment>, healthy:
   return response;
 }
 
+function transformHealthResponse(context: Context<GatewayEnvironment>, healthy: boolean) {
+  const response = healthy
+    ? context.json({ status: 'ok' })
+    : context.json({ status: 'degraded' }, 503);
+  response.headers.set('cache-control', 'no-store');
+  return response;
+}
+
 function weatherInput(context: { req: { query: (name: string) => string | undefined } }) {
   const latitudeValue = context.req.query('lat');
   const longitudeValue = context.req.query('lon');
@@ -165,8 +173,11 @@ function usesNextWeatherTransform(env: Bindings | undefined) {
 
 async function fetchNextWeatherTransform<T>(
   env: Bindings | undefined,
-  path: '/api/v1/weather/dashboard' | '/api/v1/weather/air-quality',
-  input: LocationInput | AirQualityInput,
+  path:
+    | '/api/v1/weather/dashboard'
+    | '/api/v1/weather/air-quality'
+    | '/api/v1/weather/transform-health',
+  input: LocationInput | AirQualityInput | Record<string, never>,
   requestId: string,
   traceparent: string,
 ): Promise<T> {
@@ -494,6 +505,36 @@ export function createApp(
       return dependencyHealthResponse(context, false);
     } finally {
       context.set('providerDurationMs', performance.now() - providerStartedAt);
+    }
+  });
+  app.get('/health/transform', async (context) => {
+    const startedAt = performance.now();
+    context.set('analyticsProvider', 'none');
+    try {
+      if (!usesNextWeatherTransform(context.env)) {
+        throw new WeatherTransformError('not_configured');
+      }
+      const result = await fetchNextWeatherTransform<{ status?: unknown }>(
+        context.env,
+        '/api/v1/weather/transform-health',
+        {},
+        context.get('requestId'),
+        context.get('traceparent'),
+      );
+      if (result.status !== 'ok') throw new WeatherTransformError('invalid_response');
+      return transformHealthResponse(context, true);
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          event: 'weather_transform_health_failed',
+          request_id: context.get('requestId'),
+          trace_id: context.get('traceparent').split('-')[1],
+          ...sanitizedProviderFailure(error),
+        }),
+      );
+      return transformHealthResponse(context, false);
+    } finally {
+      context.set('providerDurationMs', performance.now() - startedAt);
     }
   });
   app.get('/version', (context) =>

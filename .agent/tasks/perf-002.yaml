@@ -35,9 +35,12 @@ task:
       - packages/provider-openmeteo/src/air-quality-timeline.test.ts
       - workers/gateway/src/index.ts
       - workers/gateway/src/index.test.ts
+      - workers/gateway/src/request-analytics.ts
+      - workers/gateway/src/request-analytics.test.ts
       - workers/gateway/wrangler.jsonc
       - apps/web/app/api/v1/weather/dashboard/route.ts
       - apps/web/app/api/v1/weather/air-quality/route.ts
+      - apps/web/app/api/v1/weather/transform-health/route.ts
       - apps/web/lib/weather-route-handlers.ts
       - apps/web/lib/weather-route-handlers.test.ts
       - apps/web/lib/weather-runtime.ts
@@ -70,9 +73,12 @@ task:
       - packages/provider-openmeteo/src/air-quality-timeline.test.ts
       - workers/gateway/src/index.ts
       - workers/gateway/src/index.test.ts
+      - workers/gateway/src/request-analytics.ts
+      - workers/gateway/src/request-analytics.test.ts
       - workers/gateway/wrangler.jsonc
       - apps/web/app/api/v1/weather/dashboard/route.ts
       - apps/web/app/api/v1/weather/air-quality/route.ts
+      - apps/web/app/api/v1/weather/transform-health/route.ts
       - apps/web/lib/weather-route-handlers.ts
       - apps/web/lib/weather-route-handlers.test.ts
       - apps/web/lib/weather-runtime.ts
@@ -87,7 +93,7 @@ task:
 
   validation:
     commands:
-      - corepack pnpm exec vitest run packages/provider-openmeteo packages/contracts workers/gateway/src/index.test.ts
+      - corepack pnpm exec vitest run packages/provider-openmeteo packages/contracts workers/gateway/src/index.test.ts workers/gateway/src/request-analytics.test.ts
       - corepack pnpm exec vitest run packages/provider-openmeteo/src/full-weather.test.ts packages/provider-openmeteo/src/air-quality-timeline.test.ts
       - corepack pnpm exec vitest run apps/web/lib/weather-route-handlers.test.ts
       - corepack pnpm typecheck
