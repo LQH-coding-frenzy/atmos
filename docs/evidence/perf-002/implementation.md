@@ -176,6 +176,42 @@ requires separate owner direction after diagnosing the Vercel/provider failure.
 - No further candidate or provider requests were sent. The active deployment remains stable 100% /
   candidate 0%; the CPU sample remains insufficient and above the gate. PERF-002 stays `IN_PROGRESS`.
 
+## Owner-approved diagnostic candidate attempt — 2026-10-24
+
+- PR #324, which adds sanitized transform failure classes, was merged as
+  `04c326d1ca0ae4ae35c7dd3a0770278acdfa6921`; all PR and main-branch checks passed.
+- The shared token was rotated in the Vercel Production environment without exposing or recording
+  its value. Protected Vercel production run
+  [40091452631](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40091452631) promoted the
+  exact merged `main` deployment and passed homepage smoke; its automatic rollback was not triggered.
+- Worker version `0b772e26-9e9f-413d-82ea-fdb8df199bb1`, tag `04c326d1ca0a`, was uploaded with the
+  matching transform secret and held in deployment `0d28d1aa-5e09-48ed-8d8a-3114162e7d49` at 0%;
+  stable `2da40785-0b9e-430c-bdac-c9ad6254ff68` remained at 100%. Override-only health,
+  dependency, version, and unauthenticated-route smoke passed.
+- A read-only version manifest showed the candidate has the `WEATHER_TRANSFORM_TOKEN` secret binding;
+  the secret value was not accessed. Temporary source and upload files were removed after use.
+- The first bounded dashboard request returned HTTP 503 without an `x-cache` status at
+  `2026-10-24T11:58:21.105Z`; no response body, URL, coordinates, or provider payload was recorded.
+  Count it as at most 5 weighted units. No retries or further candidate requests were sent.
+- Exact-version Cloudflare `workersInvocationsAdaptive` for `2026-10-24T11:45Z`–`2026-10-24T12:15Z`
+  returned 4 invocations, 0 platform errors, CPU p50 `1.846 ms`, p95 `10.497 ms`, and p99
+  `10.497 ms`. This window includes the three candidate smoke invocations and the single failed
+  weather request, so it is not a reliable percentile sample. No cache-hit workload was run.
+- Read-only checks confirmed the Vercel Production variable name is present, the E2E gateway rewrite
+  is absent, and the candidate version manifest includes the transform-token binding name; no secret
+  values were read. Filtered Vercel runtime logs showed only homepage entries and no dashboard-route
+  failure event, so the source of the 503 remains undetermined.
+- The version-filtered Wrangler tail produced no matching event for the failure. Its text filter may
+  not include `console.warn`; this does not establish that the Worker emitted no diagnostic. The
+  ephemeral local token/secret files were removed after upload; the Vercel and candidate-version
+  secrets remain configured.
+- Final verification confirmed stable 100% / candidate 0%, ordinary `/version` still
+  `96434d008bd2`, and no Edge Runtime workflow or Worker rollback.
+
+PERF-002 remains `IN_PROGRESS` and **HOLD**. The diagnostic candidate still has an insufficient,
+over-budget sample; do not promote or send further production traffic without another explicit owner
+decision.
+
 ## Owner-approved Vercel security release — 2026-10-23
 
 - PR #322 merged as `9a05f8bea27639d74f18b692ed0deabf584ee0e3`. Trivy initially identified two
@@ -185,7 +221,6 @@ requires separate owner direction after diagnosing the Vercel/provider failure.
   [39972999116](https://github.com/LQH-coding-frenzy/atmos/actions/runs/39972999116) completed on
   that SHA; exact-candidate and production-domain smoke/security-header checks passed, and the public
   homepage returned HTTP 200. No Edge Runtime workflow was dispatched by this release.
-- PERF-002 remains `IN_PROGRESS`: both candidate samples were partial and above the 7 ms gate. The
-  Next.js transform is deployed and the shared service credential is bound to the 0%-candidate
-  version, but the candidate has not passed CPU/error sampling. Stable Worker release
-  `96434d008bd2` remains at 100%.
+- PERF-002 remains `IN_PROGRESS`: all candidate samples were partial and above the 7 ms gate. The
+  Next.js transform is deployed and the shared service credential is bound to the current 0%-candidate
+  version, but CPU/error sampling has not passed. Stable Worker release `96434d008bd2` remains at 100%.
