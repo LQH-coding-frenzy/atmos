@@ -2,10 +2,11 @@
 
 Date: 2026-10-24
 
-Status: **DONE — exact-version CPU gate passed; candidate is at 100%**. The local optimization is
-merged, the exact-version candidate passed bounded cache-miss/cache-hit CPU sampling and release
-gates, and it is now serving ordinary traffic. The former stable version remains attached at 0% for
-rollback. No database or provider-plan change occurred.
+Status: **IN_PROGRESS — candidate rolled back after full-traffic CPU regression**. The exact-version
+candidate passed bounded cache-miss/cache-hit sampling and pre-promotion release gates, but its
+post-exposure CPU p95 exceeded 7 ms with a sufficient sample. The retained stable Worker is restored
+at 100%; further remediation is required before another promotion. No database or provider-plan
+change occurred.
 
 ## Baseline
 
@@ -286,9 +287,9 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
   platform errors, and CPU p95 below the unchanged 7 ms gate. All sampled candidate weather requests
   after the redirect-safe deployment returned HTTP 200. Earlier 503 failures occurred on prior
   candidates; their precise cause was not conclusively established.
-- PERF-002 is **DONE** on measured CPU evidence. At the end of this sampling phase the candidate
-  remained at 0%; its later owner-approved production promotion is recorded next. No database change
-  or paid-resource change occurred.
+- The pre-promotion cache-miss/cache-hit CPU checks passed, but PERF-002 remains **IN_PROGRESS**
+  pending post-exposure validation. The later owner-approved promotion and subsequent CPU regression
+  are recorded next. No database change or paid-resource change occurred.
 
 ## Owner-approved production promotion and monitoring — 2026-10-24
 
@@ -321,6 +322,21 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
 - Post-promotion WAE release-gate run
   [40108324584](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40108324584) returned
   `PASS`: stable 34 / candidate 377 weighted samples, 0% errors for both, p95 wall time 2,188 ms
-  stable / 313 ms candidate. No rollback was needed.
-- Current production state: candidate `4aca9ef3-87b9-40ac-8980-4ed4723d1982` at 100%, previous
-  stable `2da40785-0b9e-430c-bdac-c9ad6254ff68` at 0%. No database or paid-resource changes occurred.
+  stable / 313 ms candidate. This wall-duration gate did not replace the Worker CPU gate.
+- Later exact-version CPU analytics for `2026-10-24T15:40:50.158Z`–`2026-10-24T16:51:27.018Z`
+  recorded 33 invocations, 0 platform errors, CPU p50 `8.177 ms`, p95 `19.913 ms`, and p99
+  `23.052 ms`. This exceeds the 7 ms CPU limit with at least the 30-invocation floor. The broader
+  exact-version window `2026-10-24T14:44:00Z`–`2026-10-24T16:51:27.018Z` recorded 398 invocations,
+  0 platform errors, CPU p50 `1.341 ms`, p95 `8.150 ms`, and p99 `13.661 ms`.
+- The protected rollback plan
+  [40113501573](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40113501573) validated the
+  version identities but stopped before changing traffic because its stable-target smoke on
+  `api.rainify.dpdns.org` returned HTTP 403. The exact stable version passed the documented smoke on
+  `atmos-gateway.rainify.workers.dev` (health, release, weather, and unauthenticated-route checks).
+- Under the owner's rollback authorization, Wrangler's documented rollback primitive restored
+  stable Worker `2da40785-0b9e-430c-bdac-c9ad6254ff68` / release `96434d008bd2` to 100% at
+  `2026-10-24T16:56:20.670Z`, deployment `cd43ba33-690d-41fc-922e-73c3e30d8de0`. The post-rollback
+  smoke passed; the candidate is no longer receiving traffic.
+- Current state: PERF-002 **IN_PROGRESS**. Do not re-promote candidate
+  `4aca9ef3-87b9-40ac-8980-4ed4723d1982` until the mixed-route CPU regression is diagnosed and a
+  sufficient exact-version sample is at or below 7 ms. No database or paid-resource changes occurred.

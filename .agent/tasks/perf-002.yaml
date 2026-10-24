@@ -1,7 +1,7 @@
 task:
   id: PERF-002
   title: Remediate expanded weather/AQI Worker CPU p95 over budget
-  status: DONE
+  status: IN_PROGRESS
   objective: Identify and reduce Worker CPU for expanded weather and AQI request paths so an exact-version candidate meets the 7 ms p95 gate without changing response semantics, paid tier, or CPU threshold.
 
   depends_on:
@@ -91,7 +91,7 @@ task:
     terraform_resources: []
     database_changes: [none]
     deployed_units:
-      - Cloudflare Worker 4aca9ef3-87b9-40ac-8980-4ed4723d1982 at 100%; previous stable 2da40785-0b9e-430c-bdac-c9ad6254ff68 retained at 0% for rollback
+      - Stable Cloudflare Worker 2da40785-0b9e-430c-bdac-c9ad6254ff68 at 100%; candidate 4aca9ef3-87b9-40ac-8980-4ed4723d1982 retained but not serving
 
   compatibility:
     requires_expand_contract: false
