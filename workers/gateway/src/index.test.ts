@@ -495,7 +495,7 @@ describe('gateway', () => {
     });
     const serializedDashboard = JSON.stringify({
       ...dashboard,
-      meta: { ...dashboard.meta, provider: 'open-meteo' },
+      meta: { ...dashboard.meta, provider: 'open-meteo', cached: true, stale: true },
     });
     const serializedBytes = new TextEncoder().encode(serializedDashboard);
     const stringify = vi.spyOn(JSON, 'stringify');
@@ -554,7 +554,7 @@ describe('gateway', () => {
     await expect(response.clone().text()).resolves.toBe(serializedDashboard);
     await expect(response.json()).resolves.toMatchObject({
       location: { name: 'Berlin', latitude: 52.52, longitude: 13.405 },
-      meta: { provider: 'open-meteo', cached: false, stale: false },
+      meta: { provider: 'open-meteo', cached: true, stale: true },
     });
     expect(cache.put).toHaveBeenCalledTimes(2);
     await expect(cache.put.mock.calls[0]?.[1].clone().json()).resolves.toMatchObject({
