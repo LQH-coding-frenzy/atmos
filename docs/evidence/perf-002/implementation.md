@@ -2,12 +2,12 @@
 
 Date: 2026-10-25
 
-Status: **IN_PROGRESS — HOLD; stable at 100%, candidate at 0%**. The latest exact-version candidate
-measured below the 7 ms CPU p95 gate overall and on bounded cache-miss/cache-hit samples, but the WAE
-release gate remains `INSUFFICIENT_DATA`, and two application-level 5xx responses were counted. At
-least one correlated 503 is confirmed as an upstream provider timeout. Do not promote: the
-stable/candidate WAE and current Grafana gates must pass, followed by explicit owner approval. No
-database or provider-plan change occurred.
+Status: **IN_PROGRESS — CPU/WAE/Grafana gates PASS; awaiting explicit owner decision before any
+traffic shift. Stable remains at 100%, candidate at 0%.** The exact-version candidate measured below
+the 7 ms CPU p95 gate overall and on bounded cache-miss/cache-hit samples. The WAE gate and a fresh
+read-only Grafana synthetic check now pass. Two application-level 5xx responses were counted; at
+least one correlated 503 is confirmed as an upstream provider timeout. No database or provider-plan
+change occurred.
 
 ## Baseline
 
@@ -488,3 +488,26 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
 - No Grafana candidate release gate was run after this sample. With WAE returning `INSUFFICIENT_DATA`,
   and without a fresh passing Grafana gate, promotion is not authorized. Stable remains at 100% and
   candidate at 0%; no production traffic shift or rollback was made. PERF-002 remains **IN_PROGRESS**.
+
+## Read-only release-gate recheck — 2026-10-25
+
+- The owner authorized up to 20 stable `/health` probes only if the candidate still had at least 30
+  WAE samples. No probes were needed or sent: a read-only WAE gate rerun passed without additional
+  test traffic.
+- WAE release-gate run
+  [40186106356](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40186106356), evaluated at
+  `2026-10-25T10:46:05Z` with a 60-minute lookback and 30-sample floor, returned `PASS`. Stable had
+  67 weighted samples, 0% errors, and p95 wall `1,330 ms`; candidate had 166 weighted samples,
+  `1.2048%` errors, and p95 wall `468 ms`. Limits were 2% error rate and `2,500 ms` p95 wall time.
+- A read-only Grafana query using the gate's exact PromQL,
+  `probe_success{job=~"Atmos.*"}`, returned value `1` for production frontend, edge, weather, and
+  dependencies. All four latest samples were timestamped `2026-10-25T10:47:12.505Z` (about one
+  second old), inside the gate's 30-minute freshness limit.
+- A final read-only Wrangler deployment inventory confirmed deployment
+  `b934665e-27a9-446f-871e-09f7aa0085f1` still assigns stable version
+  `2da40785-0b9e-430c-bdac-c9ad6254ff68` 100% and candidate version
+  `2503a1f0-985f-4026-a368-bd9bb5504d23` 0%. No traffic shift occurred.
+- The exact-version CPU results above remain below the 7 ms p95 gate, and the WAE/Grafana release
+  gates now pass. This is not promotion approval: no traffic change was made without a separate
+  explicit owner decision. PERF-002 remains **IN_PROGRESS** pending that decision and any requested
+  post-exposure validation.
