@@ -4,10 +4,12 @@ Date: 2026-10-25
 
 Status: **IN_PROGRESS — owner-approved candidate promotion is at 100%; WAE/Grafana gates pass, but
 post-exposure CPU p95 is not yet established.** Pre-exposure exact-version CPU p95 and bounded
-cache-miss/cache-hit p95 were below 7 ms. Immediate post-exposure smoke passed; only four candidate
-observability events were available, too few for a reliable p95. No additional weather/provider
-requests were generated after promotion. Two application-level 5xx responses were counted in the
-bounded test; at least one correlated 503 is confirmed as an upstream provider timeout.
+cache-miss/cache-hit p95 were below 7 ms. Immediate post-exposure smoke passed. Natural monitoring
+has found 13 candidate events so far, including four weather-dashboard events with observed CPU
+median `9 ms` and max `16 ms`; this remains below the 30-event analysis floor and is an early warning,
+not a reliable p95. No additional weather/provider requests were generated after promotion. Two
+application-level 5xx responses were counted in the bounded test; at least one correlated 503 is
+confirmed as an upstream provider timeout.
 
 ## Baseline
 
@@ -539,3 +541,17 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
   performed because the post-exposure CPU sample is insufficient rather than over budget. PERF-002
   remains **IN_PROGRESS** pending sufficient naturally observed exact-version CPU data or further
   owner direction.
+
+## Natural post-exposure CPU monitoring — 2026-10-25
+
+- A read-only Workers Observability query through `2026-10-25T11:30:09Z` found 13 exact-candidate
+  events since the approved promotion. Overall observed CPU p50 was `5 ms`, nearest-rank p95 `16 ms`,
+  max `16 ms`; all 13 outcomes were `ok`. This remains below the 30-event analysis floor, so the
+  p95 is provisional and must not be reported as a conclusive gate result.
+- The four `weather_dashboard` events were HTTP 200 with outcomes `ok`; their observed CPU median was
+  `9 ms`, max `16 ms`. This is an early route-specific warning above the 7 ms target, not a
+  statistically sufficient route p95. Health, transform-health, version, and protected-route
+  observations were lower and the expected protected-route response remained HTTP 401.
+- Per owner direction, the candidate remains at 100% while only read-only natural monitoring
+  continues. No synthetic weather requests, provider calls, or rollback were performed. PERF-002
+  remains **IN_PROGRESS** until a sufficient exact-version CPU sample is available and reviewed.
