@@ -2,12 +2,12 @@
 
 Date: 2026-10-25
 
-Status: **IN_PROGRESS — CPU/WAE/Grafana gates PASS; awaiting explicit owner decision before any
-traffic shift. Stable remains at 100%, candidate at 0%.** The exact-version candidate measured below
-the 7 ms CPU p95 gate overall and on bounded cache-miss/cache-hit samples. The WAE gate and a fresh
-read-only Grafana synthetic check now pass. Two application-level 5xx responses were counted; at
-least one correlated 503 is confirmed as an upstream provider timeout. No database or provider-plan
-change occurred.
+Status: **IN_PROGRESS — owner-approved candidate promotion is at 100%; WAE/Grafana gates pass, but
+post-exposure CPU p95 is not yet established.** Pre-exposure exact-version CPU p95 and bounded
+cache-miss/cache-hit p95 were below 7 ms. Immediate post-exposure smoke passed; only four candidate
+observability events were available, too few for a reliable p95. No additional weather/provider
+requests were generated after promotion. Two application-level 5xx responses were counted in the
+bounded test; at least one correlated 503 is confirmed as an upstream provider timeout.
 
 ## Baseline
 
@@ -511,3 +511,31 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
   gates now pass. This is not promotion approval: no traffic change was made without a separate
   explicit owner decision. PERF-002 remains **IN_PROGRESS** pending that decision and any requested
   post-exposure validation.
+
+## Owner-approved promotion and immediate post-exposure checks — 2026-10-25
+
+- Evidence PR #330 was merged as `f473156dacdc6e05bdcd87fd311da190c284806f`. With explicit owner
+  approval and all pre-exposure gates passing, Wrangler deployed stable version
+  `2da40785-0b9e-430c-bdac-c9ad6254ff68` at 0% and candidate
+  `2503a1f0-985f-4026-a368-bd9bb5504d23` / release `d81923250215` at 100% in deployment
+  `977c9882-24cf-4140-8fe8-3bf9cf6e1ae8` at `2026-10-25T10:53:37.623Z`.
+- Post-exposure no-provider smoke passed: `/health` and `/health/transform` returned HTTP 200 with
+  `{"status":"ok"}`; `/version` reported `d81923250215`; unauthenticated `/api/v1/me` returned
+  HTTP 401. No weather endpoint was called.
+- Post-exposure WAE read-only gate
+  [40186922785](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40186922785) returned
+  `PASS` with a 60-minute lookback: stable 66 weighted samples, 0% errors, p95 wall `1,129 ms`;
+  candidate 165 weighted samples, `0.6061%` errors, p95 wall `468 ms`. Limits were 2% errors and
+  `2,500 ms` p95 wall. This is a rolling window, not a post-promotion-only sample.
+- A fresh read-only Grafana gate query returned `1` for all four production synthetics
+  (`frontend`, `edge`, `weather`, `dependencies`) at `2026-10-25T11:02:31.270Z`; samples were about
+  one second old and within the 30-minute freshness limit.
+- A sanitized Workers Observability query from the promotion time through the immediate smoke found
+  four candidate events: three HTTP 200 and one expected HTTP 401, all with outcome `ok`; observed
+  CPU median was `2 ms`, maximum `7 ms`. This small smoke-only sample is below the 30-invocation
+  analysis floor and does **not** establish a post-exposure CPU p95. The pre-exposure exact-version
+  adaptive CPU result remains p95 `6.269 ms`; no new provider workload was authorized or sent.
+- The candidate remains at 100% under the owner's explicit promotion approval. No rollback was
+  performed because the post-exposure CPU sample is insufficient rather than over budget. PERF-002
+  remains **IN_PROGRESS** pending sufficient naturally observed exact-version CPU data or further
+  owner direction.
