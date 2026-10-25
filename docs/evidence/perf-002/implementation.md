@@ -1,12 +1,13 @@
 # PERF-002 — Expanded weather/AQI Worker CPU remediation
 
-Date: 2026-10-24
+Date: 2026-10-25
 
-Status: **IN_PROGRESS — stable at 100%; no candidate serving**. The merged cache-miss serialization
-optimization passed bounded route-specific samples, but the exact candidate still exceeded the
-7 ms CPU gate after full exposure. A local lazy-startup optimization reduced measured local startup
-work and still requires exact-version candidate verification. No database or provider-plan change
-occurred.
+Status: **IN_PROGRESS — HOLD; stable at 100%, candidate at 0%**. The latest exact-version candidate
+measured below the 7 ms CPU p95 gate overall and on bounded cache-miss/cache-hit samples, but the WAE
+release gate remains `INSUFFICIENT_DATA`, and two application-level 5xx responses were counted. At
+least one correlated 503 is confirmed as an upstream provider timeout. Do not promote: the
+stable/candidate WAE and current Grafana gates must pass, followed by explicit owner approval. No
+database or provider-plan change occurred.
 
 ## Baseline
 
@@ -441,7 +442,49 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
   Subsequent local startup profiling found eager provider/schema initialization: active startup
   profile time fell from `41.1 ms` (21 samples) to `3.2 ms` (3 samples) after lazy imports. This is
   local-only evidence, not a Cloudflare candidate result.
-- The lazy-startup change is in this follow-up PR and passed 42 focused Worker tests, repository
-  typecheck, targeted ESLint, Prettier, `git diff --check`, and gateway dry-run build. Do not upload
-  or promote it until reviewed; after merge, another exact-version CPU verification is required. No
-  database or paid-resource changes occurred.
+- At that point, the lazy-startup change was in a follow-up PR and had passed 42 focused Worker tests,
+  repository typecheck, targeted ESLint, Prettier, `git diff --check`, and gateway dry-run build. It
+  was later merged as PR #329 and is covered by the candidate verification below. No database or
+  paid-resource changes occurred.
+
+## Lazy-startup candidate verification and release hold — 2026-10-25
+
+- PR #329 merged the lazy imports for `OpenMeteoProvider` and runtime schemas as
+  `d81923250215005dc776b660d740b024f9c0cf32`. Candidate Worker version
+  `2503a1f0-985f-4026-a368-bd9bb5504d23`, release `d81923250215`, is attached at 0% in deployment
+  `b934665e-27a9-446f-871e-09f7aa0085f1`; stable version
+  `2da40785-0b9e-430c-bdac-c9ad6254ff68` / release `96434d008bd2` remains at 100%.
+- Candidate-only smoke passed: `/health`, `/health/transform`, and `/version` returned HTTP 200;
+  `/version` identified `d81923250215`; unauthenticated `/api/v1/me` returned HTTP 401.
+- Exact-version Cloudflare adaptive CPU analytics over `2026-10-25T09:55:40Z`–`10:20:00Z` recorded
+  162 invocations, 0 platform errors, p50 `2.194 ms`, p95 `6.269 ms`, and p99 `11.307 ms`. Separately,
+  the bounded cache-miss interval `10:19:05.560Z`–`10:19:23.752Z` recorded 27 analytics invocations
+  (28 client requests), 0 errors, p50 `4.489 ms`, p95 `5.087 ms`, p99 `5.141 ms`. The 50 repeated
+  cache hits in `10:19:37.754Z`–`10:19:53.106Z` measured p50 `1.675 ms`, p95 `5.248 ms`, p99
+  `12.612 ms`, with 0 errors. These cache-specific p95 results are below the 7 ms CPU threshold.
+- A route-level join of Workers Observability events to WAE cache-status events (±2 seconds) over
+  `09:55:40Z`–`10:20:00Z` matched 57 MISS events and 102 HIT events. CPU values are rounded to whole
+  milliseconds: MISS p50 `4 ms`, p95 `6 ms`, max `11 ms`; HIT p50 `1 ms`, p95 `6 ms`, max `12 ms`.
+  This independently supports the bounded route-specific p95 readings; it is not the WAE release
+  gate.
+- The WAE release-gate workflow remained `INSUFFICIENT_DATA`. Run
+  [40184650262](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40184650262) had stable 19
+  and candidate 166 weighted samples, candidate weighted error rate about `1.20%`, and candidate p95
+  wall time `468 ms`. A later run,
+  [40185392457](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40185392457), also returned
+  `INSUFFICIENT_DATA` (stable sample count 16). These results do not satisfy the release gate.
+- The WAE candidate window counted two application-level 5xx responses (the bounded client batch
+  included an HTTP 503). The sanitized Worker diagnostic classified the correlated failure as
+  `upstream_5xx`; its matching Vercel log recorded `AbortError` after the five-second upstream fetch
+  timeout. This pinpoints at least one observed 503 to an upstream timeout, not Worker CPU or
+  authorization. No automatic retry was added, to avoid increasing provider load; the failed
+  coordinates were not retried.
+- **Provider-budget accounting caveat:** the request history contains 31 distinct cache-key attempts:
+  30 successful unique MISS responses and one timed-out 503. At the conservative maximum of five
+  weighted provider units per attempt, potential usage is at most 155 units if the timed-out request
+  reached the provider—up to five above the originally stated 150-unit cap. Actual provider billing
+  units for the timeout were not confirmed. No further production requests will be sent under this
+  test authorization.
+- No Grafana candidate release gate was run after this sample. With WAE returning `INSUFFICIENT_DATA`,
+  and without a fresh passing Grafana gate, promotion is not authorized. Stable remains at 100% and
+  candidate at 0%; no production traffic shift or rollback was made. PERF-002 remains **IN_PROGRESS**.
