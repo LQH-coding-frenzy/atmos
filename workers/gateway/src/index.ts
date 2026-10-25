@@ -87,10 +87,12 @@ type CacheableWeatherPayload = {
   meta: { cached: boolean; stale: boolean };
 };
 
+type WeatherCacheBody = string | ReadableStream<Uint8Array>;
+
 type WeatherCacheVariants = {
-  response: string;
-  fresh: string;
-  stale: string;
+  response: WeatherCacheBody;
+  fresh: WeatherCacheBody;
+  stale: WeatherCacheBody;
 };
 
 function serializeWeatherCacheVariants<T extends CacheableWeatherPayload>(
@@ -131,18 +133,90 @@ class WeatherTransformError extends Error {
   }
 }
 
-// The authenticated Next.js handler validates dashboardSchema and emits `meta` last.
-// Keep the large payload as text; only parse the small metadata suffix to make cache variants.
-function serializeTransformedWeatherCacheVariants(serializedPayload: string): WeatherCacheVariants {
-  const metadataSeparator = ',"meta":';
-  const metadataStart = serializedPayload.lastIndexOf(metadataSeparator);
-  if (serializedPayload[0] !== '{' || !serializedPayload.endsWith('}') || metadataStart < 1) {
-    throw new WeatherTransformError('invalid_response');
+const transformedMetadataSeparator = ',"meta":';
+const transformedMetadataSeparatorBytes = new TextEncoder().encode(transformedMetadataSeparator);
+const transformedMetadataTailLimit = 1_024;
+
+function appendTail(left: Uint8Array, right: Uint8Array) {
+  const combinedLength = Math.min(transformedMetadataTailLimit, left.length + right.length);
+  const start = left.length + right.length - combinedLength;
+  const result = new Uint8Array(combinedLength);
+  const leftStart = Math.min(left.length, start);
+  const leftLength = left.length - leftStart;
+  if (leftLength > 0) result.set(left.subarray(leftStart), 0);
+  const rightStart = Math.max(0, start - left.length);
+  result.set(right.subarray(rightStart), leftLength);
+  return result;
+}
+
+function lastIndexOfBytes(haystack: Uint8Array, needle: Uint8Array) {
+  for (let index = haystack.length - needle.length; index >= 0; index -= 1) {
+    let matches = true;
+    for (let offset = 0; offset < needle.length; offset += 1) {
+      if (haystack[index + offset] !== needle[offset]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) return index;
   }
+  return -1;
+}
+
+function jsonObjectEnd(tail: Uint8Array) {
+  let end = tail.length - 1;
+  while (
+    end >= 0 &&
+    (tail[end] === 0x20 || tail[end] === 0x09 || tail[end] === 0x0a || tail[end] === 0x0d)
+  ) {
+    end -= 1;
+  }
+  if (tail[end] !== 0x7d) throw new WeatherTransformError('invalid_response');
+  return end;
+}
+
+async function readTransformedWeatherMetadata(source: ReadableStream<Uint8Array>) {
+  const reader = source.getReader();
+  let tail = new Uint8Array();
+  let foundObjectStart = false;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value?.length) continue;
+      if (!foundObjectStart) {
+        const first = value.find(
+          (byte) => byte !== 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d,
+        );
+        if (first === undefined) continue;
+        if (first !== 0x7b) throw new WeatherTransformError('invalid_response');
+        foundObjectStart = true;
+      }
+      tail = appendTail(tail, value);
+    }
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    if (error instanceof WeatherTransformError) throw error;
+    throw new WeatherTransformError('invalid_json');
+  } finally {
+    reader.releaseLock();
+  }
+  if (!foundObjectStart) throw new WeatherTransformError('invalid_response');
+
+  const objectEnd = jsonObjectEnd(tail);
+  const metadataStart = lastIndexOfBytes(
+    tail.subarray(0, objectEnd),
+    transformedMetadataSeparatorBytes,
+  );
+  if (metadataStart < 1) throw new WeatherTransformError('invalid_response');
 
   let meta: unknown;
   try {
-    meta = JSON.parse(serializedPayload.slice(metadataStart + metadataSeparator.length, -1));
+    meta = JSON.parse(
+      new TextDecoder().decode(
+        tail.subarray(metadataStart + transformedMetadataSeparatorBytes.length, objectEnd),
+      ),
+    );
   } catch {
     throw new WeatherTransformError('invalid_json');
   }
@@ -157,19 +231,69 @@ function serializeTransformedWeatherCacheVariants(serializedPayload: string): We
   ) {
     throw new WeatherTransformError('invalid_response');
   }
+  return meta as Record<string, unknown> & { cached: boolean; stale: boolean };
+}
 
-  const serializedDataPrefix = serializedPayload.slice(0, metadataStart);
-  const serialize = (cached: boolean, stale: boolean) =>
-    `${serializedDataPrefix}${metadataSeparator}${JSON.stringify({
-      ...(meta as Record<string, unknown>),
-      cached,
-      stale,
-    })}}`;
+function rewriteTransformedMetadata(
+  source: ReadableStream<Uint8Array>,
+  serializedMetadata: string,
+) {
+  let tail = new Uint8Array();
+  return source.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        const emitLength = Math.max(0, tail.length + chunk.length - transformedMetadataTailLimit);
+        if (emitLength > 0) {
+          const fromTail = Math.min(emitLength, tail.length);
+          if (fromTail > 0) controller.enqueue(tail.subarray(0, fromTail));
+          const fromChunk = emitLength - fromTail;
+          if (fromChunk > 0) controller.enqueue(chunk.subarray(0, fromChunk));
+          tail = appendTail(tail.subarray(fromTail), chunk.subarray(fromChunk));
+        } else {
+          tail = appendTail(tail, chunk);
+        }
+      },
+      flush(controller) {
+        const objectEnd = jsonObjectEnd(tail);
+        const metadataStart = lastIndexOfBytes(
+          tail.subarray(0, objectEnd),
+          transformedMetadataSeparatorBytes,
+        );
+        if (metadataStart < 1) throw new WeatherTransformError('invalid_response');
+        controller.enqueue(tail.subarray(0, metadataStart));
+        controller.enqueue(
+          new TextEncoder().encode(`${transformedMetadataSeparator}${serializedMetadata}}`),
+        );
+        const trailingWhitespace = tail.subarray(objectEnd + 1);
+        if (trailingWhitespace.length > 0) controller.enqueue(trailingWhitespace);
+      },
+    }),
+  );
+}
+
+// The authenticated Next.js handler validates dashboardSchema and emits `meta` last.
+// Keep the full payload streamed; inspect and rewrite only the bounded metadata suffix.
+async function serializeTransformedWeatherCacheVariants(
+  response: Response,
+): Promise<WeatherCacheVariants> {
+  if (!response.body) throw new WeatherTransformError('invalid_response');
+  const [validationSource, variantSource] = response.body.tee();
+  let meta: Awaited<ReturnType<typeof readTransformedWeatherMetadata>>;
+  try {
+    meta = await readTransformedWeatherMetadata(validationSource);
+  } catch (error) {
+    await variantSource.cancel().catch(() => undefined);
+    throw error;
+  }
+  const [responseBody, cacheSource] = variantSource.tee();
+  const [freshSource, staleSource] = cacheSource.tee();
+  const freshMetadata = JSON.stringify({ ...meta, cached: true, stale: false });
+  const staleMetadata = JSON.stringify({ ...meta, cached: true, stale: true });
 
   return {
-    response: serializedPayload,
-    fresh: serialize(true, false),
-    stale: serialize(true, true),
+    response: responseBody,
+    fresh: rewriteTransformedMetadata(freshSource, freshMetadata),
+    stale: rewriteTransformedMetadata(staleSource, staleMetadata),
   };
 }
 
@@ -353,33 +477,6 @@ async function fetchNextWeatherTransform<T>(
     throw new WeatherTransformError('invalid_response');
   }
   return result as T;
-}
-
-async function fetchNextWeatherTransformText(
-  env: Bindings | undefined,
-  path: '/api/v1/weather/dashboard',
-  input: LocationInput,
-  requestId: string,
-  traceparent: string,
-): Promise<string> {
-  const response = await fetchNextWeatherTransformResponse(
-    env,
-    path,
-    input,
-    requestId,
-    traceparent,
-  );
-
-  let result: string;
-  try {
-    result = await response.text();
-  } catch {
-    throw new WeatherTransformError('invalid_json');
-  }
-  if (result[0] !== '{' || !result.endsWith('}')) {
-    throw new WeatherTransformError('invalid_response');
-  }
-  return result;
 }
 
 function airQualityInput(context: { req: { query: (name: string) => string | undefined } }) {
@@ -732,14 +829,15 @@ export function createApp(
     context.set('analyticsProvider', 'open-meteo');
     try {
       if (usesNextWeatherTransform(context.env)) {
-        const serializedDashboard = await fetchNextWeatherTransformText(
+        const transformedResponse = await fetchNextWeatherTransformResponse(
           context.env,
           '/api/v1/weather/dashboard',
           input,
           context.get('requestId'),
           context.get('traceparent'),
         );
-        transformedResponseBodies = serializeTransformedWeatherCacheVariants(serializedDashboard);
+        transformedResponseBodies =
+          await serializeTransformedWeatherCacheVariants(transformedResponse);
       } else {
         dashboard = await weatherProvider.getDashboard(input);
       }

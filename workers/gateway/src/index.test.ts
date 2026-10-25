@@ -497,13 +497,24 @@ describe('gateway', () => {
       ...dashboard,
       meta: { ...dashboard.meta, provider: 'open-meteo' },
     });
+    const serializedBytes = new TextEncoder().encode(serializedDashboard);
     const stringify = vi.spyOn(JSON, 'stringify');
     const parse = vi.spyOn(JSON, 'parse');
     const transform = vi.fn(
       async () =>
-        new Response(serializedDashboard, {
-          headers: { 'content-type': 'application/json' },
-        }),
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              for (let offset = 0; offset < serializedBytes.length; offset += 7) {
+                controller.enqueue(serializedBytes.slice(offset, offset + 7));
+              }
+              controller.close();
+            },
+          }),
+          {
+            headers: { 'content-type': 'application/json' },
+          },
+        ),
     );
     vi.stubGlobal('fetch', transform);
 
