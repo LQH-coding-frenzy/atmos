@@ -1,13 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
-import { OpenMeteoProvider } from '@atmos/provider-openmeteo';
-import {
-  airQualitySchema,
-  openWeatherMapLayerSchema,
-  weatherMapConfigurationSchema,
-  weatherRadarTimelineSchema,
-} from '@atmos/contracts';
 import type {
   AirQuality,
   AirQualityInput,
@@ -71,6 +64,24 @@ const noWeatherCache: WeatherCache = {
   match: async () => undefined,
   put: async () => undefined,
 };
+
+function createLazyOpenMeteoProvider() {
+  type Provider = import('@atmos/provider-openmeteo').OpenMeteoProvider;
+  let providerPromise: Promise<Provider> | undefined;
+  const loadProvider = () =>
+    (providerPromise ??= import('@atmos/provider-openmeteo').then(
+      ({ OpenMeteoProvider }) => new OpenMeteoProvider(),
+    ));
+
+  return {
+    getDashboard: (input: LocationInput) =>
+      loadProvider().then((provider) => provider.getDashboard(input)),
+    getAirQuality: (input: AirQualityInput) =>
+      loadProvider().then((provider) => provider.getAirQuality(input)),
+    searchLocations: (query: string) =>
+      loadProvider().then((provider) => provider.searchLocations(query)),
+  };
+}
 
 type CacheableWeatherPayload = {
   meta: { cached: boolean; stale: boolean };
@@ -330,7 +341,8 @@ function reserveOpenWeatherTileRequest(now = Date.now()) {
   return true;
 }
 
-function openWeatherTileInput(params: Record<string, string>) {
+async function openWeatherTileInput(params: Record<string, string>) {
+  const { openWeatherMapLayerSchema } = await import('@atmos/contracts');
   const layer = openWeatherMapLayerSchema.safeParse(params.layer);
   const { z: zoomValue, x: xValue, y: yValue } = params;
   if (
@@ -363,7 +375,9 @@ function openWeatherTileInput(params: Record<string, string>) {
   return { layer: layer.data, zoom, x, y } as const;
 }
 
-function normalizeRainViewerTimeline(payload: unknown): WeatherRadarTimeline | undefined {
+async function normalizeRainViewerTimeline(
+  payload: unknown,
+): Promise<WeatherRadarTimeline | undefined> {
   if (!isRecord(payload) || payload.host !== rainViewerTileHost) return undefined;
   if (!isRecord(payload.radar) || !Array.isArray(payload.radar.past)) return undefined;
 
@@ -396,6 +410,7 @@ function normalizeRainViewerTimeline(payload: unknown): WeatherRadarTimeline | u
     payload.generated > 0
       ? payload.generated
       : null;
+  const { weatherRadarTimelineSchema } = await import('@atmos/contracts');
   const parsed = weatherRadarTimelineSchema.safeParse({
     generatedAt,
     tileHost: rainViewerTileHost,
@@ -441,7 +456,7 @@ function coalescedAirQuality(
 export function createApp(
   weatherProvider: WeatherProvider &
     Partial<LocationSearchProvider> &
-    Partial<AirQualityProvider> = new OpenMeteoProvider(),
+    Partial<AirQualityProvider> = createLazyOpenMeteoProvider(),
   cache?: WeatherCache,
 ) {
   const app = new Hono<GatewayEnvironment>();
@@ -759,6 +774,7 @@ export function createApp(
           );
         }
         const result = await weatherProvider.getAirQuality!(input);
+        const { airQualitySchema } = await import('@atmos/contracts');
         const parsed = airQualitySchema.safeParse(result);
         if (!parsed.success || (input.includeTimeline && !parsed.data.timeline)) {
           throw new Error('Air-quality response has an invalid shape');
@@ -879,7 +895,7 @@ export function createApp(
       } catch {
         throw new Error('RainViewer metadata was not valid JSON');
       }
-      const timeline = normalizeRainViewerTimeline(payload);
+      const timeline = await normalizeRainViewerTimeline(payload);
       if (!timeline) throw new Error('RainViewer metadata did not match the expected contract');
 
       const cacheControl = `public, max-age=${weatherRadarCacheTtlSeconds}, s-maxage=${weatherRadarCacheTtlSeconds}`;
@@ -915,7 +931,8 @@ export function createApp(
     }
   });
 
-  app.get('/api/v1/weather/map/layers', (context) => {
+  app.get('/api/v1/weather/map/layers', async (context) => {
+    const { weatherMapConfigurationSchema } = await import('@atmos/contracts');
     const configuration = weatherMapConfigurationSchema.parse({
       openWeatherAvailable: Boolean(context.env?.OPENWEATHER_API_KEY?.trim()),
     });
@@ -925,7 +942,7 @@ export function createApp(
   });
 
   app.get('/api/v1/weather/maps/openweather/:layer/:z/:x/:y', async (context) => {
-    const input = openWeatherTileInput(context.req.param());
+    const input = await openWeatherTileInput(context.req.param());
     if (!input) {
       return gatewayError(
         context,

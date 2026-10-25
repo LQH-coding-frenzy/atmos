@@ -2,11 +2,11 @@
 
 Date: 2026-10-24
 
-Status: **IN_PROGRESS — stable at 100%; candidate held at 0% for diagnosis**. The exact-version
-candidate passed bounded pre-promotion cache-miss/cache-hit sampling and release gates, but its
-post-exposure CPU p95 exceeded 7 ms with a sufficient sample. The retained stable Worker is restored
-at 100%; a local cache-miss serialization optimization is under review before another candidate
-upload. No database or provider-plan change occurred.
+Status: **IN_PROGRESS — stable at 100%; no candidate serving**. The merged cache-miss serialization
+optimization passed bounded route-specific samples, but the exact candidate still exceeded the
+7 ms CPU gate after full exposure. A local lazy-startup optimization reduced measured local startup
+work and still requires exact-version candidate verification. No database or provider-plan change
+occurred.
 
 ## Baseline
 
@@ -338,9 +338,9 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
   `2026-10-24T16:56:20.670Z`, deployment `cd43ba33-690d-41fc-922e-73c3e30d8de0`. The post-rollback
   smoke passed. The candidate was later attached at 0% for route-isolated diagnosis; stable remained
   at 100% in deployment `3e1a3c28-546f-4ec2-af72-3319b8ef5630`.
-- Current state: PERF-002 **IN_PROGRESS**. Do not re-promote a candidate until the miss-path
-  optimization is merged/deployed and a sufficient exact-version CPU sample is at or below 7 ms. No
-  database or paid-resource changes occurred.
+- At this point, PERF-002 remained **IN_PROGRESS** because the mixed-route CPU regression was not
+  resolved by the cache serialization change alone. The later startup-profile follow-up is below.
+  No database or paid-resource changes occurred.
 
 ## Route diagnosis and local cache-miss optimization — 2026-10-24
 
@@ -368,6 +368,80 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
 - New Worker tests assert that dashboard and AQI cache misses serialize the full payload once while
   preserving their distinct cache metadata. Validation passed: 41 focused Worker tests, repository
   typecheck, targeted ESLint, Prettier, `git diff --check`, and the gateway dry-run build.
-- The optimization is local to the open PR and is not serving production. Stable remains at 100% and
-  the unoptimized candidate is held at 0%; re-upload and exact-version CPU verification are required
-  after the code is reviewed and merged.
+- The serialization optimization was merged in PR #328 and tested in a later candidate. Its
+  post-exposure regression and rollback are recorded below; the additional startup change remains
+  local.
+
+## Post-merge candidate verification and startup diagnosis — 2026-10-25
+
+- PR #328 merged to `main` as `3cffd47794c0789175117166a2a9beff7052c555`. The first two 0%-candidate
+  uploads used an 11-character release ID and failed `/version`/`/health/transform`; they received no
+  weather requests. The corrected 12-character release ID is `3cffd47794c0`.
+- Optimized candidate `cdff2ef6-2834-4f50-bae9-b26e3ebd200f` passed no-provider smoke: `/health`,
+  `/health/transform`, and `/version` returned HTTP 200 (`3cffd47794c0`); unauthenticated `/api/v1/me`
+  remained HTTP 401. Stable stayed at 100% during the bounded samples.
+- Thirty unique dashboard requests returned HTTP 200 with `x-cache: MISS`; estimated maximum
+  provider use was 150 weighted units. Exact-version CPU analytics for `2026-10-25T08:43:00Z`–
+  `08:44:00Z` recorded 32 invocations, 0 errors, p50 `2.920 ms`, p95 `5.563 ms`, and p99 `9.327 ms`.
+- One hundred repeated requests returned HTTP 200 with `x-cache: HIT` and no provider calls. The
+  combined exact-version hit window (`08:44:00Z`–`08:47:00Z`) recorded 120 invocations, 0 errors,
+  p50 `1.775 ms`, p95 `5.514 ms`, and p99 `11.177 ms`. An initial 70-invocation subwindow reported
+  p95 `9.402 ms`; the later warmed 50-invocation subwindow reported p95 `5.364 ms`. Both readings
+  are retained here rather than hiding the early outlier.
+- WAE route data for the bounded sample recorded 30 weighted `weather_dashboard` misses and 48
+  weighted hits, both with 0% errors; p95 wall time was 617 ms for misses and 27 ms for hits. The
+  count is sample-weighted and differs from client response totals.
+- After the owner-authorized full promotion, the exact candidate had 39 invocations and 0 errors in
+  `2026-10-25T09:06:07.586Z`–`09:14:59.819Z`, but CPU p95 was `9.651 ms` (p99 `9.748 ms`). Stable
+  version `2da40785-0b9e-430c-bdac-c9ad6254ff68` was restored to 100% in deployment
+  `8871b6ee-1b5f-4855-b88f-24cde39bd9cc`; the candidate is no longer serving. The pre-promotion WAE
+  and Grafana gates passed, so CPU remains the blocker.
+- A local `wrangler check startup` profile of the merged Worker showed `41.1 ms` active startup CPU
+  across 21 samples; its top frames included Zod schema construction from eagerly imported runtime
+  contracts. The follow-up lazily imports `OpenMeteoProvider` and route-specific runtime schemas.
+  Local profile active time fell to `3.2 ms` (3 samples; bundle `999.28 KiB`, gzip `159.06 KiB`).
+  This is local diagnostic evidence, not a Cloudflare CPU measurement.
+- The startup optimization and a lazy-provider regression test are local in this follow-up PR. Local
+  validation passed: 42 focused Worker tests, repository typecheck, targeted ESLint, Prettier,
+  `git diff --check`, and gateway dry-run build. Stable remains at 100%; no version containing the
+  startup change has been uploaded.
+- PERF-002 remains **IN_PROGRESS** until a new exact-version candidate verifies the startup change
+  with cache-miss and cache-hit CPU p95 at or below 7 ms. No further production traffic was sent after
+  the stable rollback.
+
+## Cache serialization candidate revalidation and startup follow-up — 2026-10-25
+
+- The cache-miss serialization code from PR #328 was tested as candidate
+  `cdff2ef6-2834-4f50-bae9-b26e3ebd200f`, release `3cffd47794c0`. Preliminary uploads with an
+  11-character release ID remained at 0% and failed `/version`/`/health/transform`; they received no
+  weather requests. The corrected candidate passed `/health`, transform-health, version, and
+  unauthenticated-route smoke.
+- Bounded workload: 30 distinct dashboard requests returned HTTP 200 `MISS`; estimated provider use
+  was at most 150 weighted units. Exact-version CPU analytics for
+  `2026-10-25T08:43:00Z`–`08:44:00Z` recorded 32 invocations, 0 errors, p50 `2.920 ms`, p95
+  `5.563 ms`, and p99 `9.327 ms`.
+- One hundred repeats returned HTTP 200 `HIT` with no provider calls. The combined cache-hit window
+  `08:44:00Z`–`08:47:00Z` recorded 120 invocations, 0 errors, p50 `1.775 ms`, p95 `5.514 ms`, and
+  p99 `11.177 ms`. The initial 70-invocation slice had p95 `9.402 ms`; the later warmed
+  50-invocation slice had p95 `5.364 ms`. Both readings are retained; the broader hit sample is below
+  the 7 ms p95 gate.
+- The pre-promotion WAE gate
+  [40179160434](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40179160434) passed with
+  stable 32 / candidate 138 weighted samples, 0% errors for both, and p95 wall time `1,633 ms`
+  stable / `593 ms` candidate. The post-promotion gate
+  [40179439361](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40179439361) also passed
+  (stable 62 / candidate 146; 0% errors). All four Grafana synthetics passed after promotion.
+- Owner-approved deployment `23cc2a87-e9cc-4c01-bdac-c9ad6254ff68` assigned stable 0% / candidate
+  100% at `2026-10-25T09:06:07.586Z`. The post-exposure exact-version CPU window
+  `09:06:07.586Z`–`09:14:59.819Z` recorded 39 invocations, 0 errors, CPU p95 `9.651 ms` (p99
+  `9.748 ms`). The CPU gate failed despite cache-specific samples passing; Wrangler restored stable
+  release `96434d008bd2` to 100% at `09:14:59.819Z`.
+- Current state remains stable 100% with no candidate attached. The merged cache-miss optimization
+  improves the weather miss sample but is not sufficient for the mixed-route production CPU p95.
+  Subsequent local startup profiling found eager provider/schema initialization: active startup
+  profile time fell from `41.1 ms` (21 samples) to `3.2 ms` (3 samples) after lazy imports. This is
+  local-only evidence, not a Cloudflare candidate result.
+- The lazy-startup change is in this follow-up PR and passed 42 focused Worker tests, repository
+  typecheck, targeted ESLint, Prettier, `git diff --check`, and gateway dry-run build. Do not upload
+  or promote it until reviewed; after merge, another exact-version CPU verification is required. No
+  database or paid-resource changes occurred.

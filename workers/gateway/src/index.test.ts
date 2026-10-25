@@ -22,6 +22,26 @@ describe('gateway', () => {
     await expect(version.json()).resolves.toEqual({ release: 'abcdef012345' });
   });
 
+  it('loads the default weather provider lazily for direct-provider misses', async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => {
+      throw new TypeError('offline test provider');
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const weatherApp = createApp();
+
+    const response = await weatherApp.request(
+      'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405',
+      undefined,
+      { WEATHER_TRANSFORM_ORIGIN: '' },
+    );
+
+    expect(response.status).toBe(503);
+    expect(fetcher).toHaveBeenCalledOnce();
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'WEATHER_UNAVAILABLE' },
+    });
+  });
+
   it('does not expose the retired notification publish route', async () => {
     const response = await app.request('http://localhost/internal/notifications/publish', {
       method: 'POST',
