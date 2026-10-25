@@ -91,7 +91,7 @@ task:
     terraform_resources: []
     database_changes: [none]
     deployed_units:
-      - Cloudflare Worker deployment 977c9882-24cf-4140-8fe8-3bf9cf6e1ae8; candidate 2503a1f0-985f-4026-a368-bd9bb5504d23 / release d81923250215 at 100%, stable rollback version 2da40785-0b9e-430c-bdac-c9ad6254ff68 / release 96434d008bd2 at 0%; natural post-exposure observation is 13 events, below the 30-invocation analysis floor, with an early weather-dashboard CPU warning
+      - Cloudflare Worker deployment 977c9882-24cf-4140-8fe8-3bf9cf6e1ae8; candidate 2503a1f0-985f-4026-a368-bd9bb5504d23 / release d81923250215 at 100%, stable rollback version 2da40785-0b9e-430c-bdac-c9ad6254ff68 / release 96434d008bd2 at 0%; natural post-exposure observation is 16 events, below the 30-invocation analysis floor, with an early weather-dashboard CPU warning
 
   compatibility:
     requires_expand_contract: false

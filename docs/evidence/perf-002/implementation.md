@@ -5,8 +5,8 @@ Date: 2026-10-25
 Status: **IN_PROGRESS — owner-approved candidate promotion is at 100%; WAE/Grafana gates pass, but
 post-exposure CPU p95 is not yet established.** Pre-exposure exact-version CPU p95 and bounded
 cache-miss/cache-hit p95 were below 7 ms. Immediate post-exposure smoke passed. Natural monitoring
-has found 13 candidate events so far, including four weather-dashboard events with observed CPU
-median `9 ms` and max `16 ms`; this remains below the 30-event analysis floor and is an early warning,
+has found 16 candidate events so far, including six weather-dashboard events with observed CPU
+median `9 ms` and max `17 ms`; this remains below the 30-event analysis floor and is an early warning,
 not a reliable p95. No additional weather/provider requests were generated after promotion. Two
 application-level 5xx responses were counted in the bounded test; at least one correlated 503 is
 confirmed as an upstream provider timeout.
@@ -555,3 +555,13 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
 - Per owner direction, the candidate remains at 100% while only read-only natural monitoring
   continues. No synthetic weather requests, provider calls, or rollback were performed. PERF-002
   remains **IN_PROGRESS** until a sufficient exact-version CPU sample is available and reviewed.
+
+### Follow-up sample — 2026-10-25T11:40Z
+
+- A later read-only query found 16 exact-candidate events since promotion. Observed CPU p50 was
+  `8 ms`, nearest-rank p95 estimate `17 ms`, and max `17 ms`; all outcomes were `ok` (15 HTTP 200,
+  one expected HTTP 401). This remains below the required 30-event floor and is not a conclusive
+  post-exposure p95.
+- The six `weather_dashboard` events had observed CPU median `9 ms`, nearest-rank p95 estimate
+  `17 ms`, and max `17 ms`. This strengthens the early warning on that route but remains a small
+  sample. The candidate remains at 100% per owner direction; monitoring has generated no traffic.
