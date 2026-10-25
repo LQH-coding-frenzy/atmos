@@ -2,14 +2,11 @@
 
 Date: 2026-10-25
 
-Status: **IN_PROGRESS — prior candidate remains at 100% per owner direction; the fix candidate is
-held at 0%.** The prior version's 31-event post-exposure CPU sample is over budget (p95 `17 ms`).
-PR #332's local fix is merged and deployed only as zero-percent candidate
-`36630961-1572-461d-800b-aabde75f2d53`; its first bounded weather request returned HTTP 503 without
-cache status, so the workload stopped immediately. No retry or promotion occurred. The latest WAE
-check (`11:53Z`) returned `INSUFFICIENT_DATA`; the last Grafana PASS at `11:45Z` is stale. No further
-weather/provider requests were generated after the failed first attempt. Earlier test failures
-included an upstream timeout, but this new candidate's 503 has not been conclusively classified.
+Status: **IN_PROGRESS — prior candidate remains at 100% per owner direction; fix candidate remains
+at 0%.** The prior version's 31-event post-exposure CPU sample exceeded budget (p95 `17 ms`). PR #332
+is merged and the raw-response fix was retested: 30 misses and 29 hits passed, but miss CPU p95 is
+`9 ms`, still above 7 ms; hit p95 is `7 ms`. The WAE comparison remains `INSUFFICIENT_DATA` because
+stable had only 15 weighted samples. The fresh Grafana check passed. No promotion occurred.
 
 ## Baseline
 
@@ -620,3 +617,26 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
 - After Vercel CLI authentication, a production log query for the request ID returned no matching
   records in the available last-30-minute window; a two-hour query was rejected because Hobby runtime
   log retention is 30 minutes. The Vercel side of the 503 therefore remains unclassified.
+
+## Fresh bounded retest of the raw-response fix — 2026-10-25
+
+- The owner authorized a fresh cap of 30 unique dashboard misses (maximum 150 weighted provider
+  units) plus cache-hit repeats, stopping on the first failure. The previous fix-candidate 503 was
+  not retried. New version `36630961-1572-461d-800b-aabde75f2d53` remained at 0%; prior candidate
+  `2503a1f0-985f-4026-a368-bd9bb5504d23` remained at 100%.
+- The bounded workload completed 30 distinct HTTP 200 `MISS` requests and 29 immediate HTTP 200
+  `HIT` repeats. Conservative provider usage was at most 150 weighted units; no additional request
+  was sent beyond the cap. Request coordinates and response bodies were not recorded.
+- Exact-version Workers Observability event CPU for the 30 misses was p50 `4 ms`, nearest-rank p95
+  `9 ms`, p99 `12 ms`, max `12 ms`; all 30 were HTTP 200/outcome `ok`. The 29 hits were p50 `1 ms`,
+  p95 `7 ms`, p99 `12 ms`, max `12 ms`; all 29 were HTTP 200/outcome `ok`. These are event-level
+  per-invocation CPU values, not a refreshed `workersInvocationsAdaptive` GraphQL result.
+- WAE gate run
+  [40210079456](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40210079456) returned
+  `INSUFFICIENT_DATA`: stable 15 / candidate 60 weighted samples, 0% errors for both, p95 wall
+  `1,823 ms` stable / `797 ms` candidate. The stable sample floor is not met. Grafana's four
+  synthetics all returned `1` at `2026-10-25T16:06:58.843Z` (three seconds old).
+- The raw-response change reduced the sampled miss p95 from the previous version's over-budget
+  event-level estimate, but `9 ms` still exceeds the 7 ms target. The fix candidate remains at 0%;
+  no promotion or traffic shift occurred. PERF-002 remains **IN_PROGRESS** for further local
+  optimization and owner review.
