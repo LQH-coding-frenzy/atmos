@@ -2,11 +2,11 @@
 
 Date: 2026-10-25
 
-Status: **IN_PROGRESS — prior candidate remains at 100% per owner direction; fix candidate remains
-at 0%.** The prior version's 31-event post-exposure CPU sample exceeded budget (p95 `17 ms`). PR #332
-is merged and the raw-response fix was retested: 30 misses and 29 hits completed successfully, but miss CPU p95 is
-`9 ms`, still above 7 ms; hit p95 is `7 ms`. The WAE comparison remains `INSUFFICIENT_DATA` because
-stable had only 15 weighted samples. The fresh Grafana check passed. No promotion occurred.
+Status: **IN_PROGRESS — prior candidate remains at 100%; streaming fix candidate remains at 0%.**
+The prior version's post-exposure CPU sample exceeded budget (p95 `17 ms`). The raw-response fix
+miss p95 was `9 ms`; the newer streaming fix candidate's exact-version GraphQL p95 is `10.607 ms`,
+still above the 7 ms gate. WAE remains `INSUFFICIENT_DATA` because stable lacks 30 samples; fresh
+Grafana synthetics pass. No promotion occurred.
 
 ## Baseline
 
@@ -640,3 +640,30 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
   event-level estimate, but `9 ms` still exceeds the 7 ms target. The fix candidate remains at 0%;
   no promotion or traffic shift occurred. PERF-002 remains **IN_PROGRESS** for further local
   optimization and owner review.
+
+## Zero-percent retest of streaming cache variants — 2026-10-25
+
+- PR #333 merged as `4516ae206ea8f34faf9f587e852f8a6b774c2aa1`. The Worker now streams the
+  authenticated Next.js dashboard response and rewrites only the bounded metadata suffix for cache
+  variants, avoiding full-payload string copies in the Worker.
+- Wrangler uploaded release `4516ae206ea8` as version
+  `f927f71c-a492-4e6a-8ff5-0a7818a17515`. Deployment
+  `5c5cb845-0041-42ce-af41-8901c50d55aa` kept prior candidate
+  `2503a1f0-985f-4026-a368-bd9bb5504d23` at 100% and streaming candidate at 0%.
+- Candidate-only no-provider smoke passed: health, transform-health, and version returned HTTP 200
+  (`/version` reported `4516ae206ea8`); unauthenticated `/api/v1/me` returned HTTP 401.
+- The authorized bounded workload completed 30 unique HTTP 200 `MISS` requests and 29 immediate
+  HTTP 200 `HIT` repeats. The conservative provider-use upper bound was 150 weighted units. No other
+  weather requests were generated.
+- The exact-version `workersInvocationsAdaptive` GraphQL query for
+  `2026-10-25T16:36:38.205Z`–`16:38:51.817Z` returned 59 requests, 0 errors, CPU p50 `5.555 ms`,
+  p95 `10.607 ms`, and p99 `11.917 ms`. This exceeds the unchanged 7 ms target; no promotion is
+  authorized by these results.
+- WAE release-gate run
+  [40212737484](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40212737484) returned
+  `INSUFFICIENT_DATA`: stable 16 / candidate 63 weighted samples, 0% errors for both, p95 wall
+  `1,823 ms` stable / `685 ms` candidate. The stable sample floor remains unmet. A fresh Grafana
+  query returned `1` for all four synthetics at `2026-10-25T16:40:27.111Z`.
+- The streaming fix candidate remains at 0%; the prior candidate remains at 100%. No promotion or
+  traffic shift occurred. PERF-002 remains **IN_PROGRESS** for further local optimization and owner
+  direction.

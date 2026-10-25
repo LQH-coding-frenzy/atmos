@@ -91,7 +91,7 @@ task:
     terraform_resources: []
     database_changes: [none]
     deployed_units:
-      - Cloudflare Worker deployment 6cda0a2c-8308-43b5-953c-ff8ca45dc3a0; prior candidate 2503a1f0-985f-4026-a368-bd9bb5504d23 / release d81923250215 at 100%, fix candidate 36630961-1572-461d-800b-aabde75f2d53 / release ab1b63652d3e at 0%, stable rollback version 2da40785-0b9e-430c-bdac-c9ad6254ff68 available; bounded retest 30 misses/29 hits passed, miss CPU p95 9 ms (>7 ms); no promotion
+      - Cloudflare Worker deployment 5c5cb845-0041-42ce-af41-8901c50d55aa; prior candidate 2503a1f0-985f-4026-a368-bd9bb5504d23 / release d81923250215 at 100%, streaming fix candidate f927f71c-a492-4e6a-8ff5-0a7818a17515 / release 4516ae206ea8 at 0%, stable rollback version 2da40785-0b9e-430c-bdac-c9ad6254ff68 available; exact GraphQL CPU p95 10.607 ms (>7 ms), no promotion
 
   compatibility:
     requires_expand_contract: false
