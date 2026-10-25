@@ -2,12 +2,12 @@
 
 Date: 2026-10-25
 
-Status: **IN_PROGRESS — prior candidate remains at 100%; streaming fix candidate remains at 0%.**
-The prior version's post-exposure CPU sample exceeded budget (p95 `17 ms`). The raw-response fix
-miss p95 was `9 ms`; the streaming fix candidate's exact-version GraphQL p95 is `10.607 ms`, above
-both the 7 ms internal gate and the Workers Free 10 ms invocation budget. WAE remains
-`INSUFFICIENT_DATA` because stable lacks 30 samples; fresh Grafana synthetics pass. No promotion
-occurred.
+Status: **IN_PROGRESS — prior candidate remains at 100%; byte-buffer fix candidate remains at 0%.**
+The prior version's post-exposure CPU sample exceeded budget (p95 `17 ms`). The streaming fix
+candidate's exact-version GraphQL p95 was `10.607 ms`, above both the 7 ms internal gate and the
+Workers Free 10 ms invocation budget. The byte-buffer fix candidate's first bounded run stopped on a
+confirmed 5-second upstream `AbortError` after two successful misses; no CPU sample was sufficient.
+No promotion occurred.
 
 ## Baseline
 
@@ -683,3 +683,27 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
 - A fresh Grafana query at `2026-10-25T16:40:27.111Z` returned `1` for all four production
   synthetics. The streaming candidate remains at 0%; no promotion occurred. Continue local
   optimization rather than relaxing the platform CPU limit or changing the gate in this task.
+
+## Byte-buffer candidate smoke and stopped workload — 2026-10-25
+
+- PR #334 merged as `c84f369ccb5ee1ebafa36ccc636055e414a0a86e`. Wrangler uploaded release
+  `c84f369ccb5e` as Worker version `424d2d87-b827-40ac-837c-ee14161f15dd`; deployment
+  `27d9ad06-b596-47ba-8a66-73fb6d04cf18` kept prior candidate
+  `2503a1f0-985f-4026-a368-bd9bb5504d23` at 100% and the byte-buffer fix at 0%.
+- Override-only `/health`, `/health/transform`, and `/version` checks returned HTTP 200
+  (`/version` reported `c84f369ccb5e`); unauthenticated `/api/v1/me` returned HTTP 401.
+- A bounded sequence made two unique HTTP 200 `MISS` requests and two HTTP 200 `HIT` repeats. The
+  third unique dashboard request returned HTTP 503 with no cache status; the request sequence stopped
+  immediately with no retry. Candidate WAE run
+  [40214944170](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40214944170) returned
+  `INSUFFICIENT_DATA` (stable 18 / candidate 9 weighted samples); candidate error rate was `11.11%`
+  and p95 wall `5,645 ms`.
+- The correlated Vercel runtime log for `perf002-byte-miss-3` recorded
+  `weather_dashboard_provider_failed` / `AbortError`. The Open-Meteo provider has a five-second
+  request timeout; this failure is an upstream timeout, not a Worker authentication or JSON metadata
+  error. Conservative possible use was at most 15 weighted units for this short sequence; actual
+  provider billing was not confirmed.
+- Exact-version adaptive CPU analytics for this candidate had only 9 requests in the initial window
+  (`p95 12.763 ms`, `p99 12.763 ms`, 0 platform errors), below the required 30-sample floor. This
+  cannot validate the byte-buffer CPU change. No further workload or promotion was authorized; the
+  candidate remains at 0% per owner direction.
