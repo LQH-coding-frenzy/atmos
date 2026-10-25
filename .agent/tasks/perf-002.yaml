@@ -91,7 +91,7 @@ task:
     terraform_resources: []
     database_changes: [none]
     deployed_units:
-      - Cloudflare Worker deployment 977c9882-24cf-4140-8fe8-3bf9cf6e1ae8; candidate 2503a1f0-985f-4026-a368-bd9bb5504d23 / release d81923250215 at 100%, stable rollback version 2da40785-0b9e-430c-bdac-c9ad6254ff68 / release 96434d008bd2 at 0%; post-exposure Worker Observability sample is 31 events with CPU p95 17 ms (over the 7 ms budget); weather-dashboard route subset has 13 events
+      - Cloudflare Worker deployment 6cda0a2c-8308-43b5-953c-ff8ca45dc3a0; prior candidate 2503a1f0-985f-4026-a368-bd9bb5504d23 / release d81923250215 at 100%, fix candidate 36630961-1572-461d-800b-aabde75f2d53 / release ab1b63652d3e at 0%, stable rollback version 2da40785-0b9e-430c-bdac-c9ad6254ff68 available; first fix-candidate weather attempt returned HTTP 503, no retry, at most 5 estimated weighted units
 
   compatibility:
     requires_expand_contract: false

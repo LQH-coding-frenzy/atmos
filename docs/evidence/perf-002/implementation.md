@@ -2,14 +2,14 @@
 
 Date: 2026-10-25
 
-Status: **IN_PROGRESS — candidate remains at 100% per owner direction; post-exposure CPU is over
-budget in the 31-event Worker Observability sample.** Pre-exposure exact-version CPU p95 and bounded
-cache-miss/cache-hit p95 were below 7 ms. The post-exposure exact-version event sample has CPU p95
-`17 ms` (max `19 ms`); its route-specific dashboard subset is still below its own 30-event floor.
-The latest WAE check (`11:53Z`) returned `INSUFFICIENT_DATA`; the last Grafana PASS was at `11:45Z`
-and is no longer fresh. No additional weather/provider requests were generated after promotion. Two
-application-level 5xx responses were counted in the bounded test; at least one correlated 503 is
-confirmed as an upstream provider timeout.
+Status: **IN_PROGRESS — prior candidate remains at 100% per owner direction; the fix candidate is
+held at 0%.** The prior version's 31-event post-exposure CPU sample is over budget (p95 `17 ms`).
+PR #332's local fix is merged and deployed only as zero-percent candidate
+`36630961-1572-461d-800b-aabde75f2d53`; its first bounded weather request returned HTTP 503 without
+cache status, so the workload stopped immediately. No retry or promotion occurred. The latest WAE
+check (`11:53Z`) returned `INSUFFICIENT_DATA`; the last Grafana PASS at `11:45Z` is stale. No further
+weather/provider requests were generated after the failed first attempt. Earlier test failures
+included an upstream timeout, but this new candidate's 503 has not been conclusively classified.
 
 ## Baseline
 
@@ -596,3 +596,24 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
   was at `11:45Z`; it is stale by this observation time. Per owner direction, candidate stays at
   100% while diagnosis/fix work remains local. No rollback or additional production traffic was
   performed.
+
+## Zero-percent candidate retest of local JSON-path fix — 2026-10-25
+
+- PR #332 was merged as `ab1b63652d3e80bef454874a8797dbbd4bb1f336`. It changes the transformed
+  dashboard miss path to reuse the authenticated Next.js response JSON text and rewrite only its
+  trailing `meta` object for the cache variants, avoiding full Worker-side response parsing and
+  serialization.
+- Wrangler uploaded exact release `ab1b63652d3e` as Worker version
+  `36630961-1572-461d-800b-aabde75f2d53`. Deployment
+  `6cda0a2c-8308-43b5-953c-ff8ca45dc3a0` kept the prior candidate
+  `2503a1f0-985f-4026-a368-bd9bb5504d23` at 100% and the fix candidate at 0%.
+- Override-only no-provider smoke passed: `/health`, `/health/transform`, and `/version` returned
+  HTTP 200 (`/version` reported `ab1b63652d3e`); unauthenticated `/api/v1/me` returned HTTP 401.
+- The first unique dashboard attempt returned HTTP 503 with no `x-cache` header (request ID
+  `c81c84dc-08b0-4dd7-8600-72f50b2d9880`). Per the explicit cap/stop rule, no retry or further
+  weather request was sent. Conservative potential provider use is at most 5 weighted units; actual
+  provider use is unconfirmed. No cache-miss CPU sample was obtained, and no promotion occurred.
+- The sanitized Workers Observability event for the 503 had CPU `5 ms` and outcome `ok`, but no
+  structured failure class was recoverable or correlated to the request ID. Its cause remains
+  unknown; do not assume the JSON-path fix caused it or classify it as an upstream timeout without
+  evidence. The 0% fix candidate remains held pending owner direction.
