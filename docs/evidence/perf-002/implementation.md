@@ -2,15 +2,14 @@
 
 Date: 2026-10-25
 
-Status: **IN_PROGRESS — owner-approved candidate promotion is at 100%; post-exposure CPU/WAE sample
-floors are not met.** Pre-exposure exact-version CPU p95 and bounded cache-miss/cache-hit p95 were
-below 7 ms, and pre-promotion WAE/Grafana gates passed. Natural monitoring has found 20 candidate
-events so far, including eight weather-dashboard events with observed CPU median `9 ms` and max
-`17 ms`; this remains below the 30-event analysis floor and is an early warning, not a reliable p95.
-The latest rolling WAE check is `INSUFFICIENT_DATA` at 20 candidate samples; fresh Grafana synthetics
-pass. No additional weather/provider requests were generated after promotion. Two application-level
-5xx responses were counted in the bounded test; at least one correlated 503 is confirmed as an
-upstream provider timeout.
+Status: **IN_PROGRESS — candidate remains at 100% per owner direction; post-exposure CPU is over
+budget in the 31-event Worker Observability sample.** Pre-exposure exact-version CPU p95 and bounded
+cache-miss/cache-hit p95 were below 7 ms. The post-exposure exact-version event sample has CPU p95
+`17 ms` (max `19 ms`); its route-specific dashboard subset is still below its own 30-event floor.
+The latest WAE check (`11:53Z`) returned `INSUFFICIENT_DATA`; the last Grafana PASS was at `11:45Z`
+and is no longer fresh. No additional weather/provider requests were generated after promotion. Two
+application-level 5xx responses were counted in the bounded test; at least one correlated 503 is
+confirmed as an upstream provider timeout.
 
 ## Baseline
 
@@ -582,3 +581,18 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
   maximum `17 ms`. Both CPU and WAE sample counts remain below their 30-event floor. Keep the
   candidate at 100% per owner direction, make no synthetic/provider requests, and do not claim a
   post-exposure pass or fail until the sample is sufficient.
+
+### Natural CPU sample reaches invocation floor — 2026-10-25T12:33Z
+
+- A sanitized Cloudflare Workers Observability query from the approved promotion time through
+  `2026-10-25T12:33:27Z` found 31 exact-candidate per-invocation CPU events. Nearest-rank CPU p50 was
+  `9 ms`, p95 `17 ms`, max `19 ms`. All outcomes were `ok` (30 HTTP 200 and one expected HTTP 401).
+  This exceeds the unchanged 7 ms CPU budget. It is an event-level Workers Observability sample,
+  not a refreshed `workersInvocationsAdaptive` GraphQL result.
+- The 13 `weather_dashboard` events had CPU p50 `10 ms`, p95 `19 ms`, max `19 ms`; that route subset
+  is still below its 30-event analysis floor, so its percentile is preliminary. The overall sample
+  reached the 30-event floor and is an over-budget warning requiring local remediation.
+- The latest WAE workflow remains the `11:53Z` `INSUFFICIENT_DATA` run above. The last Grafana PASS
+  was at `11:45Z`; it is stale by this observation time. Per owner direction, candidate stays at
+  100% while diagnosis/fix work remains local. No rollback or additional production traffic was
+  performed.
