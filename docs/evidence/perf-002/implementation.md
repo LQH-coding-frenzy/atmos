@@ -4,7 +4,7 @@ Date: 2026-10-25
 
 Status: **IN_PROGRESS — prior candidate remains at 100% per owner direction; fix candidate remains
 at 0%.** The prior version's 31-event post-exposure CPU sample exceeded budget (p95 `17 ms`). PR #332
-is merged and the raw-response fix was retested: 30 misses and 29 hits passed, but miss CPU p95 is
+is merged and the raw-response fix was retested: 30 misses and 29 hits completed successfully, but miss CPU p95 is
 `9 ms`, still above 7 ms; hit p95 is `7 ms`. The WAE comparison remains `INSUFFICIENT_DATA` because
 stable had only 15 weighted samples. The fresh Grafana check passed. No promotion occurred.
 
