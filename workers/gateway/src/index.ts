@@ -87,7 +87,15 @@ type CacheableWeatherPayload = {
   meta: { cached: boolean; stale: boolean };
 };
 
-function serializeWeatherCacheVariants<T extends CacheableWeatherPayload>(payload: T) {
+type WeatherCacheVariants = {
+  response: string;
+  fresh: string;
+  stale: string;
+};
+
+function serializeWeatherCacheVariants<T extends CacheableWeatherPayload>(
+  payload: T,
+): WeatherCacheVariants {
   const { meta, ...data } = payload;
   const serializedData = JSON.stringify(data);
   if (!serializedData || serializedData[0] !== '{' || !serializedData.endsWith('}')) {
@@ -121,6 +129,48 @@ class WeatherTransformError extends Error {
   constructor(readonly failureClass: WeatherTransformFailureClass) {
     super('Server weather transform failed');
   }
+}
+
+// The authenticated Next.js handler validates dashboardSchema and emits `meta` last.
+// Keep the large payload as text; only parse the small metadata suffix to make cache variants.
+function serializeTransformedWeatherCacheVariants(serializedPayload: string): WeatherCacheVariants {
+  const metadataSeparator = ',"meta":';
+  const metadataStart = serializedPayload.lastIndexOf(metadataSeparator);
+  if (serializedPayload[0] !== '{' || !serializedPayload.endsWith('}') || metadataStart < 1) {
+    throw new WeatherTransformError('invalid_response');
+  }
+
+  let meta: unknown;
+  try {
+    meta = JSON.parse(serializedPayload.slice(metadataStart + metadataSeparator.length, -1));
+  } catch {
+    throw new WeatherTransformError('invalid_json');
+  }
+  if (
+    typeof meta !== 'object' ||
+    meta === null ||
+    Array.isArray(meta) ||
+    typeof (meta as { provider?: unknown }).provider !== 'string' ||
+    typeof (meta as { cached?: unknown }).cached !== 'boolean' ||
+    typeof (meta as { stale?: unknown }).stale !== 'boolean' ||
+    typeof (meta as { updatedAt?: unknown }).updatedAt !== 'string'
+  ) {
+    throw new WeatherTransformError('invalid_response');
+  }
+
+  const serializedDataPrefix = serializedPayload.slice(0, metadataStart);
+  const serialize = (cached: boolean, stale: boolean) =>
+    `${serializedDataPrefix}${metadataSeparator}${JSON.stringify({
+      ...(meta as Record<string, unknown>),
+      cached,
+      stale,
+    })}}`;
+
+  return {
+    response: serializedPayload,
+    fresh: serialize(true, false),
+    stale: serialize(true, true),
+  };
 }
 
 function sanitizedProviderFailure(error: unknown) {
@@ -205,7 +255,7 @@ function usesNextWeatherTransform(env: Bindings | undefined) {
   );
 }
 
-async function fetchNextWeatherTransform<T>(
+async function fetchNextWeatherTransformResponse(
   env: Bindings | undefined,
   path:
     | '/api/v1/weather/dashboard'
@@ -214,7 +264,7 @@ async function fetchNextWeatherTransform<T>(
   input: LocationInput | AirQualityInput | Record<string, never>,
   requestId: string,
   traceparent: string,
-): Promise<T> {
+): Promise<Response> {
   const originValue = env?.WEATHER_TRANSFORM_ORIGIN;
   const serviceToken = env?.WEATHER_TRANSFORM_TOKEN;
   if (!originValue || !serviceToken || serviceToken.length < weatherTransformTokenMinimumLength) {
@@ -272,6 +322,27 @@ async function fetchNextWeatherTransform<T>(
     throw new WeatherTransformError('invalid_content_type');
   }
 
+  return response;
+}
+
+async function fetchNextWeatherTransform<T>(
+  env: Bindings | undefined,
+  path:
+    | '/api/v1/weather/dashboard'
+    | '/api/v1/weather/air-quality'
+    | '/api/v1/weather/transform-health',
+  input: LocationInput | AirQualityInput | Record<string, never>,
+  requestId: string,
+  traceparent: string,
+): Promise<T> {
+  const response = await fetchNextWeatherTransformResponse(
+    env,
+    path,
+    input,
+    requestId,
+    traceparent,
+  );
+
   let result: unknown;
   try {
     result = await response.json();
@@ -282,6 +353,33 @@ async function fetchNextWeatherTransform<T>(
     throw new WeatherTransformError('invalid_response');
   }
   return result as T;
+}
+
+async function fetchNextWeatherTransformText(
+  env: Bindings | undefined,
+  path: '/api/v1/weather/dashboard',
+  input: LocationInput,
+  requestId: string,
+  traceparent: string,
+): Promise<string> {
+  const response = await fetchNextWeatherTransformResponse(
+    env,
+    path,
+    input,
+    requestId,
+    traceparent,
+  );
+
+  let result: string;
+  try {
+    result = await response.text();
+  } catch {
+    throw new WeatherTransformError('invalid_json');
+  }
+  if (result[0] !== '{' || !result.endsWith('}')) {
+    throw new WeatherTransformError('invalid_response');
+  }
+  return result;
 }
 
 function airQualityInput(context: { req: { query: (name: string) => string | undefined } }) {
@@ -628,19 +726,23 @@ export function createApp(
       );
     }
 
-    let dashboard: Dashboard;
+    let dashboard: Dashboard | undefined;
+    let transformedResponseBodies: WeatherCacheVariants | undefined;
     const providerStartedAt = performance.now();
     context.set('analyticsProvider', 'open-meteo');
     try {
-      dashboard = usesNextWeatherTransform(context.env)
-        ? await fetchNextWeatherTransform<Dashboard>(
-            context.env,
-            '/api/v1/weather/dashboard',
-            input,
-            context.get('requestId'),
-            context.get('traceparent'),
-          )
-        : await weatherProvider.getDashboard(input);
+      if (usesNextWeatherTransform(context.env)) {
+        const serializedDashboard = await fetchNextWeatherTransformText(
+          context.env,
+          '/api/v1/weather/dashboard',
+          input,
+          context.get('requestId'),
+          context.get('traceparent'),
+        );
+        transformedResponseBodies = serializeTransformedWeatherCacheVariants(serializedDashboard);
+      } else {
+        dashboard = await weatherProvider.getDashboard(input);
+      }
     } catch (error) {
       console.warn(
         JSON.stringify({
@@ -667,7 +769,8 @@ export function createApp(
       context.set('providerDurationMs', performance.now() - providerStartedAt);
     }
 
-    const responseBodies = serializeWeatherCacheVariants(dashboard);
+    const responseBodies =
+      transformedResponseBodies ?? serializeWeatherCacheVariants(dashboard as Dashboard);
     const response = context.body(responseBodies.response, 200, {
       'content-type': 'application/json; charset=UTF-8',
     });

@@ -485,6 +485,121 @@ describe('gateway', () => {
     expect(getDashboard).not.toHaveBeenCalled();
   });
 
+  it('avoids parsing and reserializing the full transformed dashboard in the Worker', async () => {
+    const provider = new MockWeatherProvider();
+    const dashboard = await provider.getDashboard({
+      latitude: 52.52,
+      longitude: 13.405,
+      timezone: 'Europe/Berlin',
+      units: 'metric',
+    });
+    const serializedDashboard = JSON.stringify({
+      ...dashboard,
+      meta: { ...dashboard.meta, provider: 'open-meteo' },
+    });
+    const stringify = vi.spyOn(JSON, 'stringify');
+    const parse = vi.spyOn(JSON, 'parse');
+    const transform = vi.fn(
+      async () =>
+        new Response(serializedDashboard, {
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    vi.stubGlobal('fetch', transform);
+
+    const stored = new Map<string, Response>();
+    const cache = {
+      match: vi.fn(async (request: Request) => stored.get(request.url)?.clone()),
+      put: vi.fn(async (request: Request, response: Response) => {
+        stored.set(request.url, response.clone());
+      }),
+    };
+    const weatherApp = createApp({ getDashboard: vi.fn(async () => dashboard) }, cache);
+    const response = await weatherApp.request(
+      'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405&timezone=Europe%2FBerlin&units=metric',
+      undefined,
+      {
+        WEATHER_TRANSFORM_ORIGIN: 'https://rainify.dpdns.org',
+        WEATHER_TRANSFORM_TOKEN: testWeatherTransformToken,
+        CF_VERSION_METADATA: {
+          id: '7cf6db10-8f5e-4cb2-a70c-34a1d3f28193',
+          tag: 'abcdef012345',
+          timestamp: '2026-10-23T00:00:00.000Z',
+        },
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-cache')).toBe('MISS');
+    expect(transform).toHaveBeenCalledOnce();
+    expect(parse.mock.calls.some(([value]) => value === serializedDashboard)).toBe(false);
+    expect(
+      stringify.mock.calls.filter(
+        ([value]) =>
+          typeof value === 'object' && value !== null && 'location' in value && 'hourly' in value,
+      ),
+    ).toHaveLength(0);
+
+    await expect(response.clone().text()).resolves.toBe(serializedDashboard);
+    await expect(response.json()).resolves.toMatchObject({
+      location: { name: 'Berlin', latitude: 52.52, longitude: 13.405 },
+      meta: { provider: 'open-meteo', cached: false, stale: false },
+    });
+    expect(cache.put).toHaveBeenCalledTimes(2);
+    await expect(cache.put.mock.calls[0]?.[1].clone().json()).resolves.toMatchObject({
+      meta: { provider: 'open-meteo', cached: true, stale: false },
+    });
+    await expect(cache.put.mock.calls[1]?.[1].clone().json()).resolves.toMatchObject({
+      meta: { provider: 'open-meteo', cached: true, stale: true },
+    });
+  });
+
+  it('fails closed when a transformed dashboard response lacks cache metadata', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response('{"location":{},"current":{},"hourly":[],"daily":[]}', {
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    );
+    const weatherApp = createApp({
+      getDashboard: vi.fn(async () =>
+        new MockWeatherProvider().getDashboard({
+          latitude: 52.52,
+          longitude: 13.405,
+          timezone: 'Europe/Berlin',
+          units: 'metric',
+        }),
+      ),
+    });
+
+    const response = await weatherApp.request(
+      'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405',
+      undefined,
+      {
+        WEATHER_TRANSFORM_ORIGIN: 'https://rainify.dpdns.org',
+        WEATHER_TRANSFORM_TOKEN: testWeatherTransformToken,
+        CF_VERSION_METADATA: {
+          id: '7cf6db10-8f5e-4cb2-a70c-34a1d3f28193',
+          tag: 'abcdef012345',
+          timestamp: '2026-10-23T00:00:00.000Z',
+        },
+      },
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'WEATHER_UNAVAILABLE' },
+    });
+    expect(JSON.parse(String(warning.mock.calls[0]?.[0]))).toMatchObject({
+      event: 'weather_provider_failed',
+      failure_class: 'invalid_response',
+    });
+  });
+
   it('fails closed when a versioned transform release lacks its service token', async () => {
     const getDashboard = vi.fn(
       new MockWeatherProvider().getDashboard.bind(new MockWeatherProvider()),
