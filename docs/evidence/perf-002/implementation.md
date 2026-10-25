@@ -2,14 +2,15 @@
 
 Date: 2026-10-25
 
-Status: **IN_PROGRESS — owner-approved candidate promotion is at 100%; WAE/Grafana gates pass, but
-post-exposure CPU p95 is not yet established.** Pre-exposure exact-version CPU p95 and bounded
-cache-miss/cache-hit p95 were below 7 ms. Immediate post-exposure smoke passed. Natural monitoring
-has found 16 candidate events so far, including six weather-dashboard events with observed CPU
-median `9 ms` and max `17 ms`; this remains below the 30-event analysis floor and is an early warning,
-not a reliable p95. No additional weather/provider requests were generated after promotion. Two
-application-level 5xx responses were counted in the bounded test; at least one correlated 503 is
-confirmed as an upstream provider timeout.
+Status: **IN_PROGRESS — owner-approved candidate promotion is at 100%; post-exposure CPU/WAE sample
+floors are not met.** Pre-exposure exact-version CPU p95 and bounded cache-miss/cache-hit p95 were
+below 7 ms, and pre-promotion WAE/Grafana gates passed. Natural monitoring has found 20 candidate
+events so far, including eight weather-dashboard events with observed CPU median `9 ms` and max
+`17 ms`; this remains below the 30-event analysis floor and is an early warning, not a reliable p95.
+The latest rolling WAE check is `INSUFFICIENT_DATA` at 20 candidate samples; fresh Grafana synthetics
+pass. No additional weather/provider requests were generated after promotion. Two application-level
+5xx responses were counted in the bounded test; at least one correlated 503 is confirmed as an
+upstream provider timeout.
 
 ## Baseline
 
@@ -565,3 +566,19 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
 - The six `weather_dashboard` events had observed CPU median `9 ms`, nearest-rank p95 estimate
   `17 ms`, and max `17 ms`. This strengthens the early warning on that route but remains a small
   sample. The candidate remains at 100% per owner direction; monitoring has generated no traffic.
+
+### Rolling-gate and natural-sample update — 2026-10-25T11:53Z
+
+- The post-promotion WAE workflow
+  [40190756424](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40190756424) returned
+  `INSUFFICIENT_DATA` at the 30-sample floor. The candidate had 20 weighted samples, 0% errors, and
+  p95 wall `1,735 ms`; stable also lacked the required sample row. The earlier post-promotion WAE
+  `PASS` above used a 60-minute rolling window that still contained the pre-promotion candidate
+  workload; it is not evidence of a post-exposure-only pass.
+- A fresh Grafana query at `2026-10-25T11:45:38.707Z` still returned `1` for all four production
+  synthetics, within the 30-minute freshness limit.
+- Natural CPU monitoring found 20 candidate events since promotion: observed CPU p50 `8 ms`,
+  nearest-rank p95 estimate `16 ms`, max `17 ms`; eight were `weather_dashboard` events with observed
+  maximum `17 ms`. Both CPU and WAE sample counts remain below their 30-event floor. Keep the
+  candidate at 100% per owner direction, make no synthetic/provider requests, and do not claim a
+  post-exposure pass or fail until the sample is sufficient.
