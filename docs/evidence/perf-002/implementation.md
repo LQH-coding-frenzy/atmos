@@ -617,3 +617,6 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
   structured failure class was recoverable or correlated to the request ID. Its cause remains
   unknown; do not assume the JSON-path fix caused it or classify it as an upstream timeout without
   evidence. The 0% fix candidate remains held pending owner direction.
+- After Vercel CLI authentication, a production log query for the request ID returned no matching
+  records in the available last-30-minute window; a two-hour query was rejected because Hobby runtime
+  log retention is 30 minutes. The Vercel side of the 503 therefore remains unclassified.
