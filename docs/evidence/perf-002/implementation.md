@@ -4,9 +4,10 @@ Date: 2026-10-25
 
 Status: **IN_PROGRESS — prior candidate remains at 100%; streaming fix candidate remains at 0%.**
 The prior version's post-exposure CPU sample exceeded budget (p95 `17 ms`). The raw-response fix
-miss p95 was `9 ms`; the newer streaming fix candidate's exact-version GraphQL p95 is `10.607 ms`,
-still above the 7 ms gate. WAE remains `INSUFFICIENT_DATA` because stable lacks 30 samples; fresh
-Grafana synthetics pass. No promotion occurred.
+miss p95 was `9 ms`; the streaming fix candidate's exact-version GraphQL p95 is `10.607 ms`, above
+both the 7 ms internal gate and the Workers Free 10 ms invocation budget. WAE remains
+`INSUFFICIENT_DATA` because stable lacks 30 samples; fresh Grafana synthetics pass. No promotion
+occurred.
 
 ## Baseline
 
@@ -667,3 +668,18 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
 - The streaming fix candidate remains at 0%; the prior candidate remains at 100%. No promotion or
   traffic shift occurred. PERF-002 remains **IN_PROGRESS** for further local optimization and owner
   direction.
+
+### Exact-version CPU and gate recheck — 2026-10-25T16:38Z
+
+- Cloudflare `workersInvocationsAdaptive`, filtered to `atmos-gateway`, exact streaming candidate
+  version `f927f71c-a492-4e6a-8ff5-0a7818a17515`, and the bounded test window
+  `16:36:38.205Z`–`16:38:51.817Z`, returned 59 requests, 0 errors, CPU p50 `5.555 ms`, p95
+  `10.607 ms`, and p99 `11.917 ms`. This is above the 7 ms internal gate and the 10 ms Workers Free
+  per-invocation budget; app-level success does not make it safe to promote.
+- The post-test WAE release gate
+  [40212737484](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40212737484) returned
+  `INSUFFICIENT_DATA`: stable 16 / candidate 63 weighted samples, 0% errors for both, p95 wall
+  `1,823 ms` stable / `685 ms` candidate. The stable comparison floor is not met.
+- A fresh Grafana query at `2026-10-25T16:40:27.111Z` returned `1` for all four production
+  synthetics. The streaming candidate remains at 0%; no promotion occurred. Continue local
+  optimization rather than relaxing the platform CPU limit or changing the gate in this task.
