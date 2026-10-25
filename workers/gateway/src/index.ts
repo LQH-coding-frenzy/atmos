@@ -72,6 +72,28 @@ const noWeatherCache: WeatherCache = {
   put: async () => undefined,
 };
 
+type CacheableWeatherPayload = {
+  meta: { cached: boolean; stale: boolean };
+};
+
+function serializeWeatherCacheVariants<T extends CacheableWeatherPayload>(payload: T) {
+  const { meta, ...data } = payload;
+  const serializedData = JSON.stringify(data);
+  if (!serializedData || serializedData[0] !== '{' || !serializedData.endsWith('}')) {
+    throw new Error('Weather response could not be serialized.');
+  }
+
+  const serializedDataPrefix = serializedData.slice(0, -1);
+  const serialize = (cached: boolean, stale: boolean) =>
+    `${serializedDataPrefix},"meta":${JSON.stringify({ ...meta, cached, stale })}}`;
+
+  return {
+    response: serialize(meta.cached, meta.stale),
+    fresh: serialize(true, false),
+    stale: serialize(true, true),
+  };
+}
+
 type WeatherTransformFailureClass =
   | 'not_configured'
   | 'invalid_origin'
@@ -630,7 +652,10 @@ export function createApp(
       context.set('providerDurationMs', performance.now() - providerStartedAt);
     }
 
-    const response = context.json(dashboard);
+    const responseBodies = serializeWeatherCacheVariants(dashboard);
+    const response = context.body(responseBodies.response, 200, {
+      'content-type': 'application/json; charset=UTF-8',
+    });
     response.headers.set(
       'cache-control',
       `public, max-age=${weatherCacheTtlSeconds}, s-maxage=${weatherCacheTtlSeconds}`,
@@ -640,25 +665,21 @@ export function createApp(
       await Promise.all([
         weatherCache.put(
           cacheKeys.fresh,
-          Response.json(
-            { ...dashboard, meta: { ...dashboard.meta, cached: true, stale: false } },
-            {
-              headers: {
-                'cache-control': `public, max-age=${weatherCacheTtlSeconds}, s-maxage=${weatherCacheTtlSeconds}`,
-              },
+          new Response(responseBodies.fresh, {
+            headers: {
+              'content-type': 'application/json',
+              'cache-control': `public, max-age=${weatherCacheTtlSeconds}, s-maxage=${weatherCacheTtlSeconds}`,
             },
-          ),
+          }),
         ),
         weatherCache.put(
           cacheKeys.stale,
-          Response.json(
-            { ...dashboard, meta: { ...dashboard.meta, cached: true, stale: true } },
-            {
-              headers: {
-                'cache-control': `public, max-age=0, s-maxage=${staleWeatherCacheTtlSeconds}`,
-              },
+          new Response(responseBodies.stale, {
+            headers: {
+              'content-type': 'application/json',
+              'cache-control': `public, max-age=0, s-maxage=${staleWeatherCacheTtlSeconds}`,
             },
-          ),
+          }),
         ),
       ]);
     } catch (error) {
@@ -745,7 +766,10 @@ export function createApp(
         return parsed.data;
       });
 
-      const response = context.json(airQuality);
+      const responseBodies = serializeWeatherCacheVariants(airQuality);
+      const response = context.body(responseBodies.response, 200, {
+        'content-type': 'application/json; charset=UTF-8',
+      });
       response.headers.set(
         'cache-control',
         `public, max-age=${airQualityCacheTtlSeconds}, s-maxage=${airQualityCacheTtlSeconds}`,
@@ -755,25 +779,21 @@ export function createApp(
         await Promise.all([
           airQualityCache.put(
             cacheKeys.fresh,
-            Response.json(
-              { ...airQuality, meta: { ...airQuality.meta, cached: true, stale: false } },
-              {
-                headers: {
-                  'cache-control': `public, max-age=${airQualityCacheTtlSeconds}, s-maxage=${airQualityCacheTtlSeconds}`,
-                },
+            new Response(responseBodies.fresh, {
+              headers: {
+                'content-type': 'application/json',
+                'cache-control': `public, max-age=${airQualityCacheTtlSeconds}, s-maxage=${airQualityCacheTtlSeconds}`,
               },
-            ),
+            }),
           ),
           airQualityCache.put(
             cacheKeys.stale,
-            Response.json(
-              { ...airQuality, meta: { ...airQuality.meta, cached: true, stale: true } },
-              {
-                headers: {
-                  'cache-control': `public, max-age=0, s-maxage=${staleWeatherCacheTtlSeconds}`,
-                },
+            new Response(responseBodies.stale, {
+              headers: {
+                'content-type': 'application/json',
+                'cache-control': `public, max-age=0, s-maxage=${staleWeatherCacheTtlSeconds}`,
               },
-            ),
+            }),
           ),
         ]);
       } catch (error) {

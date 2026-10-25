@@ -54,6 +54,8 @@ task:
       - docs/architecture/atmos-devsecops-master-plan.md
       - docs/design/feature-completion-roadmap.md
       - docs/evidence/perf-002/implementation.md
+      - .agent/status.yaml
+      - .agent/tasks/perf-002.yaml
     exclude:
       - Database schema, migrations, grants, policies, or user-data changes.
       - Raising the 7 ms budget, upgrading Workers plans, or adding paid resources.
@@ -88,7 +90,8 @@ task:
       - pnpm-lock.yaml
     terraform_resources: []
     database_changes: [none]
-    deployed_units: [none unless an isolated candidate is separately approved]
+    deployed_units:
+      - Stable Cloudflare Worker 2da40785-0b9e-430c-bdac-c9ad6254ff68 at 100%; unoptimized candidate 4aca9ef3-87b9-40ac-8980-4ed4723d1982 at 0%
 
   compatibility:
     requires_expand_contract: false

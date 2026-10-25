@@ -459,7 +459,7 @@ describe('gateway', () => {
     expect(response.headers.get('x-cache')).toBe('MISS');
     await expect(response.json()).resolves.toMatchObject({
       location: { name: 'Berlin', latitude: 52.52, longitude: 13.405 },
-      meta: { provider: 'open-meteo', cached: false },
+      meta: { provider: 'open-meteo', cached: false, stale: false },
     });
     expect(proxy).toHaveBeenCalledOnce();
     expect(getDashboard).not.toHaveBeenCalled();
@@ -543,6 +543,47 @@ describe('gateway', () => {
       expect(JSON.stringify(event)).not.toContain('secret=hidden');
       expect(JSON.stringify(event)).not.toContain(testWeatherTransformToken);
     }
+  });
+
+  it('logs only the safe failure class for a transform network failure', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const provider = new MockWeatherProvider();
+    const getDashboard = vi.fn(provider.getDashboard.bind(provider));
+    const fetchFailure = new TypeError('private URL and bearer credential');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async () => {
+        throw fetchFailure;
+      }),
+    );
+    const weatherApp = createApp({ getDashboard });
+
+    const response = await weatherApp.request(
+      'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405',
+      undefined,
+      {
+        WEATHER_TRANSFORM_ORIGIN: 'https://rainify.dpdns.org',
+        WEATHER_TRANSFORM_TOKEN: testWeatherTransformToken,
+        CF_VERSION_METADATA: {
+          id: '7cf6db10-8f5e-4cb2-a70c-34a1d3f28193',
+          tag: 'abcdef012345',
+          timestamp: '2026-10-23T00:00:00.000Z',
+        },
+      },
+    );
+
+    expect(response.status).toBe(503);
+    expect(warning).toHaveBeenCalledOnce();
+    const event = JSON.parse(warning.mock.calls[0]?.[0] ?? '{}');
+    expect(event).toMatchObject({
+      event: 'weather_provider_failed',
+      failure_class: 'network_error',
+    });
+    expect(event).not.toHaveProperty('error_type');
+    expect(JSON.stringify(event)).not.toContain('private URL');
+    expect(JSON.stringify(event)).not.toContain('bearer credential');
+    expect(JSON.stringify(event)).not.toContain(testWeatherTransformToken);
+    expect(getDashboard).not.toHaveBeenCalled();
   });
 
   it('moves only versioned AQI timeline normalization to Next.js', async () => {
@@ -813,6 +854,11 @@ describe('gateway', () => {
     expect(first.status).toBe(200);
     expect(first.headers.get('x-cache')).toBe('MISS');
     expect(getAirQuality).toHaveBeenCalledWith({ latitude: 52.52, longitude: 13.405 });
+    await expect(first.json()).resolves.toMatchObject({
+      usAqi: 42,
+      europeanAqi: 18,
+      meta: { cached: false, stale: false },
+    });
     expect(cache.match.mock.calls[0]?.[0].url).toBe(
       'http://localhost/api/v1/weather/air-quality?lat=52.52&lon=13.405',
     );
@@ -827,6 +873,53 @@ describe('gateway', () => {
       meta: { cached: true, stale: false },
     });
     expect(getAirQuality).toHaveBeenCalledOnce();
+  });
+
+  it('serializes the full AQI payload once on a cache miss', async () => {
+    const provider = new MockWeatherProvider();
+    const airQuality = {
+      observedAt: '2026-09-27T10:00:00.000Z',
+      usAqi: 42,
+      europeanAqi: 18,
+      pollutants: {
+        pm25: 7.2,
+        pm10: 12.4,
+        carbonMonoxide: 120,
+        nitrogenDioxide: 4.3,
+        sulphurDioxide: 1.1,
+        ozone: 65,
+      },
+      meta: {
+        provider: 'open-meteo' as const,
+        cached: false,
+        stale: false,
+        updatedAt: '2026-09-27T10:02:00.000Z',
+      },
+    };
+    const getAirQuality = vi.fn(async () => airQuality);
+    const stringify = vi.spyOn(JSON, 'stringify');
+    const airQualityApp = createApp(
+      { getDashboard: provider.getDashboard.bind(provider), getAirQuality },
+      { match: vi.fn(async () => undefined), put: vi.fn(async () => undefined) },
+    );
+
+    const response = await airQualityApp.request(
+      'http://localhost/api/v1/weather/air-quality?lat=40.7128&lon=-74.006',
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      meta: { cached: false, stale: false },
+    });
+    expect(
+      stringify.mock.calls.filter(
+        ([value]) =>
+          typeof value === 'object' &&
+          value !== null &&
+          'observedAt' in value &&
+          'pollutants' in value,
+      ),
+    ).toHaveLength(1);
   });
 
   it('coalesces concurrent AQI cache misses for the same coordinates', async () => {
@@ -1143,6 +1236,31 @@ describe('gateway', () => {
     await expect(cache.put.mock.calls[1]?.[1].clone().json()).resolves.toMatchObject({
       meta: { cached: true, stale: true },
     });
+  });
+
+  it('serializes the full dashboard payload once on a cache miss', async () => {
+    const provider = new MockWeatherProvider();
+    const getDashboard = vi.fn(provider.getDashboard.bind(provider));
+    const stringify = vi.spyOn(JSON, 'stringify');
+    const weatherApp = createApp(
+      { getDashboard },
+      { match: vi.fn(async () => undefined), put: vi.fn(async () => undefined) },
+    );
+
+    const response = await weatherApp.request(
+      'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405&timezone=Europe%2FBerlin&units=metric',
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      meta: { cached: false, stale: false },
+    });
+    expect(
+      stringify.mock.calls.filter(
+        ([value]) =>
+          typeof value === 'object' && value !== null && 'location' in value && 'hourly' in value,
+      ),
+    ).toHaveLength(1);
   });
 
   it('uses one cache key for equivalent weather requests', async () => {
