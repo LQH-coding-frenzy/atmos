@@ -26,7 +26,7 @@ task:
   runtime_placement:
     allowed: [cloudflare-worker, vercel-nextjs]
     selected: vercel-nextjs
-    reason: The partial exact-version CPU sample observed p95 above the gate, though it was too small to be conclusive. Keep the Worker as a thin validated/cached gateway and move expanded weather and AQI-timeline normalization to the existing Next.js server runtime rather than raising the threshold.
+    reason: Keep the Worker as a thin validated/cached gateway and move expanded weather/AQI-timeline normalization and cache-variant serialization to the existing Next.js server runtime rather than raising the threshold; keep only lightweight cache operations at the edge.
 
   scope:
     include:
@@ -91,7 +91,7 @@ task:
     terraform_resources: []
     database_changes: [none]
     deployed_units:
-      - Stable Cloudflare Worker 2da40785-0b9e-430c-bdac-c9ad6254ff68 / release 96434d008bd2 at 100%; candidate 2503a1f0-985f-4026-a368-bd9bb5504d23 / release d81923250215 at 0% in deployment b934665e-27a9-446f-871e-09f7aa0085f1
+      - Stable Cloudflare Worker 2503a1f0-985f-4026-a368-bd9bb5504d23 / release d81923250215 at 100%; candidate 002a8829-61f7-4170-a8bb-22b85c12996e / release ee5db573c741 at 0% in deployment 76c426b1-1cbd-4bff-8d75-d420e4fb3ca1
 
   compatibility:
     requires_expand_contract: false

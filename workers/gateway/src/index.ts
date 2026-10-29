@@ -59,7 +59,7 @@ let openWeatherTileWindowStartedAt = 0;
 let openWeatherTileRequestCount = 0;
 const forwardedProxyHeaders = new Set(['accept', 'authorization', 'content-type']);
 const locationSearchInFlight = new Map<string, Promise<LocationSearchResult[]>>();
-const airQualityInFlight = new Map<string, Promise<AirQuality>>();
+const airQualityInFlight = new Map<string, Promise<AirQuality | WeatherCacheVariants>>();
 const noWeatherCache: WeatherCache = {
   match: async () => undefined,
   put: async () => undefined,
@@ -87,19 +87,21 @@ type CacheableWeatherPayload = {
   meta: { cached: boolean; stale: boolean };
 };
 
-type WeatherCacheBody = string | ReadableStream<Uint8Array>;
+type WeatherCacheBody = string | (() => ReadableStream<Uint8Array>);
 
 type WeatherCacheVariants = {
   response: WeatherCacheBody;
   fresh: WeatherCacheBody;
-  stale: WeatherCacheBody;
 };
 
 type StringWeatherCacheVariants = {
   response: string;
   fresh: string;
-  stale: string;
 };
+
+function weatherCacheBody(body: WeatherCacheBody): string | ReadableStream<Uint8Array> {
+  return typeof body === 'string' ? body : body();
+}
 
 function serializeWeatherCacheVariants<T extends CacheableWeatherPayload>(
   payload: T,
@@ -117,7 +119,6 @@ function serializeWeatherCacheVariants<T extends CacheableWeatherPayload>(
   return {
     response: serialize(meta.cached, meta.stale),
     fresh: serialize(true, false),
-    stale: serialize(true, true),
   };
 }
 
@@ -139,10 +140,12 @@ class WeatherTransformError extends Error {
   }
 }
 
-const workerCacheVariantsAccept = 'application/vnd.atmos.weather-cache-variants; version=1';
-const workerCacheVariantsMagic = new Uint8Array([0x41, 0x54, 0x43, 0x31]); // ATC1
+const workerCacheVariantsAccept = 'application/vnd.atmos.weather-cache-variants; version=2';
+const workerCacheVariantsMagic = new Uint8Array([0x41, 0x54, 0x43, 0x32]); // ATC2
 const workerCacheVariantHeaderLength = 16;
 const workerCacheVariantMaximumBytes = 1_000_000;
+const weatherCacheSchemaVersion = '3';
+const weatherCacheStoredAtHeader = 'x-atmos-cache-stored-at';
 
 function chunksAsStream(chunks: Uint8Array[]) {
   let index = 0;
@@ -194,30 +197,41 @@ async function readFramedWeatherCacheVariants(response: Response): Promise<Weath
       throw new WeatherTransformError('invalid_response');
     }
     const view = new DataView(header.buffer, header.byteOffset, header.byteLength);
-    const lengths = [view.getUint32(4), view.getUint32(8), view.getUint32(12)];
+    const [prefixLength, responseSuffixLength, freshSuffixLength] = [
+      view.getUint32(4),
+      view.getUint32(8),
+      view.getUint32(12),
+    ];
     if (
-      lengths.some((length) => length === 0 || length > workerCacheVariantMaximumBytes) ||
-      lengths.reduce((total, length) => total + length, 0) > workerCacheVariantMaximumBytes * 3
+      prefixLength === 0 ||
+      responseSuffixLength === 0 ||
+      freshSuffixLength === 0 ||
+      prefixLength + responseSuffixLength > workerCacheVariantMaximumBytes ||
+      prefixLength + freshSuffixLength > workerCacheVariantMaximumBytes
     ) {
       throw new WeatherTransformError('invalid_response');
     }
 
-    const parts: [Uint8Array[], Uint8Array[], Uint8Array[]] = [[], [], []];
-    for (let part = 0; part < lengths.length; part += 1) {
-      let remaining = lengths[part]!;
+    async function readPart(length: number) {
+      const chunks: Uint8Array[] = [];
+      let remaining = length;
       while (remaining > 0) {
         const slice = await readSlice(remaining);
         if (!slice) throw new WeatherTransformError('invalid_response');
-        parts[part]!.push(slice);
+        chunks.push(slice);
         remaining -= slice.length;
       }
+      return chunks;
     }
+
+    const prefix = await readPart(prefixLength);
+    const responseSuffix = await readPart(responseSuffixLength);
+    const freshSuffix = await readPart(freshSuffixLength);
     if (await readSlice(1)) throw new WeatherTransformError('invalid_response');
 
     return {
-      response: chunksAsStream(parts[0]),
-      fresh: chunksAsStream(parts[1]),
-      stale: chunksAsStream(parts[2]),
+      response: () => chunksAsStream([...prefix, ...responseSuffix]),
+      fresh: () => chunksAsStream([...prefix, ...freshSuffix]),
     };
   } catch (error) {
     await reader.cancel().catch(() => undefined);
@@ -288,19 +302,61 @@ function weatherInput(context: { req: { query: (name: string) => string | undefi
 
 function weatherCacheKeys(url: string, input: ReturnType<typeof weatherInput>) {
   if (!input) throw new Error('Weather cache keys require valid weather input');
-  const freshUrl = new URL(url);
-  freshUrl.search = new URLSearchParams({
+  const cacheUrl = new URL(url);
+  cacheUrl.search = new URLSearchParams({
     lat: String(input.latitude),
     lon: String(input.longitude),
     timezone: input.timezone,
     units: input.units,
+    __atmos_cache_schema: weatherCacheSchemaVersion,
   }).toString();
-  const staleUrl = new URL(freshUrl);
-  staleUrl.searchParams.set('__atmos_cache_tier', 'stale');
-  return {
-    fresh: new Request(freshUrl, { method: 'GET' }),
-    stale: new Request(staleUrl, { method: 'GET' }),
-  };
+  return new Request(cacheUrl, { method: 'GET' });
+}
+
+function weatherCacheState(response: Response, freshTtlSeconds: number) {
+  const storedAtHeader = response.headers.get(weatherCacheStoredAtHeader);
+  const storedAt = storedAtHeader ? Number(storedAtHeader) : Number.NaN;
+  const ageMs = Date.now() - storedAt;
+  if (Number.isFinite(storedAt) && ageMs >= 0 && ageMs < freshTtlSeconds * 1_000) {
+    return 'fresh';
+  }
+  if (
+    Number.isFinite(storedAt) &&
+    ageMs >= freshTtlSeconds * 1_000 &&
+    ageMs <= staleWeatherCacheTtlSeconds * 1_000
+  ) {
+    return 'stale';
+  }
+  return undefined;
+}
+
+function freshWeatherCacheResponse(response: Response, freshTtlSeconds: number) {
+  const hit = new Response(response.body, response);
+  hit.headers.delete(weatherCacheStoredAtHeader);
+  hit.headers.set(
+    'cache-control',
+    `public, max-age=${freshTtlSeconds}, s-maxage=${freshTtlSeconds}`,
+  );
+  hit.headers.set('x-cache', 'HIT');
+  return hit;
+}
+
+function staleWeatherResponse(response: Response) {
+  const headers = new Headers(response.headers);
+  headers.delete(weatherCacheStoredAtHeader);
+  headers.delete('content-length');
+  headers.set('cache-control', 'private, no-store');
+  headers.set('x-cache', 'STALE');
+  return response.text().then((body) => {
+    const metadataStart = body.lastIndexOf(',"meta":');
+    const freshStaleValue = '"stale":false';
+    const staleValue = body.lastIndexOf(freshStaleValue);
+    if (metadataStart < 0 || staleValue < metadataStart) {
+      throw new WeatherTransformError('invalid_response');
+    }
+    const staleBody = `${body.slice(0, staleValue)}"stale":true${body.slice(staleValue + freshStaleValue.length)}`;
+    return new Response(staleBody, { status: response.status, headers });
+  });
 }
 
 function usesNextWeatherTransform(env: Bindings | undefined) {
@@ -419,13 +475,14 @@ async function fetchNextWeatherTransform<T>(
 
 async function fetchNextWeatherCacheVariants(
   env: Bindings | undefined,
-  input: LocationInput,
+  path: '/api/v1/weather/dashboard' | '/api/v1/weather/air-quality',
+  input: LocationInput | AirQualityInput,
   requestId: string,
   traceparent: string,
 ): Promise<WeatherCacheVariants> {
   const response = await fetchNextWeatherTransformResponse(
     env,
-    '/api/v1/weather/dashboard',
+    path,
     input,
     requestId,
     traceparent,
@@ -459,19 +516,15 @@ function airQualityInput(context: { req: { query: (name: string) => string | und
   } as const;
 }
 
-function airQualityCacheKeys(url: string, input: NonNullable<ReturnType<typeof airQualityInput>>) {
-  const freshUrl = new URL(url);
-  freshUrl.search = new URLSearchParams({
+function airQualityCacheKey(url: string, input: NonNullable<ReturnType<typeof airQualityInput>>) {
+  const cacheUrl = new URL(url);
+  cacheUrl.search = new URLSearchParams({
     lat: String(input.latitude),
     lon: String(input.longitude),
+    ...(input.includeTimeline ? { view: 'timeline' } : {}),
+    __atmos_cache_schema: weatherCacheSchemaVersion,
   }).toString();
-  if (input.includeTimeline) freshUrl.searchParams.set('view', 'timeline');
-  const staleUrl = new URL(freshUrl);
-  staleUrl.searchParams.set('__atmos_cache_tier', 'stale');
-  return {
-    fresh: new Request(freshUrl, { method: 'GET' }),
-    stale: new Request(staleUrl, { method: 'GET' }),
-  };
+  return new Request(cacheUrl, { method: 'GET' });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -594,13 +647,19 @@ function coalescedLocationSearch(
 
 function coalescedAirQuality(
   key: string,
-  getAirQuality: () => Promise<AirQuality>,
-): Promise<AirQuality> {
+  getAirQuality: () => Promise<AirQuality | WeatherCacheVariants>,
+): Promise<AirQuality | WeatherCacheVariants> {
   const existing = airQualityInFlight.get(key);
   if (existing) return existing;
   const pending = getAirQuality().finally(() => airQualityInFlight.delete(key));
   airQualityInFlight.set(key, pending);
   return pending;
+}
+
+function isWeatherCacheVariants(
+  value: AirQuality | WeatherCacheVariants,
+): value is WeatherCacheVariants {
+  return 'response' in value;
 }
 
 export function createApp(
@@ -751,7 +810,7 @@ export function createApp(
       );
     }
 
-    const cacheKeys = weatherCacheKeys(context.req.url, input);
+    const cacheKey = weatherCacheKeys(context.req.url, input);
     const weatherCache =
       cache ??
       (typeof caches === 'undefined'
@@ -759,14 +818,15 @@ export function createApp(
         : (caches as CacheStorage & { default: WeatherCache }).default);
     let staleResponse: Response | undefined;
     try {
-      const cachedResponse = await weatherCache.match(cacheKeys.fresh);
+      const cachedResponse = await weatherCache.match(cacheKey);
       if (cachedResponse) {
-        context.set('analyticsProvider', 'cache');
-        const response = new Response(cachedResponse.body, cachedResponse);
-        response.headers.set('x-cache', 'HIT');
-        return response;
+        const state = weatherCacheState(cachedResponse, weatherCacheTtlSeconds);
+        if (state === 'fresh') {
+          context.set('analyticsProvider', 'cache');
+          return freshWeatherCacheResponse(cachedResponse, weatherCacheTtlSeconds);
+        }
+        if (state === 'stale') staleResponse = cachedResponse;
       }
-      staleResponse = await weatherCache.match(cacheKeys.stale);
     } catch (error) {
       console.warn(
         JSON.stringify({
@@ -786,6 +846,7 @@ export function createApp(
       if (usesNextWeatherTransform(context.env)) {
         transformedResponseBodies = await fetchNextWeatherCacheVariants(
           context.env,
+          '/api/v1/weather/dashboard',
           input,
           context.get('requestId'),
           context.get('traceparent'),
@@ -804,10 +865,11 @@ export function createApp(
         }),
       );
       if (staleResponse) {
-        const response = new Response(staleResponse.body, staleResponse);
-        response.headers.set('cache-control', 'private, no-store');
-        response.headers.set('x-cache', 'STALE');
-        return response;
+        try {
+          return await staleWeatherResponse(staleResponse);
+        } catch {
+          // A malformed private cache entry must not replace a sanitized provider error.
+        }
       }
       return gatewayError(
         context,
@@ -821,7 +883,7 @@ export function createApp(
 
     const responseBodies =
       transformedResponseBodies ?? serializeWeatherCacheVariants(dashboard as Dashboard);
-    const response = context.body(responseBodies.response, 200, {
+    const response = context.body(weatherCacheBody(responseBodies.response), 200, {
       'content-type': 'application/json; charset=UTF-8',
     });
     response.headers.set(
@@ -830,26 +892,16 @@ export function createApp(
     );
     response.headers.set('x-cache', 'MISS');
     try {
-      await Promise.all([
-        weatherCache.put(
-          cacheKeys.fresh,
-          new Response(responseBodies.fresh, {
-            headers: {
-              'content-type': 'application/json',
-              'cache-control': `public, max-age=${weatherCacheTtlSeconds}, s-maxage=${weatherCacheTtlSeconds}`,
-            },
-          }),
-        ),
-        weatherCache.put(
-          cacheKeys.stale,
-          new Response(responseBodies.stale, {
-            headers: {
-              'content-type': 'application/json',
-              'cache-control': `public, max-age=0, s-maxage=${staleWeatherCacheTtlSeconds}`,
-            },
-          }),
-        ),
-      ]);
+      await weatherCache.put(
+        cacheKey,
+        new Response(weatherCacheBody(responseBodies.fresh), {
+          headers: {
+            'content-type': 'application/json',
+            'cache-control': `public, max-age=${staleWeatherCacheTtlSeconds}, s-maxage=${staleWeatherCacheTtlSeconds}`,
+            [weatherCacheStoredAtHeader]: String(Date.now()),
+          },
+        }),
+      );
     } catch (error) {
       console.warn(
         JSON.stringify({
@@ -879,17 +931,18 @@ export function createApp(
       (typeof caches === 'undefined'
         ? noWeatherCache
         : (caches as CacheStorage & { default: WeatherCache }).default);
-    const cacheKeys = airQualityCacheKeys(context.req.url, input);
+    const cacheKey = airQualityCacheKey(context.req.url, input);
     let staleResponse: Response | undefined;
     try {
-      const cached = await airQualityCache.match(cacheKeys.fresh);
+      const cached = await airQualityCache.match(cacheKey);
       if (cached) {
-        context.set('analyticsProvider', 'cache');
-        const response = new Response(cached.body, cached);
-        response.headers.set('x-cache', 'HIT');
-        return response;
+        const state = weatherCacheState(cached, airQualityCacheTtlSeconds);
+        if (state === 'fresh') {
+          context.set('analyticsProvider', 'cache');
+          return freshWeatherCacheResponse(cached, airQualityCacheTtlSeconds);
+        }
+        if (state === 'stale') staleResponse = cached;
       }
-      staleResponse = await airQualityCache.match(cacheKeys.stale);
     } catch (error) {
       console.warn(
         JSON.stringify({
@@ -916,9 +969,9 @@ export function createApp(
     const providerStartedAt = performance.now();
     context.set('analyticsProvider', 'open-meteo');
     try {
-      const airQuality = await coalescedAirQuality(key, async () => {
+      const result = await coalescedAirQuality(key, async () => {
         if (useNextTransform) {
-          return fetchNextWeatherTransform<AirQuality>(
+          return fetchNextWeatherCacheVariants(
             context.env,
             '/api/v1/weather/air-quality',
             input,
@@ -935,8 +988,10 @@ export function createApp(
         return parsed.data;
       });
 
-      const responseBodies = serializeWeatherCacheVariants(airQuality);
-      const response = context.body(responseBodies.response, 200, {
+      const responseBodies = isWeatherCacheVariants(result)
+        ? result
+        : serializeWeatherCacheVariants(result);
+      const response = context.body(weatherCacheBody(responseBodies.response), 200, {
         'content-type': 'application/json; charset=UTF-8',
       });
       response.headers.set(
@@ -945,26 +1000,16 @@ export function createApp(
       );
       response.headers.set('x-cache', 'MISS');
       try {
-        await Promise.all([
-          airQualityCache.put(
-            cacheKeys.fresh,
-            new Response(responseBodies.fresh, {
-              headers: {
-                'content-type': 'application/json',
-                'cache-control': `public, max-age=${airQualityCacheTtlSeconds}, s-maxage=${airQualityCacheTtlSeconds}`,
-              },
-            }),
-          ),
-          airQualityCache.put(
-            cacheKeys.stale,
-            new Response(responseBodies.stale, {
-              headers: {
-                'content-type': 'application/json',
-                'cache-control': `public, max-age=0, s-maxage=${staleWeatherCacheTtlSeconds}`,
-              },
-            }),
-          ),
-        ]);
+        await airQualityCache.put(
+          cacheKey,
+          new Response(weatherCacheBody(responseBodies.fresh), {
+            headers: {
+              'content-type': 'application/json',
+              'cache-control': `public, max-age=${staleWeatherCacheTtlSeconds}, s-maxage=${staleWeatherCacheTtlSeconds}`,
+              [weatherCacheStoredAtHeader]: String(Date.now()),
+            },
+          }),
+        );
       } catch (error) {
         console.warn(
           JSON.stringify({
@@ -987,10 +1032,11 @@ export function createApp(
         }),
       );
       if (staleResponse) {
-        const response = new Response(staleResponse.body, staleResponse);
-        response.headers.set('cache-control', 'private, no-store');
-        response.headers.set('x-cache', 'STALE');
-        return response;
+        try {
+          return await staleWeatherResponse(staleResponse);
+        } catch {
+          // A malformed private cache entry must not replace a sanitized provider error.
+        }
       }
       return gatewayError(
         context,

@@ -511,3 +511,46 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
   gates now pass. This is not promotion approval: no traffic change was made without a separate
   explicit owner decision. PERF-002 remains **IN_PROGRESS** pending that decision and any requested
   post-exposure validation.
+
+## PR #335 bounded retest and local cache-path follow-up — 2026-10-29
+
+- The deployed Next.js handler release completed its protected Vercel production workflow
+  (`40903722609`). No Worker traffic shift was part of that release. Candidate Worker
+  `002a8829-61f7-4170-a8bb-22b85c12996e` / release `ee5db573c741` remained at 0% in deployment
+  `76c426b1-1cbd-4bff-8d75-d420e4fb3ca1`; the prior Worker `2503a1f0-985f-4026-a368-bd9bb5504d23`
+  / release `d81923250215` remained at 100%.
+- The owner-approved bounded candidate workload on 2026-10-29 returned 29 unique HTTP 200 cache
+  misses and 28 HTTP 200 repeats as cache hits. Including one earlier failed attempt conservatively
+  charged at up to five provider units, the upper bound was 150 weighted units; the authorized cap
+  was not exceeded. No provider traffic was sent after this batch.
+- Exact-version Cloudflare CPU analytics for 60 candidate invocations recorded 0 platform errors,
+  p50 `5.228 ms`, p95 `9.548 ms`, and p99 `15.052 ms`. The p95 is still above the internal 7 ms
+  gate; the sample was not separated into hit and miss CPU distributions, so no route-specific pass
+  is inferred.
+- WAE remained `INSUFFICIENT_DATA` on read-only run
+  [40909210631](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40909210631) with stable 27
+  and candidate 68 weighted samples. The latest Grafana synthetics for frontend, edge, weather, and
+  dependencies all passed. Neither result authorizes promotion, and the candidate remains at 0%.
+- This local-only follow-up changes dashboard and AQI cache storage from two entries/lookups to one
+  versioned entry/lookup. Each entry keeps a five-minute fresh window and one-hour bounded stale
+  window using an internal timestamp header; the header is stripped from public responses. Provider
+  failure returns the cached payload with `meta.stale=true`; cache entries older than one hour are
+  not served. The cache key schema was incremented to avoid collisions with entries written by the
+  currently deployed Worker and preserve rollback isolation.
+- AQI timeline misses now request the same authenticated v2 frame from Next.js as dashboard misses.
+  In-flight request coalescing is preserved by retaining reusable byte-chunk factories, so each
+  concurrent caller receives independent response/cache streams without parsing or reserializing
+  the full AQI timeline in the Worker.
+- The authenticated Worker-to-Next.js cache frame is now protocol v2: it carries one shared
+  serialized data prefix plus response/fresh metadata suffixes; stale metadata is patched only on
+  the rare fallback path. Protocol v1 remains available for the already-uploaded zero-percent
+  candidate. No provider, public JSON contract, secret,
+  database schema, deployment, or production cache was changed by this local iteration.
+- Local validation passed: 55 focused Worker/Next-handler tests; 90 provider/contracts/gateway tests;
+  10 full-weather/AQI-timeline tests; 10 Next route-handler tests; repository typecheck; targeted
+  ESLint; gateway dry-run build; Next.js production build; six focused Playwright tests; Prettier;
+  and `git diff --check`.
+- The local optimization has not been uploaded or measured in Cloudflare. PERF-002 remains
+  **IN_PROGRESS / HOLD** until a separately approved exact-version candidate meets the CPU gate and
+  the release gates have sufficient samples. No production traffic, promotion, rollback, or GitHub
+  push was performed for this local iteration.

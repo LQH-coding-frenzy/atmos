@@ -4,6 +4,7 @@ import {
   airQualitySchema,
   dashboardSchema,
   locationInputSchema,
+  type AirQuality,
   type Dashboard,
   type AirQualityProvider,
   type WeatherProvider,
@@ -14,9 +15,13 @@ const timezonePattern = /^[A-Za-z_+-]+(?:\/[A-Za-z_+-]+)*$/;
 const requestIdPattern = /^[A-Za-z0-9_-]{1,64}$/;
 const serviceTokenPrefix = 'Bearer ';
 const minimumServiceTokenLength = 32;
-const workerCacheVariantsAccept = 'application/vnd.atmos.weather-cache-variants; version=1';
-const workerCacheVariantsContentType = 'application/vnd.atmos.weather-cache-variants; version=1';
-const workerCacheVariantsMagic = new Uint8Array([0x41, 0x54, 0x43, 0x31]);
+const legacyWorkerCacheVariantsAccept = 'application/vnd.atmos.weather-cache-variants; version=1';
+const legacyWorkerCacheVariantsContentType =
+  'application/vnd.atmos.weather-cache-variants; version=1';
+const workerCacheVariantsAccept = 'application/vnd.atmos.weather-cache-variants; version=2';
+const workerCacheVariantsContentType = 'application/vnd.atmos.weather-cache-variants; version=2';
+const legacyWorkerCacheVariantsMagic = new Uint8Array([0x41, 0x54, 0x43, 0x31]);
+const workerCacheVariantsMagic = new Uint8Array([0x41, 0x54, 0x43, 0x32]);
 const maxWorkerCacheVariantBytes = 1_000_000;
 
 type WeatherRequestError = {
@@ -44,8 +49,8 @@ function errorResponse(
   );
 }
 
-function dashboardCacheVariantsResponse(dashboard: Dashboard, requestId: string) {
-  const { meta, ...data } = dashboard;
+function weatherCacheVariantsResponse(payload: Dashboard | AirQuality, requestId: string) {
+  const { meta, ...data } = payload;
   const serializedData = JSON.stringify(data);
   if (!serializedData || serializedData[0] !== '{' || !serializedData.endsWith('}')) {
     throw new Error('Dashboard response could not be serialized.');
@@ -56,25 +61,28 @@ function dashboardCacheVariantsResponse(dashboard: Dashboard, requestId: string)
   const metadataSuffixes = [
     encoder.encode(`,"meta":${JSON.stringify(meta)}}`),
     encoder.encode(`,"meta":${JSON.stringify({ ...meta, cached: true, stale: false })}}`),
-    encoder.encode(`,"meta":${JSON.stringify({ ...meta, cached: true, stale: true })}}`),
   ];
-  const variantLengths = metadataSuffixes.map(
-    (suffix) => dataPrefix.byteLength + suffix.byteLength,
-  );
-  if (variantLengths.some((length) => length <= 0 || length > maxWorkerCacheVariantBytes)) {
+  const suffixLengths = metadataSuffixes.map((suffix) => suffix.byteLength);
+  if (
+    dataPrefix.byteLength === 0 ||
+    suffixLengths.some(
+      (length) => length <= 0 || dataPrefix.byteLength + length > maxWorkerCacheVariantBytes,
+    )
+  ) {
     throw new Error('Dashboard cache variant exceeds the response limit.');
   }
 
   const header = new Uint8Array(16);
   header.set(workerCacheVariantsMagic);
   const headerView = new DataView(header.buffer);
-  variantLengths.forEach((length, index) => headerView.setUint32(4 + index * 4, length, false));
+  headerView.setUint32(4, dataPrefix.byteLength, false);
+  suffixLengths.forEach((length, index) => headerView.setUint32(8 + index * 4, length, false));
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       controller.enqueue(header);
+      controller.enqueue(dataPrefix);
       for (const metadataSuffix of metadataSuffixes) {
-        controller.enqueue(dataPrefix);
         controller.enqueue(metadataSuffix);
       }
       controller.close();
@@ -84,6 +92,55 @@ function dashboardCacheVariantsResponse(dashboard: Dashboard, requestId: string)
   return new Response(stream, {
     headers: {
       'content-type': workerCacheVariantsContentType,
+      'cache-control': 'no-store',
+      'x-request-id': requestId,
+    },
+  });
+}
+
+function legacyDashboardCacheVariantsResponse(dashboard: Dashboard, requestId: string) {
+  const { meta, ...data } = dashboard;
+  const serializedData = JSON.stringify(data);
+  if (!serializedData || serializedData[0] !== '{' || !serializedData.endsWith('}')) {
+    throw new Error('Dashboard response could not be serialized.');
+  }
+
+  const dataPrefix = serializedData.slice(0, -1);
+  const encoder = new TextEncoder();
+  const variants = [
+    encoder.encode(`${dataPrefix},"meta":${JSON.stringify(meta)}}`),
+    encoder.encode(
+      `${dataPrefix},"meta":${JSON.stringify({ ...meta, cached: true, stale: false })}}`,
+    ),
+    encoder.encode(
+      `${dataPrefix},"meta":${JSON.stringify({ ...meta, cached: true, stale: true })}}`,
+    ),
+  ];
+  if (
+    variants.some(
+      (variant) => variant.byteLength === 0 || variant.byteLength > maxWorkerCacheVariantBytes,
+    )
+  ) {
+    throw new Error('Dashboard cache variant exceeds the response limit.');
+  }
+
+  const header = new Uint8Array(16);
+  header.set(legacyWorkerCacheVariantsMagic);
+  const headerView = new DataView(header.buffer);
+  variants.forEach((variant, index) =>
+    headerView.setUint32(4 + index * 4, variant.byteLength, false),
+  );
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(header);
+      for (const variant of variants) controller.enqueue(variant);
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'content-type': legacyWorkerCacheVariantsContentType,
       'cache-control': 'no-store',
       'x-request-id': requestId,
     },
@@ -215,8 +272,12 @@ export function createWeatherRouteHandlers(provider: WeatherRouteProvider, expec
       const result = await provider.getDashboard(parsedInput.data);
       const parsedResult = dashboardSchema.safeParse(result);
       if (!parsedResult.success) throw new Error('Weather response did not match its contract');
-      if (request.headers.get('accept') === workerCacheVariantsAccept) {
-        return dashboardCacheVariantsResponse(parsedResult.data, requestId);
+      const accept = request.headers.get('accept');
+      if (accept === legacyWorkerCacheVariantsAccept) {
+        return legacyDashboardCacheVariantsResponse(parsedResult.data, requestId);
+      }
+      if (accept === workerCacheVariantsAccept) {
+        return weatherCacheVariantsResponse(parsedResult.data, requestId);
       }
       return Response.json(parsedResult.data, {
         headers: { 'cache-control': 'no-store', 'x-request-id': requestId },
@@ -276,6 +337,9 @@ export function createWeatherRouteHandlers(provider: WeatherRouteProvider, expec
         (parsedInput.data.includeTimeline === true && !parsedResult.data.timeline)
       ) {
         throw new Error('Air-quality response did not match its contract');
+      }
+      if (request.headers.get('accept') === workerCacheVariantsAccept) {
+        return weatherCacheVariantsResponse(parsedResult.data, requestId);
       }
       return Response.json(parsedResult.data, {
         headers: { 'cache-control': 'no-store', 'x-request-id': requestId },
