@@ -36,8 +36,11 @@ task:
       - packages/provider-openmeteo/src/air-quality-timeline.test.ts
       - workers/gateway/src/index.ts
       - workers/gateway/src/index.test.ts
+      - workers/gateway/src/air-quality-timeline.test.ts
       - workers/gateway/src/request-analytics.ts
       - workers/gateway/src/request-analytics.test.ts
+      - apps/web/lib/version-affinity.ts
+      - apps/web/lib/version-affinity.test.ts
       - workers/gateway/wrangler.jsonc
       - apps/web/app/api/v1/weather/dashboard/route.ts
       - apps/web/app/api/v1/weather/air-quality/route.ts
@@ -78,8 +81,11 @@ task:
       - packages/provider-openmeteo/src/air-quality-timeline.test.ts
       - workers/gateway/src/index.ts
       - workers/gateway/src/index.test.ts
+      - workers/gateway/src/air-quality-timeline.test.ts
       - workers/gateway/src/request-analytics.ts
       - workers/gateway/src/request-analytics.test.ts
+      - apps/web/lib/version-affinity.ts
+      - apps/web/lib/version-affinity.test.ts
       - workers/gateway/wrangler.jsonc
       - apps/web/app/api/v1/weather/dashboard/route.ts
       - apps/web/app/api/v1/weather/air-quality/route.ts
@@ -91,7 +97,7 @@ task:
     terraform_resources: []
     database_changes: [none]
     deployed_units:
-      - Stable Cloudflare Worker 2503a1f0-985f-4026-a368-bd9bb5504d23 / release d81923250215 at 100%; candidate 002a8829-61f7-4170-a8bb-22b85c12996e / release ee5db573c741 at 0% in deployment 76c426b1-1cbd-4bff-8d75-d420e4fb3ca1
+      - Stable Cloudflare Worker 2503a1f0-985f-4026-a368-bd9bb5504d23 / release d81923250215 at 100%; candidate 3bf55c39-8865-4fe6-ac41-cafba8c11143 / release b57d8bf399bf at 0% in deployment c72a0e37-bbe3-41f3-8df2-b61b5dc801c7
 
   compatibility:
     requires_expand_contract: false
@@ -100,11 +106,12 @@ task:
 
   validation:
     commands:
-      - corepack pnpm exec vitest run packages/provider-openmeteo packages/contracts workers/gateway/src/index.test.ts workers/gateway/src/request-analytics.test.ts
+      - corepack pnpm exec vitest run packages/provider-openmeteo packages/contracts workers/gateway/src/index.test.ts workers/gateway/src/air-quality-timeline.test.ts workers/gateway/src/request-analytics.test.ts
       - corepack pnpm exec vitest run packages/provider-openmeteo/src/full-weather.test.ts packages/provider-openmeteo/src/air-quality-timeline.test.ts
       - corepack pnpm exec vitest run apps/web/lib/weather-route-handlers.test.ts
+      - corepack pnpm exec vitest run apps/web/lib/version-affinity.test.ts
       - corepack pnpm typecheck
-      - corepack pnpm exec eslint packages/provider-openmeteo workers/gateway/src apps/web/app/api/v1/weather apps/web/lib/weather-route-handlers.ts apps/web/lib/weather-runtime.ts apps/web/components/weather-calendar-panel.tsx apps/web/components/air-quality-timeline.tsx --max-warnings=0
+      - corepack pnpm exec eslint packages/provider-openmeteo workers/gateway/src apps/web/app/api/v1/weather apps/web/lib/weather-route-handlers.ts apps/web/lib/weather-runtime.ts apps/web/lib/version-affinity.ts apps/web/components/weather-calendar-panel.tsx apps/web/components/air-quality-timeline.tsx --max-warnings=0
       - corepack pnpm --filter @atmos/gateway build
       - corepack pnpm --filter @atmos/web build
       - corepack pnpm exec playwright test tests/e2e/weather-calendar.spec.ts tests/e2e/air-quality-timeline.spec.ts --workers=1

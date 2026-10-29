@@ -300,7 +300,7 @@ function weatherInput(context: { req: { query: (name: string) => string | undefi
   return { latitude, longitude, timezone, units } as const;
 }
 
-function weatherCacheKeys(url: string, input: ReturnType<typeof weatherInput>) {
+function weatherCacheKey(url: string, input: ReturnType<typeof weatherInput>) {
   if (!input) throw new Error('Weather cache keys require valid weather input');
   const cacheUrl = new URL(url);
   cacheUrl.search = new URLSearchParams({
@@ -310,7 +310,7 @@ function weatherCacheKeys(url: string, input: ReturnType<typeof weatherInput>) {
     units: input.units,
     __atmos_cache_schema: weatherCacheSchemaVersion,
   }).toString();
-  return new Request(cacheUrl, { method: 'GET' });
+  return cacheUrl.href;
 }
 
 function weatherCacheState(response: Response, freshTtlSeconds: number) {
@@ -399,7 +399,7 @@ async function fetchNextWeatherTransformResponse(
 
   let response: Response;
   try {
-    response = await fetch(new URL(path, origin), {
+    response = await fetch(`${origin.origin}${path}`, {
       method: 'POST',
       headers: {
         accept,
@@ -524,7 +524,7 @@ function airQualityCacheKey(url: string, input: NonNullable<ReturnType<typeof ai
     ...(input.includeTimeline ? { view: 'timeline' } : {}),
     __atmos_cache_schema: weatherCacheSchemaVersion,
   }).toString();
-  return new Request(cacheUrl, { method: 'GET' });
+  return cacheUrl.href;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -810,7 +810,7 @@ export function createApp(
       );
     }
 
-    const cacheKey = weatherCacheKeys(context.req.url, input);
+    const cacheKey = weatherCacheKey(context.req.url, input);
     const weatherCache =
       cache ??
       (typeof caches === 'undefined'

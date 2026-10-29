@@ -38,6 +38,10 @@ function result(timeline = false): AirQuality {
 const base = 'http://localhost/api/v1/weather/air-quality?lat=52.52&lon=13.405';
 const provider = new MockWeatherProvider();
 
+function cacheKeyUrl(request: RequestInfo | URL) {
+  return request instanceof Request ? request.url : String(request);
+}
+
 describe('AQI timeline gateway boundary', () => {
   it('isolates canonical current and timeline caches and retains bounded stale responses per mode', async () => {
     let failing = false;
@@ -47,9 +51,11 @@ describe('AQI timeline gateway boundary', () => {
     });
     const responses = new Map<string, Response>();
     const cache = {
-      match: vi.fn(async (request: Request) => responses.get(request.url)?.clone()),
-      put: vi.fn(async (request: Request, response: Response) => {
-        responses.set(request.url, response.clone());
+      match: vi.fn(async (request: RequestInfo | URL) =>
+        responses.get(cacheKeyUrl(request))?.clone(),
+      ),
+      put: vi.fn(async (request: RequestInfo | URL, response: Response) => {
+        responses.set(cacheKeyUrl(request), response.clone());
       }),
     };
     const app = createApp(
