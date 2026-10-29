@@ -91,7 +91,7 @@ task:
     terraform_resources: []
     database_changes: [none]
     deployed_units:
-      - Cloudflare Worker deployment 27d9ad06-b596-47ba-8a66-73fb6d04cf18; prior candidate 2503a1f0-985f-4026-a368-bd9bb5504d23 / release d81923250215 at 100%, byte-buffer fix candidate 424d2d87-b827-40ac-837c-ee14161f15dd / release c84f369ccb5e at 0%, stable rollback version 2da40785-0b9e-430c-bdac-c9ad6254ff68 available; first bounded sequence stopped on 5-second upstream timeout, no promotion
+      - Cloudflare Worker deployment 27d9ad06-b596-47ba-8a66-73fb6d04cf18; prior candidate 2503a1f0-985f-4026-a368-bd9bb5504d23 / release d81923250215 at 100%, byte-buffer fix candidate 424d2d87-b827-40ac-837c-ee14161f15dd / release c84f369ccb5e at 0%, stable rollback version 2da40785-0b9e-430c-bdac-c9ad6254ff68 available; latest retest stopped on first HTTP 503 (no retry; max 5 potential units); no promotion
 
   compatibility:
     requires_expand_contract: false

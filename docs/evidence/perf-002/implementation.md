@@ -1,13 +1,13 @@
 # PERF-002 — Expanded weather/AQI Worker CPU remediation
 
-Date: 2026-10-25
+Date: 2026-10-29
 
 Status: **IN_PROGRESS — prior candidate remains at 100%; byte-buffer fix candidate remains at 0%.**
 The prior version's post-exposure CPU sample exceeded budget (p95 `17 ms`). The streaming fix
 candidate's exact-version GraphQL p95 was `10.607 ms`, above both the 7 ms internal gate and the
-Workers Free 10 ms invocation budget. The byte-buffer fix candidate's first bounded run stopped on a
-confirmed 5-second upstream `AbortError` after two successful misses; no CPU sample was sufficient.
-No promotion occurred.
+Workers Free 10 ms invocation budget. The byte-buffer fix candidate's initial retest stopped on a
+confirmed five-second upstream `AbortError` after two successful misses. A later retest on Oct 29
+stopped on its first HTTP 503; no promotion occurred.
 
 ## Baseline
 
@@ -707,3 +707,16 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
   (`p95 12.763 ms`, `p99 12.763 ms`, 0 platform errors), below the required 30-sample floor. This
   cannot validate the byte-buffer CPU change. No further workload or promotion was authorized; the
   candidate remains at 0% per owner direction.
+
+## Additional bounded retest stopped on first failure — 2026-10-29
+
+- The owner authorized up to 30 new unique misses (maximum 150 weighted units) plus cache-hit
+  repeats, with an immediate stop on any non-200/non-MISS. The read-only inventory showed the prior
+  candidate `2503a1f0-985f-4026-a368-bd9bb5504d23` at 100% and byte-buffer candidate
+  `424d2d87-b827-40ac-837c-ee14161f15dd` at 0% in deployment
+  `27d9ad06-b596-47ba-8a66-73fb6d04cf18`. Candidate override-only smoke passed before testing.
+- The first unique request (`perf002-final-miss-1`) returned HTTP 503 with no cache status. The test
+  stopped immediately: one attempt, no successful misses or hits, and a conservative maximum of 5
+  weighted units potentially consumed. No retry was made.
+- The read-only Vercel query found no matching runtime log in the available recent window. No further
+  provider requests or promotion occurred. Candidate remains at 0% per owner direction.
