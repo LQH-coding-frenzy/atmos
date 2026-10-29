@@ -588,12 +588,10 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
 - No additional provider requests were sent after the bounded batch. The candidate remains at 0%,
   stable remains at 100%, and no promotion or ordinary traffic shift occurred. Another optimization
   and owner-approved candidate measurement are required before PERF-002 can pass.
-- A further local-only middleware optimization reuses a generated or valid UUID `x-request-id` as
-  the trace ID when a traceparent is absent. Browser affinity headers now send a fresh UUID request
-  ID and a valid W3C traceparent per API call, so the Worker can validate and propagate correlation
-  without generating additional UUIDs on the common path. The bounded batch used non-UUID synthetic
-  IDs and no traceparent, so it did not exercise this follow-up; it is not deployed or measured in
-  Cloudflare.
+- Browser affinity headers now send a fresh UUID request ID and a valid W3C traceparent per API
+  call. The Worker validates and propagates both without generating additional UUIDs on that path.
+  The bounded batch used non-UUID synthetic IDs and no traceparent, so it did not exercise this
+  follow-up; it is not deployed or measured in Cloudflare.
 - Dashboard and AQI cache lookups now pass the canonical cache URL string directly to the Cache API,
   avoiding an extra `Request` wrapper allocation while preserving the versioned key and method. The
   authenticated Next.js subrequest also uses the validated origin string directly rather than
