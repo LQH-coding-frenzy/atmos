@@ -86,17 +86,41 @@ const airQuality: AirQuality = {
 };
 
 const serviceToken = 'test-only-'.repeat(4);
+const workerCacheVariantsAccept = 'application/vnd.atmos.weather-cache-variants; version=1';
+const workerCacheVariantsMagic = [0x41, 0x54, 0x43, 0x31];
 
-function post(body: string, requestId = 'weather_route_test-1', authorizationToken = serviceToken) {
+function post(
+  body: string,
+  requestId = 'weather_route_test-1',
+  authorizationToken = serviceToken,
+  accept?: string,
+) {
   return new Request('https://rainify.dpdns.org/api/v1/weather/dashboard', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       'x-request-id': requestId,
+      ...(accept ? { accept } : {}),
       ...(authorizationToken ? { authorization: `Bearer ${authorizationToken}` } : {}),
     },
     body,
   });
+}
+
+async function decodeCacheVariantFrame(response: Response) {
+  expect(response.headers.get('content-type')).toBe(workerCacheVariantsAccept);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  expect(Array.from(bytes.subarray(0, 4))).toEqual(workerCacheVariantsMagic);
+  const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const lengths = [header.getUint32(4), header.getUint32(8), header.getUint32(12)];
+  const variants: unknown[] = [];
+  let offset = 16;
+  for (const length of lengths) {
+    variants.push(JSON.parse(new TextDecoder().decode(bytes.subarray(offset, offset + length))));
+    offset += length;
+  }
+  expect(offset).toBe(bytes.length);
+  return variants;
 }
 
 describe('Next.js weather transform handlers', () => {
@@ -134,6 +158,33 @@ describe('Next.js weather transform handlers', () => {
       timezone: 'Europe/Berlin',
       units: 'metric',
     });
+  });
+
+  it('returns framed cache variants only for an authenticated Worker request', async () => {
+    const getDashboard = vi.fn(async () => dashboard);
+    const handlers = createWeatherRouteHandlers({ getDashboard }, serviceToken);
+    const response = await handlers.dashboard(
+      post(
+        JSON.stringify({
+          latitude: 52.52,
+          longitude: 13.405,
+          timezone: 'Europe/Berlin',
+          units: 'metric',
+        }),
+        'worker_cache_variants-1',
+        serviceToken,
+        workerCacheVariantsAccept,
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('x-request-id')).toBe('worker_cache_variants-1');
+    const [original, fresh, stale] = await decodeCacheVariantFrame(response);
+    expect(original).toMatchObject({ meta: { cached: false, stale: false } });
+    expect(fresh).toMatchObject({ meta: { cached: true, stale: false } });
+    expect(stale).toMatchObject({ meta: { cached: true, stale: true } });
+    expect(getDashboard).toHaveBeenCalledOnce();
   });
 
   it('rejects invalid and oversized dashboard requests before provider work', async () => {
@@ -242,6 +293,7 @@ describe('Next.js weather transform handlers', () => {
         JSON.stringify({ latitude: 52.52, longitude: 13.405, timezone: 'Europe/Berlin' }),
         'weather_unauthorized-1',
         '',
+        workerCacheVariantsAccept,
       ),
     );
 
