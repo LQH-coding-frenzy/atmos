@@ -1,13 +1,13 @@
 # PERF-002 — Expanded weather/AQI Worker CPU remediation
 
-Date: 2026-10-25
+Date: 2026-10-29
 
-Status: **IN_PROGRESS — CPU/WAE/Grafana gates PASS; awaiting explicit owner decision before any
-traffic shift. Stable remains at 100%, candidate at 0%.** The exact-version candidate measured below
-the 7 ms CPU p95 gate overall and on bounded cache-miss/cache-hit samples. The WAE gate and a fresh
-read-only Grafana synthetic check now pass. Two application-level 5xx responses were counted; at
-least one correlated 503 is confirmed as an upstream provider timeout. No database or provider-plan
-change occurred.
+Status: **IN_PROGRESS — prior candidate remains at 100%; byte-buffer fix candidate remains at 0%.**
+The prior version's post-exposure CPU sample exceeded budget (p95 `17 ms`). The streaming fix
+candidate's exact-version GraphQL p95 was `10.607 ms`, above both the 7 ms internal gate and the
+Workers Free 10 ms invocation budget. The byte-buffer fix candidate's initial retest stopped on a
+confirmed five-second upstream `AbortError` after two successful misses. A later retest on Oct 29
+stopped on its first HTTP 503; no promotion occurred.
 
 ## Baseline
 
@@ -511,3 +511,212 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
   gates now pass. This is not promotion approval: no traffic change was made without a separate
   explicit owner decision. PERF-002 remains **IN_PROGRESS** pending that decision and any requested
   post-exposure validation.
+
+## Owner-approved promotion and immediate post-exposure checks — 2026-10-25
+
+- Evidence PR #330 was merged as `f473156dacdc6e05bdcd87fd311da190c284806f`. With explicit owner
+  approval and all pre-exposure gates passing, Wrangler deployed stable version
+  `2da40785-0b9e-430c-bdac-c9ad6254ff68` at 0% and candidate
+  `2503a1f0-985f-4026-a368-bd9bb5504d23` / release `d81923250215` at 100% in deployment
+  `977c9882-24cf-4140-8fe8-3bf9cf6e1ae8` at `2026-10-25T10:53:37.623Z`.
+- Post-exposure no-provider smoke passed: `/health` and `/health/transform` returned HTTP 200 with
+  `{"status":"ok"}`; `/version` reported `d81923250215`; unauthenticated `/api/v1/me` returned
+  HTTP 401. No weather endpoint was called.
+- Post-exposure WAE read-only gate
+  [40186922785](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40186922785) returned
+  `PASS` with a 60-minute lookback: stable 66 weighted samples, 0% errors, p95 wall `1,129 ms`;
+  candidate 165 weighted samples, `0.6061%` errors, p95 wall `468 ms`. Limits were 2% errors and
+  `2,500 ms` p95 wall. This is a rolling window, not a post-promotion-only sample.
+- A fresh read-only Grafana gate query returned `1` for all four production synthetics
+  (`frontend`, `edge`, `weather`, `dependencies`) at `2026-10-25T11:02:31.270Z`; samples were about
+  one second old and within the 30-minute freshness limit.
+- A sanitized Workers Observability query from the promotion time through the immediate smoke found
+  four candidate events: three HTTP 200 and one expected HTTP 401, all with outcome `ok`; observed
+  CPU median was `2 ms`, maximum `7 ms`. This small smoke-only sample is below the 30-invocation
+  analysis floor and does **not** establish a post-exposure CPU p95. The pre-exposure exact-version
+  adaptive CPU result remains p95 `6.269 ms`; no new provider workload was authorized or sent.
+- The candidate remains at 100% under the owner's explicit promotion approval. No rollback was
+  performed because the post-exposure CPU sample is insufficient rather than over budget. PERF-002
+  remains **IN_PROGRESS** pending sufficient naturally observed exact-version CPU data or further
+  owner direction.
+
+## Natural post-exposure CPU monitoring — 2026-10-25
+
+- A read-only Workers Observability query through `2026-10-25T11:30:09Z` found 13 exact-candidate
+  events since the approved promotion. Overall observed CPU p50 was `5 ms`, nearest-rank p95 `16 ms`,
+  max `16 ms`; all 13 outcomes were `ok`. This remains below the 30-event analysis floor, so the
+  p95 is provisional and must not be reported as a conclusive gate result.
+- The four `weather_dashboard` events were HTTP 200 with outcomes `ok`; their observed CPU median was
+  `9 ms`, max `16 ms`. This is an early route-specific warning above the 7 ms target, not a
+  statistically sufficient route p95. Health, transform-health, version, and protected-route
+  observations were lower and the expected protected-route response remained HTTP 401.
+- Per owner direction, the candidate remains at 100% while only read-only natural monitoring
+  continues. No synthetic weather requests, provider calls, or rollback were performed. PERF-002
+  remains **IN_PROGRESS** until a sufficient exact-version CPU sample is available and reviewed.
+
+### Follow-up sample — 2026-10-25T11:40Z
+
+- A later read-only query found 16 exact-candidate events since promotion. Observed CPU p50 was
+  `8 ms`, nearest-rank p95 estimate `17 ms`, and max `17 ms`; all outcomes were `ok` (15 HTTP 200,
+  one expected HTTP 401). This remains below the required 30-event floor and is not a conclusive
+  post-exposure p95.
+- The six `weather_dashboard` events had observed CPU median `9 ms`, nearest-rank p95 estimate
+  `17 ms`, and max `17 ms`. This strengthens the early warning on that route but remains a small
+  sample. The candidate remains at 100% per owner direction; monitoring has generated no traffic.
+
+### Rolling-gate and natural-sample update — 2026-10-25T11:53Z
+
+- The post-promotion WAE workflow
+  [40190756424](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40190756424) returned
+  `INSUFFICIENT_DATA` at the 30-sample floor. The candidate had 20 weighted samples, 0% errors, and
+  p95 wall `1,735 ms`; stable also lacked the required sample row. The earlier post-promotion WAE
+  `PASS` above used a 60-minute rolling window that still contained the pre-promotion candidate
+  workload; it is not evidence of a post-exposure-only pass.
+- A fresh Grafana query at `2026-10-25T11:45:38.707Z` still returned `1` for all four production
+  synthetics, within the 30-minute freshness limit.
+- Natural CPU monitoring found 20 candidate events since promotion: observed CPU p50 `8 ms`,
+  nearest-rank p95 estimate `16 ms`, max `17 ms`; eight were `weather_dashboard` events with observed
+  maximum `17 ms`. Both CPU and WAE sample counts remain below their 30-event floor. Keep the
+  candidate at 100% per owner direction, make no synthetic/provider requests, and do not claim a
+  post-exposure pass or fail until the sample is sufficient.
+
+### Natural CPU sample reaches invocation floor — 2026-10-25T12:33Z
+
+- A sanitized Cloudflare Workers Observability query from the approved promotion time through
+  `2026-10-25T12:33:27Z` found 31 exact-candidate per-invocation CPU events. Nearest-rank CPU p50 was
+  `9 ms`, p95 `17 ms`, max `19 ms`. All outcomes were `ok` (30 HTTP 200 and one expected HTTP 401).
+  This exceeds the unchanged 7 ms CPU budget. It is an event-level Workers Observability sample,
+  not a refreshed `workersInvocationsAdaptive` GraphQL result.
+- The 13 `weather_dashboard` events had CPU p50 `10 ms`, p95 `19 ms`, max `19 ms`; that route subset
+  is still below its 30-event analysis floor, so its percentile is preliminary. The overall sample
+  reached the 30-event floor and is an over-budget warning requiring local remediation.
+- The latest WAE workflow remains the `11:53Z` `INSUFFICIENT_DATA` run above. The last Grafana PASS
+  was at `11:45Z`; it is stale by this observation time. Per owner direction, candidate stays at
+  100% while diagnosis/fix work remains local. No rollback or additional production traffic was
+  performed.
+
+## Zero-percent candidate retest of local JSON-path fix — 2026-10-25
+
+- PR #332 was merged as `ab1b63652d3e80bef454874a8797dbbd4bb1f336`. It changes the transformed
+  dashboard miss path to reuse the authenticated Next.js response JSON text and rewrite only its
+  trailing `meta` object for the cache variants, avoiding full Worker-side response parsing and
+  serialization.
+- Wrangler uploaded exact release `ab1b63652d3e` as Worker version
+  `36630961-1572-461d-800b-aabde75f2d53`. Deployment
+  `6cda0a2c-8308-43b5-953c-ff8ca45dc3a0` kept the prior candidate
+  `2503a1f0-985f-4026-a368-bd9bb5504d23` at 100% and the fix candidate at 0%.
+- Override-only no-provider smoke passed: `/health`, `/health/transform`, and `/version` returned
+  HTTP 200 (`/version` reported `ab1b63652d3e`); unauthenticated `/api/v1/me` returned HTTP 401.
+- The first unique dashboard attempt returned HTTP 503 with no `x-cache` header (request ID
+  `c81c84dc-08b0-4dd7-8600-72f50b2d9880`). Per the explicit cap/stop rule, no retry or further
+  weather request was sent. Conservative potential provider use is at most 5 weighted units; actual
+  provider use is unconfirmed. No cache-miss CPU sample was obtained, and no promotion occurred.
+- The sanitized Workers Observability event for the 503 had CPU `5 ms` and outcome `ok`, but no
+  structured failure class was recoverable or correlated to the request ID. Its cause remains
+  unknown; do not assume the JSON-path fix caused it or classify it as an upstream timeout without
+  evidence. The 0% fix candidate remains held pending owner direction.
+- After Vercel CLI authentication, a production log query for the request ID returned no matching
+  records in the available last-30-minute window; a two-hour query was rejected because Hobby runtime
+  log retention is 30 minutes. The Vercel side of the 503 therefore remains unclassified.
+
+## Fresh bounded retest of the raw-response fix — 2026-10-25
+
+- The owner authorized a fresh cap of 30 unique dashboard misses (maximum 150 weighted provider
+  units) plus cache-hit repeats, stopping on the first failure. The previous fix-candidate 503 was
+  not retried. New version `36630961-1572-461d-800b-aabde75f2d53` remained at 0%; prior candidate
+  `2503a1f0-985f-4026-a368-bd9bb5504d23` remained at 100%.
+- The bounded workload completed 30 distinct HTTP 200 `MISS` requests and 29 immediate HTTP 200
+  `HIT` repeats. Conservative provider usage was at most 150 weighted units; no additional request
+  was sent beyond the cap. Request coordinates and response bodies were not recorded.
+- Exact-version Workers Observability event CPU for the 30 misses was p50 `4 ms`, nearest-rank p95
+  `9 ms`, p99 `12 ms`, max `12 ms`; all 30 were HTTP 200/outcome `ok`. The 29 hits were p50 `1 ms`,
+  p95 `7 ms`, p99 `12 ms`, max `12 ms`; all 29 were HTTP 200/outcome `ok`. These are event-level
+  per-invocation CPU values, not a refreshed `workersInvocationsAdaptive` GraphQL result.
+- WAE gate run
+  [40210079456](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40210079456) returned
+  `INSUFFICIENT_DATA`: stable 15 / candidate 60 weighted samples, 0% errors for both, p95 wall
+  `1,823 ms` stable / `797 ms` candidate. The stable sample floor is not met. Grafana's four
+  synthetics all returned `1` at `2026-10-25T16:06:58.843Z` (three seconds old).
+- The raw-response change reduced the sampled miss p95 from the previous version's over-budget
+  event-level estimate, but `9 ms` still exceeds the 7 ms target. The fix candidate remains at 0%;
+  no promotion or traffic shift occurred. PERF-002 remains **IN_PROGRESS** for further local
+  optimization and owner review.
+
+## Zero-percent retest of streaming cache variants — 2026-10-25
+
+- PR #333 merged as `4516ae206ea8f34faf9f587e852f8a6b774c2aa1`. The Worker now streams the
+  authenticated Next.js dashboard response and rewrites only the bounded metadata suffix for cache
+  variants, avoiding full-payload string copies in the Worker.
+- Wrangler uploaded release `4516ae206ea8` as version
+  `f927f71c-a492-4e6a-8ff5-0a7818a17515`. Deployment
+  `5c5cb845-0041-42ce-af41-8901c50d55aa` kept prior candidate
+  `2503a1f0-985f-4026-a368-bd9bb5504d23` at 100% and streaming candidate at 0%.
+- Candidate-only no-provider smoke passed: health, transform-health, and version returned HTTP 200
+  (`/version` reported `4516ae206ea8`); unauthenticated `/api/v1/me` returned HTTP 401.
+- The authorized bounded workload completed 30 unique HTTP 200 `MISS` requests and 29 immediate
+  HTTP 200 `HIT` repeats. The conservative provider-use upper bound was 150 weighted units. No other
+  weather requests were generated.
+- The exact-version `workersInvocationsAdaptive` GraphQL query for
+  `2026-10-25T16:36:38.205Z`–`16:38:51.817Z` returned 59 requests, 0 errors, CPU p50 `5.555 ms`,
+  p95 `10.607 ms`, and p99 `11.917 ms`. This exceeds the unchanged 7 ms target; no promotion is
+  authorized by these results.
+- WAE release-gate run
+  [40212737484](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40212737484) returned
+  `INSUFFICIENT_DATA`: stable 16 / candidate 63 weighted samples, 0% errors for both, p95 wall
+  `1,823 ms` stable / `685 ms` candidate. The stable sample floor remains unmet. A fresh Grafana
+  query returned `1` for all four synthetics at `2026-10-25T16:40:27.111Z`.
+- The streaming fix candidate remains at 0%; the prior candidate remains at 100%. No promotion or
+  traffic shift occurred. PERF-002 remains **IN_PROGRESS** for further local optimization and owner
+  direction.
+
+### Exact-version CPU and gate recheck — 2026-10-25T16:38Z
+
+- Cloudflare `workersInvocationsAdaptive`, filtered to `atmos-gateway`, exact streaming candidate
+  version `f927f71c-a492-4e6a-8ff5-0a7818a17515`, and the bounded test window
+  `16:36:38.205Z`–`16:38:51.817Z`, returned 59 requests, 0 errors, CPU p50 `5.555 ms`, p95
+  `10.607 ms`, and p99 `11.917 ms`. This is above the 7 ms internal gate and the 10 ms Workers Free
+  per-invocation budget; app-level success does not make it safe to promote.
+- The post-test WAE release gate
+  [40212737484](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40212737484) returned
+  `INSUFFICIENT_DATA`: stable 16 / candidate 63 weighted samples, 0% errors for both, p95 wall
+  `1,823 ms` stable / `685 ms` candidate. The stable comparison floor is not met.
+- A fresh Grafana query at `2026-10-25T16:40:27.111Z` returned `1` for all four production
+  synthetics. The streaming candidate remains at 0%; no promotion occurred. Continue local
+  optimization rather than relaxing the platform CPU limit or changing the gate in this task.
+
+## Byte-buffer candidate smoke and stopped workload — 2026-10-25
+
+- PR #334 merged as `c84f369ccb5ee1ebafa36ccc636055e414a0a86e`. Wrangler uploaded release
+  `c84f369ccb5e` as Worker version `424d2d87-b827-40ac-837c-ee14161f15dd`; deployment
+  `27d9ad06-b596-47ba-8a66-73fb6d04cf18` kept prior candidate
+  `2503a1f0-985f-4026-a368-bd9bb5504d23` at 100% and the byte-buffer fix at 0%.
+- Override-only `/health`, `/health/transform`, and `/version` checks returned HTTP 200
+  (`/version` reported `c84f369ccb5e`); unauthenticated `/api/v1/me` returned HTTP 401.
+- A bounded sequence made two unique HTTP 200 `MISS` requests and two HTTP 200 `HIT` repeats. The
+  third unique dashboard request returned HTTP 503 with no cache status; the request sequence stopped
+  immediately with no retry. Candidate WAE run
+  [40214944170](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40214944170) returned
+  `INSUFFICIENT_DATA` (stable 18 / candidate 9 weighted samples); candidate error rate was `11.11%`
+  and p95 wall `5,645 ms`.
+- The correlated Vercel runtime log for `perf002-byte-miss-3` recorded
+  `weather_dashboard_provider_failed` / `AbortError`. The Open-Meteo provider has a five-second
+  request timeout; this failure is an upstream timeout, not a Worker authentication or JSON metadata
+  error. Conservative possible use was at most 15 weighted units for this short sequence; actual
+  provider billing was not confirmed.
+- Exact-version adaptive CPU analytics for this candidate had only 9 requests in the initial window
+  (`p95 12.763 ms`, `p99 12.763 ms`, 0 platform errors), below the required 30-sample floor. This
+  cannot validate the byte-buffer CPU change. No further workload or promotion was authorized; the
+  candidate remains at 0% per owner direction.
+
+## Additional bounded retest stopped on first failure — 2026-10-29
+
+- The owner authorized up to 30 new unique misses (maximum 150 weighted units) plus cache-hit
+  repeats, with an immediate stop on any non-200/non-MISS. The read-only inventory showed the prior
+  candidate `2503a1f0-985f-4026-a368-bd9bb5504d23` at 100% and byte-buffer candidate
+  `424d2d87-b827-40ac-837c-ee14161f15dd` at 0% in deployment
+  `27d9ad06-b596-47ba-8a66-73fb6d04cf18`. Candidate override-only smoke passed before testing.
+- The first unique request (`perf002-final-miss-1`) returned HTTP 503 with no cache status. The test
+  stopped immediately: one attempt, no successful misses or hits, and a conservative maximum of 5
+  weighted units potentially consumed. No retry was made.
+- The read-only Vercel query found no matching runtime log in the available recent window. No further
+  provider requests or promotion occurred. Candidate remains at 0% per owner direction.
