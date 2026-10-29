@@ -544,13 +544,60 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
 - The authenticated Worker-to-Next.js cache frame is now protocol v2: it carries one shared
   serialized data prefix plus response/fresh metadata suffixes; stale metadata is patched only on
   the rare fallback path. Protocol v1 remains available for the already-uploaded zero-percent
-  candidate. No provider, public JSON contract, secret,
-  database schema, deployment, or production cache was changed by this local iteration.
+  candidate. The local code changes do not alter provider behavior, the public JSON contract, or
+  database schema. The subsequent protected deployment and candidate test are recorded below.
 - Local validation passed: 55 focused Worker/Next-handler tests; 90 provider/contracts/gateway tests;
   10 full-weather/AQI-timeline tests; 10 Next route-handler tests; repository typecheck; targeted
   ESLint; gateway dry-run build; Next.js production build; six focused Playwright tests; Prettier;
   and `git diff --check`.
-- The local optimization has not been uploaded or measured in Cloudflare. PERF-002 remains
-  **IN_PROGRESS / HOLD** until a separately approved exact-version candidate meets the CPU gate and
-  the release gates have sufficient samples. No production traffic, promotion, rollback, or GitHub
-  push was performed for this local iteration.
+- At this local validation milestone, the optimization had not yet been uploaded or measured in
+  Cloudflare. The subsequent protected deployment and candidate test are recorded below; no
+  promotion or ordinary Worker traffic shift was performed.
+
+## Unified-cache candidate hold and bounded retest — 2026-10-29
+
+- PR [#336](https://github.com/LQH-coding-frenzy/atmos/pull/336) merged as
+  `b57d8bf399bf20ae7103c6a0c20a8cdc20db02f9` after all required quality, security, database,
+  browser, and Vercel preview checks passed. The Vercel production workflow
+  [40925816877](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40925816877) deployed and
+  promoted the Next.js handler. This did not change Worker traffic.
+- Worker version `3bf55c39-8865-4fe6-ac41-cafba8c11143`, tag `b57d8bf399bf`, was uploaded and held
+  at 0% in deployment `c72a0e37-bbe3-41f3-8df2-b61b5dc801c7`. Stable Worker
+  `2503a1f0-985f-4026-a368-bd9bb5504d23` / `d81923250215` remains at 100%. An ordinary `/version`
+  request still identified the stable release.
+- Candidate-only `/health`, `/health/transform`, `/version`, and unauthenticated `/api/v1/me` smoke
+  passed (200, 200, 200 with exact candidate tag, and 401 respectively). The transform-health check
+  ran before provider traffic.
+- The bounded candidate workload completed 30 unique HTTP 200 `MISS` responses and 30 immediate
+  HTTP 200 `HIT` repeats. All response metadata matched miss/hit semantics, and no request failed.
+  The conservative provider-use upper bound was 150 weighted units. No additional provider requests
+  were sent afterward.
+- Read-only WAE run
+  [40927816053](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40927816053) returned
+  `INSUFFICIENT_DATA`: stable 21 weighted samples, 0% errors, p95 wall `1,895 ms`; candidate 64
+  weighted samples, 0% errors, p95 wall `532 ms`. A later read-only recheck,
+  [40930856492](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40930856492), remained
+  `INSUFFICIENT_DATA` (stable 22 / candidate 64; 0% errors; p95 wall `1,982 ms` / `532 ms`). Stable
+  did not reach the 30-sample floor.
+- Exact-version Cloudflare `workersInvocationsAdaptive` for
+  `2026-10-29T18:01:00Z`–`18:05:00Z`, filtered to candidate version
+  `3bf55c39-8865-4fe6-ac41-cafba8c11143`, returned 56 invocations, 0 errors, CPU p50 `2.129 ms`,
+  p95 `7.471 ms`, and p99 `9.579 ms`. The combined interval includes cache misses, cache hits, and
+  smoke requests; it is not a separate miss/hit CPU analysis. Candidate p95 exceeds the unchanged
+  7 ms gate by `0.471 ms`, so PERF-002 remains **HOLD**.
+- No additional provider requests were sent after the bounded batch. The candidate remains at 0%,
+  stable remains at 100%, and no promotion or ordinary traffic shift occurred. Another optimization
+  and owner-approved candidate measurement are required before PERF-002 can pass.
+- A further local-only middleware optimization reuses a generated or valid UUID `x-request-id` as
+  the trace ID when a traceparent is absent. Browser affinity headers now send a fresh UUID request
+  ID and a valid W3C traceparent per API call, so the Worker can validate and propagate correlation
+  without generating additional UUIDs on the common path. The bounded batch used non-UUID synthetic
+  IDs and no traceparent, so it did not exercise this follow-up; it is not deployed or measured in
+  Cloudflare.
+- Dashboard and AQI cache lookups now pass the canonical cache URL string directly to the Cache API,
+  avoiding an extra `Request` wrapper allocation while preserving the versioned key and method. The
+  authenticated Next.js subrequest also uses the validated origin string directly rather than
+  allocating a second `URL` object.
+- Follow-up local validation passed: 70 focused Worker/Next/analytics/affinity tests, repository typecheck,
+  targeted ESLint, Worker dry-run build, Next.js production build, six focused Playwright tests,
+  Prettier, and `git diff --check`.

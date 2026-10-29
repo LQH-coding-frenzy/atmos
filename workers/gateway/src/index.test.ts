@@ -43,6 +43,10 @@ function cacheVariantsResponse<T extends { meta: { cached: boolean; stale: boole
   return new Response(body, { headers: { 'content-type': workerCacheVariantsContentType } });
 }
 
+function cacheKeyUrl(request: RequestInfo | URL) {
+  return request instanceof Request ? request.url : String(request);
+}
+
 describe('gateway', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -546,9 +550,9 @@ describe('gateway', () => {
 
     const stored = new Map<string, Response>();
     const cache = {
-      match: vi.fn(async (request: Request) => stored.get(request.url)?.clone()),
-      put: vi.fn(async (request: Request, response: Response) => {
-        stored.set(request.url, response.clone());
+      match: vi.fn(async (request: RequestInfo | URL) => stored.get(cacheKeyUrl(request))?.clone()),
+      put: vi.fn(async (request: RequestInfo | URL, response: Response) => {
+        stored.set(cacheKeyUrl(request), response.clone());
       }),
     };
     const weatherApp = createApp({ getDashboard: vi.fn(async () => dashboard) }, cache);
@@ -1039,9 +1043,11 @@ describe('gateway', () => {
     const getAirQuality = vi.fn(async () => airQuality);
     const cachedResponses = new Map<string, Response>();
     const cache = {
-      match: vi.fn(async (request: Request) => cachedResponses.get(request.url)?.clone()),
-      put: vi.fn(async (request: Request, response: Response) => {
-        cachedResponses.set(request.url, response.clone());
+      match: vi.fn(async (request: RequestInfo | URL) =>
+        cachedResponses.get(cacheKeyUrl(request))?.clone(),
+      ),
+      put: vi.fn(async (request: RequestInfo | URL, response: Response) => {
+        cachedResponses.set(cacheKeyUrl(request), response.clone());
       }),
     };
     const airQualityApp = createApp(
@@ -1060,7 +1066,7 @@ describe('gateway', () => {
       europeanAqi: 18,
       meta: { cached: false, stale: false },
     });
-    expect(cache.match.mock.calls[0]?.[0].url).toBe(
+    expect(cache.match.mock.calls[0]?.[0]).toBe(
       'http://localhost/api/v1/weather/air-quality?lat=52.52&lon=13.405&__atmos_cache_schema=3',
     );
     expect(cache.put).toHaveBeenCalledOnce();
@@ -1463,7 +1469,7 @@ describe('gateway', () => {
     );
     const cache = {
       match: vi.fn(async () => undefined),
-      put: vi.fn(async (request: Request, response: Response) => {
+      put: vi.fn(async (request: RequestInfo | URL, response: Response) => {
         void request;
         void response;
       }),
@@ -1478,8 +1484,8 @@ describe('gateway', () => {
     expect(response.headers.get('cache-control')).toBe('public, max-age=300, s-maxage=300');
     expect(cache.match).toHaveBeenCalledOnce();
     expect(cache.put).toHaveBeenCalledOnce();
-    expect(cache.put.mock.calls[0]?.[0].url).toContain('__atmos_cache_schema=3');
-    expect(cache.put.mock.calls[0]?.[0].url).not.toContain('__atmos_cache_tier');
+    expect(cache.put.mock.calls[0]?.[0]).toContain('__atmos_cache_schema=3');
+    expect(cache.put.mock.calls[0]?.[0]).not.toContain('__atmos_cache_tier');
     expect(cache.put.mock.calls[0]?.[1].headers.get('cache-control')).toBe(
       'public, max-age=3600, s-maxage=3600',
     );
@@ -1518,7 +1524,7 @@ describe('gateway', () => {
 
   it('uses one cache key for equivalent weather requests', async () => {
     const cache = {
-      match: vi.fn(async (request: Request) => {
+      match: vi.fn(async (request: RequestInfo | URL) => {
         void request;
         return undefined;
       }),
@@ -1530,7 +1536,7 @@ describe('gateway', () => {
       'http://localhost/api/v1/weather/dashboard?lat=52.520&lon=13.4050&timezone=Europe%2FBerlin&units=metric&nonce=one',
     );
 
-    expect(cache.match.mock.calls[0]?.[0].url).toBe(
+    expect(cache.match.mock.calls[0]?.[0]).toBe(
       'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405&timezone=Europe%2FBerlin&units=metric&__atmos_cache_schema=3',
     );
   });

@@ -16,14 +16,29 @@ export function getOrCreateAtmosVersionKey(
   return generated;
 }
 
-export function versionAffinityHeaders(): Record<string, string> {
+export function versionAffinityHeaders(
+  createRequestId = () => crypto.randomUUID(),
+): Record<string, string> {
   if (typeof window === 'undefined') return {};
   try {
     const key = getOrCreateAtmosVersionKey(window.sessionStorage);
-    return {
+    const headers: Record<string, string> = {
       'X-Atmos-Version-Key': key,
       'Cloudflare-Workers-Version-Key': key,
     };
+    try {
+      const requestId = createRequestId();
+      if (versionKeyPattern.test(requestId)) {
+        headers['X-Request-Id'] = requestId;
+        const spanUuid = createRequestId();
+        if (versionKeyPattern.test(spanUuid)) {
+          headers.traceparent = `00-${requestId.replaceAll('-', '')}-${spanUuid.replaceAll('-', '').slice(-16)}-01`;
+        }
+      }
+    } catch {
+      // Correlation is optional; preserve version affinity if UUID generation is unavailable.
+    }
+    return headers;
   } catch {
     return {};
   }
