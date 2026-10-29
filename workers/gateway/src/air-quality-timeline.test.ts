@@ -65,7 +65,8 @@ describe('AQI timeline gateway boundary', () => {
       longitude: 13.405,
       includeTimeline: true,
     });
-    expect(responses.has(`${base}&view=timeline`)).toBe(true);
+    const timelineCacheKey = `${base}&view=timeline&__atmos_cache_schema=3`;
+    expect(responses.has(timelineCacheKey)).toBe(true);
     expect(
       [...responses.keys()].some((key) => key.includes('private') || key.includes('999')),
     ).toBe(false);
@@ -76,7 +77,13 @@ describe('AQI timeline gateway boundary', () => {
       ((await (await app.request(`${base}&view=current`)).json()) as AirQuality).timeline,
     ).toBeUndefined();
     expect(getAirQuality).toHaveBeenCalledTimes(2);
-    responses.delete(`${base}&view=timeline`);
+    const cachedTimeline = responses.get(timelineCacheKey);
+    expect(cachedTimeline).toBeDefined();
+    if (cachedTimeline) {
+      const staleEntry = new Response(cachedTimeline.body, cachedTimeline);
+      staleEntry.headers.set('x-atmos-cache-stored-at', String(Date.now() - 10 * 60_000));
+      responses.set(timelineCacheKey, staleEntry);
+    }
     failing = true;
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const stale = await app.request(`${base}&view=timeline`);
