@@ -1,8 +1,47 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Dashboard } from '@atmos/contracts';
 import { MockWeatherProvider } from '@atmos/provider-openmeteo';
 import { app, createApp } from './index';
 
 const testWeatherTransformToken = 'test-only-'.repeat(4);
+const workerCacheVariantsContentType = 'application/vnd.atmos.weather-cache-variants; version=1';
+const workerCacheVariantsMagic = new Uint8Array([0x41, 0x54, 0x43, 0x31]);
+
+function cacheVariantsResponse(dashboard: Dashboard) {
+  const { meta, ...data } = dashboard;
+  const serializedData = JSON.stringify(data);
+  const dataPrefix = serializedData.slice(0, -1);
+  const encoder = new TextEncoder();
+  const parts = [
+    encoder.encode(`${dataPrefix},"meta":${JSON.stringify(meta)}}`),
+    encoder.encode(
+      `${dataPrefix},"meta":${JSON.stringify({ ...meta, cached: true, stale: false })}}`,
+    ),
+    encoder.encode(
+      `${dataPrefix},"meta":${JSON.stringify({ ...meta, cached: true, stale: true })}}`,
+    ),
+  ];
+  const header = new Uint8Array(16);
+  header.set(workerCacheVariantsMagic);
+  const headerView = new DataView(header.buffer);
+  parts.forEach((part, index) => headerView.setUint32(4 + index * 4, part.length, false));
+  const frame = new Uint8Array(header.length + parts.reduce((sum, part) => sum + part.length, 0));
+  frame.set(header);
+  let offset = header.length;
+  for (const part of parts) {
+    frame.set(part, offset);
+    offset += part.length;
+  }
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (let index = 0; index < frame.length; index += 7) {
+        controller.enqueue(frame.slice(index, index + 7));
+      }
+      controller.close();
+    },
+  });
+  return new Response(body, { headers: { 'content-type': workerCacheVariantsContentType } });
+}
 
 describe('gateway', () => {
   afterEach(() => {
@@ -428,6 +467,7 @@ describe('gateway', () => {
       expect(request.url).toBe('https://rainify.dpdns.org/api/v1/weather/dashboard');
       expect(request.method).toBe('POST');
       expect(request.headers.get('content-type')).toBe('application/json');
+      expect(request.headers.get('accept')).toBe(workerCacheVariantsContentType);
       expect(request.headers.get('authorization')).toBe(`Bearer ${testWeatherTransformToken}`);
       expect(request.headers.get('cookie')).toBeNull();
       expect(request.headers.get('x-request-id')).toBe('worker_proxy_test-1');
@@ -446,7 +486,7 @@ describe('gateway', () => {
         timezone: 'Europe/Berlin',
         units: 'metric',
       });
-      return Response.json({
+      return cacheVariantsResponse({
         ...dashboard,
         meta: { ...dashboard.meta, provider: 'open-meteo' },
       });
@@ -493,29 +533,15 @@ describe('gateway', () => {
       timezone: 'Europe/Berlin',
       units: 'metric',
     });
-    const serializedDashboard = JSON.stringify({
+    const transformedDashboard = {
       ...dashboard,
       meta: { ...dashboard.meta, provider: 'open-meteo', cached: true, stale: true },
-    });
-    const serializedBytes = new TextEncoder().encode(serializedDashboard);
+    };
+    const serializedDashboard = JSON.stringify(transformedDashboard);
+    const framedResponse = cacheVariantsResponse(transformedDashboard);
     const stringify = vi.spyOn(JSON, 'stringify');
     const parse = vi.spyOn(JSON, 'parse');
-    const transform = vi.fn(
-      async () =>
-        new Response(
-          new ReadableStream<Uint8Array>({
-            start(controller) {
-              for (let offset = 0; offset < serializedBytes.length; offset += 7) {
-                controller.enqueue(serializedBytes.slice(offset, offset + 7));
-              }
-              controller.close();
-            },
-          }),
-          {
-            headers: { 'content-type': 'application/json' },
-          },
-        ),
-    );
+    const transform = vi.fn(async () => framedResponse.clone());
     vi.stubGlobal('fetch', transform);
 
     const stored = new Map<string, Response>();
@@ -565,14 +591,14 @@ describe('gateway', () => {
     });
   });
 
-  it('fails closed when a transformed dashboard response lacks cache metadata', async () => {
+  it('fails closed when a transformed dashboard cache-variant frame is invalid', async () => {
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     vi.stubGlobal(
       'fetch',
       vi.fn(
         async () =>
-          new Response('{"location":{},"current":{},"hourly":[],"daily":[]}', {
-            headers: { 'content-type': 'application/json' },
+          new Response(new Uint8Array(16), {
+            headers: { 'content-type': workerCacheVariantsContentType },
           }),
       ),
     );

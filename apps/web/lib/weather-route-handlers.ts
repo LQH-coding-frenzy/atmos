@@ -4,6 +4,7 @@ import {
   airQualitySchema,
   dashboardSchema,
   locationInputSchema,
+  type Dashboard,
   type AirQualityProvider,
   type WeatherProvider,
 } from '@atmos/contracts';
@@ -13,6 +14,10 @@ const timezonePattern = /^[A-Za-z_+-]+(?:\/[A-Za-z_+-]+)*$/;
 const requestIdPattern = /^[A-Za-z0-9_-]{1,64}$/;
 const serviceTokenPrefix = 'Bearer ';
 const minimumServiceTokenLength = 32;
+const workerCacheVariantsAccept = 'application/vnd.atmos.weather-cache-variants; version=1';
+const workerCacheVariantsContentType = 'application/vnd.atmos.weather-cache-variants; version=1';
+const workerCacheVariantsMagic = new Uint8Array([0x41, 0x54, 0x43, 0x31]);
+const maxWorkerCacheVariantBytes = 1_000_000;
 
 type WeatherRequestError = {
   code: 'INVALID_REQUEST' | 'REQUEST_TOO_LARGE';
@@ -37,6 +42,52 @@ function errorResponse(
     { error: { code, message, request_id: requestId } },
     { status, headers: { 'cache-control': 'no-store', 'x-request-id': requestId } },
   );
+}
+
+function dashboardCacheVariantsResponse(dashboard: Dashboard, requestId: string) {
+  const { meta, ...data } = dashboard;
+  const serializedData = JSON.stringify(data);
+  if (!serializedData || serializedData[0] !== '{' || !serializedData.endsWith('}')) {
+    throw new Error('Dashboard response could not be serialized.');
+  }
+
+  const encoder = new TextEncoder();
+  const dataPrefix = encoder.encode(serializedData.slice(0, -1));
+  const metadataSuffixes = [
+    encoder.encode(`,"meta":${JSON.stringify(meta)}}`),
+    encoder.encode(`,"meta":${JSON.stringify({ ...meta, cached: true, stale: false })}}`),
+    encoder.encode(`,"meta":${JSON.stringify({ ...meta, cached: true, stale: true })}}`),
+  ];
+  const variantLengths = metadataSuffixes.map(
+    (suffix) => dataPrefix.byteLength + suffix.byteLength,
+  );
+  if (variantLengths.some((length) => length <= 0 || length > maxWorkerCacheVariantBytes)) {
+    throw new Error('Dashboard cache variant exceeds the response limit.');
+  }
+
+  const header = new Uint8Array(16);
+  header.set(workerCacheVariantsMagic);
+  const headerView = new DataView(header.buffer);
+  variantLengths.forEach((length, index) => headerView.setUint32(4 + index * 4, length, false));
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(header);
+      for (const metadataSuffix of metadataSuffixes) {
+        controller.enqueue(dataPrefix);
+        controller.enqueue(metadataSuffix);
+      }
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'content-type': workerCacheVariantsContentType,
+      'cache-control': 'no-store',
+      'x-request-id': requestId,
+    },
+  });
 }
 
 function isAuthorized(request: Request, expectedToken: string | undefined) {
@@ -164,6 +215,9 @@ export function createWeatherRouteHandlers(provider: WeatherRouteProvider, expec
       const result = await provider.getDashboard(parsedInput.data);
       const parsedResult = dashboardSchema.safeParse(result);
       if (!parsedResult.success) throw new Error('Weather response did not match its contract');
+      if (request.headers.get('accept') === workerCacheVariantsAccept) {
+        return dashboardCacheVariantsResponse(parsedResult.data, requestId);
+      }
       return Response.json(parsedResult.data, {
         headers: { 'cache-control': 'no-store', 'x-request-id': requestId },
       });
