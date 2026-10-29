@@ -1,36 +1,36 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Dashboard } from '@atmos/contracts';
 import { MockWeatherProvider } from '@atmos/provider-openmeteo';
 import { app, createApp } from './index';
 
 const testWeatherTransformToken = 'test-only-'.repeat(4);
-const workerCacheVariantsContentType = 'application/vnd.atmos.weather-cache-variants; version=1';
-const workerCacheVariantsMagic = new Uint8Array([0x41, 0x54, 0x43, 0x31]);
+const workerCacheVariantsContentType = 'application/vnd.atmos.weather-cache-variants; version=2';
+const workerCacheVariantsMagic = new Uint8Array([0x41, 0x54, 0x43, 0x32]);
 
-function cacheVariantsResponse(dashboard: Dashboard) {
-  const { meta, ...data } = dashboard;
-  const serializedData = JSON.stringify(data);
-  const dataPrefix = serializedData.slice(0, -1);
+function cacheVariantsResponse<T extends { meta: { cached: boolean; stale: boolean } }>(
+  payload: T,
+) {
+  const { meta, ...data } = payload;
   const encoder = new TextEncoder();
-  const parts = [
-    encoder.encode(`${dataPrefix},"meta":${JSON.stringify(meta)}}`),
-    encoder.encode(
-      `${dataPrefix},"meta":${JSON.stringify({ ...meta, cached: true, stale: false })}}`,
-    ),
-    encoder.encode(
-      `${dataPrefix},"meta":${JSON.stringify({ ...meta, cached: true, stale: true })}}`,
-    ),
+  const dataPrefix = encoder.encode(JSON.stringify(data).slice(0, -1));
+  const suffixes = [
+    encoder.encode(`,"meta":${JSON.stringify(meta)}}`),
+    encoder.encode(`,"meta":${JSON.stringify({ ...meta, cached: true, stale: false })}}`),
   ];
   const header = new Uint8Array(16);
   header.set(workerCacheVariantsMagic);
   const headerView = new DataView(header.buffer);
-  parts.forEach((part, index) => headerView.setUint32(4 + index * 4, part.length, false));
-  const frame = new Uint8Array(header.length + parts.reduce((sum, part) => sum + part.length, 0));
+  headerView.setUint32(4, dataPrefix.length, false);
+  suffixes.forEach((suffix, index) => headerView.setUint32(8 + index * 4, suffix.length, false));
+  const frame = new Uint8Array(
+    header.length + dataPrefix.length + suffixes.reduce((sum, suffix) => sum + suffix.length, 0),
+  );
   frame.set(header);
   let offset = header.length;
-  for (const part of parts) {
-    frame.set(part, offset);
-    offset += part.length;
+  frame.set(dataPrefix, offset);
+  offset += dataPrefix.length;
+  for (const suffix of suffixes) {
+    frame.set(suffix, offset);
+    offset += suffix.length;
   }
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -582,12 +582,9 @@ describe('gateway', () => {
       location: { name: 'Berlin', latitude: 52.52, longitude: 13.405 },
       meta: { provider: 'open-meteo', cached: true, stale: true },
     });
-    expect(cache.put).toHaveBeenCalledTimes(2);
+    expect(cache.put).toHaveBeenCalledOnce();
     await expect(cache.put.mock.calls[0]?.[1].clone().json()).resolves.toMatchObject({
       meta: { provider: 'open-meteo', cached: true, stale: false },
-    });
-    await expect(cache.put.mock.calls[1]?.[1].clone().json()).resolves.toMatchObject({
-      meta: { provider: 'open-meteo', cached: true, stale: true },
     });
   });
 
@@ -758,7 +755,7 @@ describe('gateway', () => {
     expect(getDashboard).not.toHaveBeenCalled();
   });
 
-  it('moves only versioned AQI timeline normalization to Next.js', async () => {
+  it('offloads AQI timeline serialization while coalescing concurrent transform requests', async () => {
     const airQuality = {
       observedAt: '2026-10-23T10:00:00.000Z',
       usAqi: 42,
@@ -798,47 +795,79 @@ describe('gateway', () => {
         updatedAt: '2026-10-23T10:00:00.000Z',
       },
     };
+    const framedResponse = cacheVariantsResponse(airQuality);
+    const serializedAirQuality = JSON.stringify(airQuality);
+    const stringify = vi.spyOn(JSON, 'stringify');
+    const parse = vi.spyOn(JSON, 'parse');
     const provider = new MockWeatherProvider();
     const getAirQuality = vi.fn();
+    let resolveFrame!: (response: Response) => void;
     const proxy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = new Request(input, init);
       expect(request.url).toBe('https://rainify.dpdns.org/api/v1/weather/air-quality');
       expect(request.method).toBe('POST');
+      expect(request.headers.get('accept')).toBe(workerCacheVariantsContentType);
       await expect(request.json()).resolves.toEqual({
         latitude: 52.52,
         longitude: 13.405,
         includeTimeline: true,
       });
-      return Response.json(airQuality);
+      return new Promise<Response>((resolve) => {
+        resolveFrame = resolve;
+      });
     });
     vi.stubGlobal('fetch', proxy);
     const airQualityApp = createApp({
       getDashboard: provider.getDashboard.bind(provider),
       getAirQuality,
     });
+    const env = {
+      WEATHER_TRANSFORM_ORIGIN: 'https://rainify.dpdns.org',
+      WEATHER_TRANSFORM_TOKEN: testWeatherTransformToken,
+      CF_VERSION_METADATA: {
+        id: '7cf6db10-8f5e-4cb2-a70c-34a1d3f28193',
+        tag: 'abcdef012345',
+        timestamp: '2026-10-23T00:00:00.000Z',
+      },
+    };
 
-    const response = await airQualityApp.request(
+    const first = airQualityApp.request(
       'http://localhost/api/v1/weather/air-quality?lat=52.52&lon=13.405&view=timeline',
       undefined,
-      {
-        WEATHER_TRANSFORM_ORIGIN: 'https://rainify.dpdns.org',
-        WEATHER_TRANSFORM_TOKEN: testWeatherTransformToken,
-        CF_VERSION_METADATA: {
-          id: '7cf6db10-8f5e-4cb2-a70c-34a1d3f28193',
-          tag: 'abcdef012345',
-          timestamp: '2026-10-23T00:00:00.000Z',
-        },
-      },
+      env,
     );
+    const second = airQualityApp.request(
+      'http://localhost/api/v1/weather/air-quality?lat=52.5200&lon=13.4050&view=timeline',
+      undefined,
+      env,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(proxy).toHaveBeenCalledOnce();
+    resolveFrame(framedResponse.clone());
+    const responses = await Promise.all([first, second]);
 
-    expect(response.status).toBe(200);
-    expect(response.headers.get('x-cache')).toBe('MISS');
-    await expect(response.json()).resolves.toMatchObject({
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    expect(responses.map((response) => response.headers.get('x-cache'))).toEqual(['MISS', 'MISS']);
+    expect(proxy).toHaveBeenCalledOnce();
+    expect(getAirQuality).not.toHaveBeenCalled();
+    expect(parse.mock.calls.some(([value]) => value === serializedAirQuality)).toBe(false);
+    expect(
+      stringify.mock.calls.filter(
+        ([value]) =>
+          typeof value === 'object' &&
+          value !== null &&
+          'timeline' in value &&
+          'pollutants' in value,
+      ),
+    ).toHaveLength(0);
+    await expect(responses[0]?.json()).resolves.toMatchObject({
       timeline: { kind: 'model', requestedPastDays: 7, requestedForecastDays: 5 },
       meta: { cached: false, stale: false },
     });
-    expect(proxy).toHaveBeenCalledOnce();
-    expect(getAirQuality).not.toHaveBeenCalled();
+    await expect(responses[1]?.json()).resolves.toMatchObject({
+      timeline: { kind: 'model', requestedPastDays: 7, requestedForecastDays: 5 },
+      meta: { cached: false, stale: false },
+    });
   });
 
   it('normalizes and caches recent RainViewer frames behind the gateway contract', async () => {
@@ -1032,8 +1061,9 @@ describe('gateway', () => {
       meta: { cached: false, stale: false },
     });
     expect(cache.match.mock.calls[0]?.[0].url).toBe(
-      'http://localhost/api/v1/weather/air-quality?lat=52.52&lon=13.405',
+      'http://localhost/api/v1/weather/air-quality?lat=52.52&lon=13.405&__atmos_cache_schema=3',
     );
+    expect(cache.put).toHaveBeenCalledOnce();
 
     const second = await airQualityApp.request(
       'http://localhost/api/v1/weather/air-quality?lat=52.52&lon=13.405',
@@ -1174,17 +1204,18 @@ describe('gateway', () => {
       meta: {
         provider: 'open-meteo',
         cached: true,
-        stale: true,
+        stale: false,
         updatedAt: '2026-09-27T10:02:00.000Z',
       },
     };
     const cache = {
-      match: vi.fn(async (request: Request) =>
-        request.url.includes('__atmos_cache_tier=stale')
-          ? Response.json(cached, {
-              headers: { 'cache-control': 'public, max-age=0, s-maxage=3600' },
-            })
-          : undefined,
+      match: vi.fn(async () =>
+        Response.json(cached, {
+          headers: {
+            'cache-control': 'public, max-age=3600, s-maxage=3600',
+            'x-atmos-cache-stored-at': String(Date.now() - 10 * 60_000),
+          },
+        }),
       ),
       put: vi.fn(async () => undefined),
     };
@@ -1201,6 +1232,7 @@ describe('gateway', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('x-cache')).toBe('STALE');
     expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('x-atmos-cache-stored-at')).toBeNull();
     await expect(response.json()).resolves.toMatchObject({ meta: { stale: true } });
     expect(String(warning.mock.calls[0]?.[0])).not.toContain('private provider details');
     warning.mockRestore();
@@ -1319,14 +1351,18 @@ describe('gateway', () => {
       timezone: 'Europe/Berlin',
       units: 'metric',
     });
+    const staleCachedDashboard = {
+      ...staleDashboard,
+      meta: { ...staleDashboard.meta, cached: true, stale: false },
+    };
     const cache = {
-      match: vi.fn(async (request: Request) =>
-        request.url.includes('__atmos_cache_tier=stale')
-          ? Response.json({
-              ...staleDashboard,
-              meta: { ...staleDashboard.meta, cached: true, stale: true },
-            })
-          : undefined,
+      match: vi.fn(async () =>
+        Response.json(staleCachedDashboard, {
+          headers: {
+            'cache-control': 'public, max-age=3600, s-maxage=3600',
+            'x-atmos-cache-stored-at': String(Date.now() - 10 * 60_000),
+          },
+        }),
       ),
       put: vi.fn(),
     };
@@ -1364,7 +1400,13 @@ describe('gateway', () => {
     const getDashboard = vi.fn();
     const cache = {
       match: vi.fn(async () =>
-        Response.json({ location: { name: 'Berlin' }, meta: { provider: 'mock' } }),
+        Response.json(
+          {
+            location: { name: 'Berlin' },
+            meta: { provider: 'mock', cached: true, stale: false },
+          },
+          { headers: { 'x-atmos-cache-stored-at': String(Date.now()) } },
+        ),
       ),
       put: vi.fn(),
     };
@@ -1375,12 +1417,47 @@ describe('gateway', () => {
     );
 
     expect(response.headers.get('x-cache')).toBe('HIT');
+    expect(response.headers.get('x-atmos-cache-stored-at')).toBeNull();
+    expect(response.headers.get('cache-control')).toBe('public, max-age=300, s-maxage=300');
     await expect(response.json()).resolves.toMatchObject({ location: { name: 'Berlin' } });
     expect(getDashboard).not.toHaveBeenCalled();
     expect(cache.put).not.toHaveBeenCalled();
   });
 
-  it('caches successful public weather responses for five minutes', async () => {
+  it('does not serve weather cache entries older than the stale window', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const cache = {
+      match: vi.fn(async () =>
+        Response.json(
+          { location: { name: 'Berlin' }, meta: { cached: true, stale: false } },
+          { headers: { 'x-atmos-cache-stored-at': String(Date.now() - 2 * 60 * 60_000) } },
+        ),
+      ),
+      put: vi.fn(),
+    };
+    const weatherApp = createApp(
+      {
+        getDashboard: vi.fn(async () => {
+          throw new Error('provider unavailable');
+        }),
+      },
+      cache,
+    );
+
+    const response = await weatherApp.request(
+      'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405',
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('x-cache')).toBeNull();
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'WEATHER_UNAVAILABLE' },
+    });
+    expect(cache.match).toHaveBeenCalledOnce();
+    expect(warning).toHaveBeenCalledOnce();
+  });
+
+  it('caches one fresh public weather response with a bounded stale window', async () => {
     const getDashboard = vi.fn(
       new MockWeatherProvider().getDashboard.bind(new MockWeatherProvider()),
     );
@@ -1399,14 +1476,18 @@ describe('gateway', () => {
 
     expect(response.headers.get('x-cache')).toBe('MISS');
     expect(response.headers.get('cache-control')).toBe('public, max-age=300, s-maxage=300');
-    expect(cache.put).toHaveBeenCalledTimes(2);
+    expect(cache.match).toHaveBeenCalledOnce();
+    expect(cache.put).toHaveBeenCalledOnce();
+    expect(cache.put.mock.calls[0]?.[0].url).toContain('__atmos_cache_schema=3');
     expect(cache.put.mock.calls[0]?.[0].url).not.toContain('__atmos_cache_tier');
-    expect(cache.put.mock.calls[1]?.[0].url).toContain('__atmos_cache_tier=stale');
+    expect(cache.put.mock.calls[0]?.[1].headers.get('cache-control')).toBe(
+      'public, max-age=3600, s-maxage=3600',
+    );
+    expect(
+      Number(cache.put.mock.calls[0]?.[1].headers.get('x-atmos-cache-stored-at')),
+    ).toBeGreaterThan(0);
     await expect(cache.put.mock.calls[0]?.[1].clone().json()).resolves.toMatchObject({
       meta: { cached: true, stale: false },
-    });
-    await expect(cache.put.mock.calls[1]?.[1].clone().json()).resolves.toMatchObject({
-      meta: { cached: true, stale: true },
     });
   });
 
@@ -1450,7 +1531,7 @@ describe('gateway', () => {
     );
 
     expect(cache.match.mock.calls[0]?.[0].url).toBe(
-      'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405&timezone=Europe%2FBerlin&units=metric',
+      'http://localhost/api/v1/weather/dashboard?lat=52.52&lon=13.405&timezone=Europe%2FBerlin&units=metric&__atmos_cache_schema=3',
     );
   });
 
