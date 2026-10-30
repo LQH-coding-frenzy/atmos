@@ -591,7 +591,7 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
 - Browser affinity headers now send a fresh UUID request ID and a valid W3C traceparent per API
   call. The Worker validates and propagates both without generating additional UUIDs on that path.
   The bounded batch used non-UUID synthetic IDs and no traceparent, so it did not exercise this
-  follow-up; it is not deployed or measured in Cloudflare.
+  follow-up. Its later protected deployment and failed first-miss attempt are recorded below.
 - Dashboard and AQI cache lookups now pass the canonical cache URL string directly to the Cache API,
   avoiding an extra `Request` wrapper allocation while preserving the versioned key and method. The
   authenticated Next.js subrequest also uses the validated origin string directly rather than
@@ -599,3 +599,93 @@ sufficient. The later read-only analytics re-query and bounded hit sample below 
 - Follow-up local validation passed: 70 focused Worker/Next/analytics/affinity tests, repository typecheck,
   targeted ESLint, Worker dry-run build, Next.js production build, six focused Playwright tests,
   Prettier, and `git diff --check`.
+
+## Request-correlation candidate first-miss failure — 2026-10-29
+
+- PR [#337](https://github.com/LQH-coding-frenzy/atmos/pull/337) merged as
+  `5105fa59910b8eebe9335fa3ddaafc94099f4c37` after required quality, security, database, browser,
+  and Vercel preview checks passed. The protected Vercel production workflow
+  [40936302080](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40936302080) deployed the
+  browser request-ID/traceparent headers.
+- Worker version `a998dabc-c89b-48bc-a336-ae9358e3bce6`, tag `5105fa59910b`, was held at 0% in
+  deployment `ccafc4af-8010-4aec-ac7f-4493264a6049`; stable `2503a1f0-985f-4026-a368-bd9bb5504d23`
+  / `d81923250215` remained at 100%. Candidate `/health`, `/health/transform`, exact `/version`, and
+  unauthenticated `/api/v1/me` smoke passed.
+- The first bounded weather miss returned HTTP 503 without `x-cache`. Per the stop-on-first-failure
+  rule, no retry, cache-hit batch, or additional provider call was sent. Conservative maximum
+  provider use is five weighted units.
+- The sanitized Vercel runtime event correlated to the request reported
+  `weather_dashboard_provider_failed` with `error_type=Error`; the provider-specific cause is not
+  exposed by the existing safe logger and remains unknown.
+- Read-only WAE run
+  [40938402008](https://github.com/LQH-coding-frenzy/atmos/actions/runs/40938402008) returned
+  `INSUFFICIENT_DATA`: stable 23 weighted samples (0% errors; p95 wall `1,982 ms`) and candidate 5
+  (20% errors; p95 wall `1,038 ms`). This does not establish CPU performance for the new candidate.
+  It remains at 0%; no promotion or ordinary traffic shift occurred, and no further provider traffic
+  was sent.
+
+## Local cache-budget and abuse-control review — 2026-10-30
+
+- No deployment, production route change, or weather-provider request was made during this review.
+  The Vercel and Open-Meteo figures below are documented limits and code-path estimates, not measured
+  production usage.
+- Vercel Runtime Cache Hobby includes 1,000,000 reads and 200,000 writes per month shared across the
+  team. Atmos's 70% warning rule gives HOLD thresholds of 700,000 reads and 140,000 writes. Each new
+  public endpoint request attempts one cache read; a successful cold miss/revalidation attempts one
+  write. There is no production request baseline from which to project these totals.
+- The public cache's in-flight map and `OpenMeteoUsageGuard` are per process/instance, not global.
+  Unique coordinates, eviction, multiple regions/instances, and concurrent misses may increase cache
+  writes and duplicate upstream work. Existing provider weights are five units for dashboard misses,
+  one for current AQI, and two for timeline AQI. The 70% monthly Open-Meteo warning is 210,000 units;
+  42,000 dashboard misses would consume that amount only in the artificial all-dashboard-only case.
+  It is not a capacity target and excludes other app consumers.
+- The initial review found the anonymous handlers accepted requests without an `application/json`
+  content type or same-origin `Origin`. Local-only hardening now checks both before reading the body
+  or calling the cache/provider; tests cover missing/cross-origin Origin, `text/plain`, and JSON with a
+  charset. This blocks browser cross-origin simple posts, but is not a shared per-client/provider
+  limiter; non-browser clients can supply headers, and per-instance guards do not bound aggregate use.
+- A second anonymous entry point remains: the `force-dynamic` homepage accepts validated location
+  share-link query parameters and calls the same Vercel provider/cache directly, bypassing the POST
+  policy checks. The release abuse control and usage projection must include both this SSR path and
+  the public POST handlers; the share-link behavior remains in place pending a scoped design decision.
+- The read-only Vercel CLI pricing lookup resolved the current plan as Hobby and listed `Firewall Rate
+Limit Requests` as 1,000,000 allowed requests/month included; the authenticated CLI scope listed the
+  `atmos` project. Current WAF documentation lists per-region counters and regional usage pricing. Team
+  Usage showed 9.7K CDN requests/1M over the last 30 days, but no WAF-specific meter; this is a coarse
+  baseline, not a direct WAF usage count.
+- The read-only `vercel usage --format json` query returned billing data unavailable for 2026-10-01
+  through 2026-10-30; Vercel explicitly warned that this does not mean usage was zero. Using the
+  existing Brave-Origin session, the Atmos Firewall overview showed `Custom Rules 0` and `Rate Limited
+-` before the change. After explicit owner authorization on 2026-10-30, one rule was published:
+  `PERF-002 public weather abuse guard`, matching `/` OR `/api/public/v1/weather/`, fixed window 600s,
+  limit 60 requests/IP, action 429. The saved rule detail was read back and confirmed. The 9.7K CDN
+  metric is not an exact WAF-specific usage counter; remaining allowance is not directly metered in the
+  visible Team Usage view. The rule's actual 429 threshold behavior has not been load-tested.
+- The active WAF guard is the only production mutation so far. The application deployment and
+  first-party route switch are still pending; no weather-provider request has been made during this
+  WAF configuration.
+- The protected Vercel production workflow now smokes both public POST handlers on the exact candidate
+  before promotion. Its verifier makes one dashboard and one timeline-AQI attempt, stops on first
+  failure, logs no coordinates/provider payloads, and caps total smoke use with the existing homepage
+  check at 12 weighted provider units. Three local verifier tests pass; the workflow has not run and no
+  provider smoke request has been sent from this session.
+- The implementation/approval plan is recorded at
+  `docs/operations/perf-002-public-weather-abuse-control.md`. It prefers a single edge rule for the
+  homepage and public POST paths, and explicitly records the regional-counter and global-provider-budget
+  limitations.
+- Runtime Cache's documented `get`/`set`/`delete` API has no atomic increment/compare-and-set suitable
+  for a hard distributed limiter; cache eviction, regional behavior, and concurrent writers make a
+  cache-backed counter unsuitable for strict quota enforcement.
+- The local cross-instance unit test uses a shared in-memory test store; it does not prove Vercel's
+  live regional cache persistence or eviction behavior. The owner authorized the protected Vercel
+  production propagation; its new workflow smoke has not run yet. The Vercel CLI billing query did not
+  return usage data, so the 9.7K Team CDN figure is only a coarse baseline.
+- Local validation after hardening: 19 focused route/cache tests, typecheck, targeted ESLint, web
+  production build, and all 43 E2E tests passed. Playwright emitted existing React development `eval`
+  notices and OpenFreeMap font-range 404s; those did not fail the tests. No live weather-provider
+  request was generated.
+- Decision: the owner-approved Vercel WAF guard is active, but application production propagation is
+  still pending. Do not claim PERF-002 complete until the exact Vercel runtime cache/stale behavior
+  and provider budget are verified, team-level usage remains below the 70% warnings, and exact-version
+  CPU p95 for remaining Worker traffic is at or below 7 ms. No app deployment or weather-provider
+  smoke request has been made by this continuation yet.

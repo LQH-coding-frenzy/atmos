@@ -25,6 +25,7 @@ import { CalendarDays } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { getSupabaseBrowserClient } from '../lib/supabase-browser';
 import { versionAffinityHeaders } from '../lib/version-affinity';
+import { fetchPublicAirQuality } from '../lib/public-weather-api';
 import {
   alertRuleScheduledForDate,
   calendarDateInTimezone,
@@ -342,17 +343,14 @@ export function WeatherCalendarPanel({
     const controller = new AbortController();
     setAqiStatus('loading');
     setAirQuality(null);
-    const url = new URL('/api/v1/weather/air-quality', gatewayOrigin);
-    url.search = new URLSearchParams({
-      lat: String(dashboard.location.latitude),
-      lon: String(dashboard.location.longitude),
-      view: 'timeline',
-    }).toString();
-    void fetch(url, {
-      cache: 'no-store',
-      headers: versionAffinityHeaders(),
-      signal: controller.signal,
-    })
+    void fetchPublicAirQuality(
+      {
+        latitude: dashboard.location.latitude,
+        longitude: dashboard.location.longitude,
+        includeTimeline: true,
+      },
+      { signal: controller.signal },
+    )
       .then(async (response) => {
         const parsed = airQualitySchema.safeParse(await response.json().catch(() => undefined));
         if (!response.ok || !parsed.success) throw new Error('AQI timeline unavailable');
@@ -364,13 +362,7 @@ export function WeatherCalendarPanel({
         if (!controller.signal.aborted) setAqiStatus('unavailable');
       });
     return () => controller.abort();
-  }, [
-    aqiRetry,
-    dashboard.location.latitude,
-    dashboard.location.longitude,
-    expanded,
-    gatewayOrigin,
-  ]);
+  }, [aqiRetry, dashboard.location.latitude, dashboard.location.longitude, expanded]);
 
   const accessToken = session?.access_token;
   useEffect(() => {

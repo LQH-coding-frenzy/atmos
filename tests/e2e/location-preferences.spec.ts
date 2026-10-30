@@ -54,10 +54,14 @@ test('uses recent selections locally, excludes device GPS, and supports direct c
     geocodingRequests++;
     await route.fulfill({ json: { results: [oslo] } });
   });
-  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
-    const query = new URL(route.request().url()).searchParams;
-    const latitude = Number(query.get('lat')),
-      longitude = Number(query.get('lon'));
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
+    const request = route.request();
+    const headers = request.headers();
+    expect(headers['content-type']).toBe('application/json');
+    expect(headers.origin).toBe(new URL(request.url()).origin);
+    const input = request.postDataJSON();
+    const latitude = Number(input.latitude),
+      longitude = Number(input.longitude);
     dashboardRequests.push({ latitude, longitude });
     const location =
       latitude > 59 ? oslo : { latitude, longitude, name: 'Coordinates', country: 'Coordinates' };

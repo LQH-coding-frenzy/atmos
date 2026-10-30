@@ -17,10 +17,9 @@ import {
   type PlannerThresholds,
 } from '@atmos/domain';
 import { useEffect, useId, useRef, useState } from 'react';
-import { versionAffinityHeaders } from '../lib/version-affinity';
+import { fetchPublicAirQuality } from '../lib/public-weather-api';
 
 type ActivityPlannerProps = Pick<Dashboard, 'hourly' | 'location'> & {
-  gatewayOrigin: string;
   units: UnitSystem;
   displayTimezone: string;
 };
@@ -64,7 +63,6 @@ function fromDisplayPrecipitation(value: number, units: UnitSystem) {
 export function ActivityPlanner({
   hourly,
   location,
-  gatewayOrigin,
   units,
   displayTimezone,
 }: ActivityPlannerProps) {
@@ -112,17 +110,10 @@ export function ActivityPlanner({
     setAirQualityStatus('loading');
     setIncludeAqi(false);
     try {
-      const url = new URL('/api/v1/weather/air-quality', gatewayOrigin);
-      url.search = new URLSearchParams({
-        lat: String(location.latitude),
-        lon: String(location.longitude),
-        view: 'timeline',
-      }).toString();
-      const response = await fetch(url, {
-        cache: 'no-store',
-        headers: versionAffinityHeaders(),
-        signal: controller.signal,
-      });
+      const response = await fetchPublicAirQuality(
+        { latitude: location.latitude, longitude: location.longitude, includeTimeline: true },
+        { signal: controller.signal },
+      );
       const parsed = airQualitySchema.safeParse(await response.json().catch(() => undefined));
       if (!response.ok || !parsed.success) throw new Error('AQI timeline unavailable');
       if (controller.signal.aborted) return;

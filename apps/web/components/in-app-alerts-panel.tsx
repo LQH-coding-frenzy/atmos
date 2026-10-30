@@ -30,6 +30,7 @@ import { BellRing, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabaseBrowserClient } from '../lib/supabase-browser';
 import { versionAffinityHeaders } from '../lib/version-affinity';
+import { fetchPublicAirQuality } from '../lib/public-weather-api';
 
 type InAppAlertMetric = AlertThresholdMetric | AlertOccurrenceMetric;
 type Comparison = 'above' | 'below';
@@ -317,17 +318,14 @@ export function InAppAlertsPanel({
     airQualityRequestKey.current = locationKey;
     setAirQualityContext({ key: locationKey, status: 'loading' });
 
-    const url = new URL('/api/v1/weather/air-quality', gatewayOrigin);
-    url.search = new URLSearchParams({
-      lat: String(location.latitude),
-      lon: String(location.longitude),
-      view: 'timeline',
-    }).toString();
-    void fetch(url, {
-      cache: 'no-store',
-      headers: versionAffinityHeaders(),
-      signal: controller.signal,
-    })
+    void fetchPublicAirQuality(
+      {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        includeTimeline: true,
+      },
+      { signal: controller.signal },
+    )
       .then(async (response) => {
         const parsed = airQualitySchema.safeParse(await response.json().catch(() => undefined));
         if (!response.ok || !parsed.success) throw new Error('Air quality is unavailable');
@@ -343,7 +341,6 @@ export function InAppAlertsPanel({
   }, [
     auxiliaryRetry,
     expanded,
-    gatewayOrigin,
     location.latitude,
     location.longitude,
     locationKey,

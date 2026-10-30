@@ -49,13 +49,13 @@ import {
   type ForecastTrendMetric,
   type ForecastTrendRange,
 } from '../lib/forecast-trend';
-import { versionAffinityHeaders } from '../lib/version-affinity';
 import {
   asOfflineDashboard,
   readOfflineDashboard,
   saveOfflineDashboard,
 } from '../lib/offline-dashboard';
 import { locationFromShareUrl } from '../lib/location-url';
+import { fetchPublicDashboard } from '../lib/public-weather-api';
 import { LegalLinks } from './legal-links';
 import { WeatherTools } from './weather-tools';
 import { CurrentMeasurements, HourlyMeasurements, DailyMeasurements } from './weather-measurements';
@@ -266,18 +266,16 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
     locationRequestController.current?.abort();
     const controller = new AbortController();
     locationRequestController.current = controller;
-    const url = new URL('/api/v1/weather/dashboard', gatewayOrigin);
-    url.search = new URLSearchParams({
-      lat: String(location.latitude),
-      lon: String(location.longitude),
-      timezone: location.timezone,
-      units: 'metric',
-    }).toString();
     try {
-      const response = await fetch(url, {
-        headers: versionAffinityHeaders(),
-        signal: controller.signal,
-      });
+      const response = await fetchPublicDashboard(
+        {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          timezone: location.timezone,
+          units: 'metric',
+        },
+        { signal: controller.signal },
+      );
       const parsed = dashboardSchema.safeParse(await response.json());
       if (!response.ok || !parsed.success) throw new Error('Weather request failed');
       if (generation !== locationRequestGeneration.current) return false;
@@ -494,7 +492,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
                 dashboard={dashboard}
                 units={units}
               />
-              <AirQualityPanel gatewayOrigin={gatewayOrigin} location={dashboard.location} />
+              <AirQualityPanel location={dashboard.location} />
               <SevereWeatherPanel location={dashboard.location} />
               <WeatherComparisonPanel
                 current={dashboard}
@@ -942,7 +940,6 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
 
           <ActivityPlanner
             key={`${dashboard.location.id}:${dashboard.location.latitude}:${dashboard.location.longitude}`}
-            gatewayOrigin={gatewayOrigin}
             units={units}
             hourly={dashboard.hourly}
             location={dashboard.location}

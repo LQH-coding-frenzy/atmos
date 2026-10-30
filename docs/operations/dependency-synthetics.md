@@ -37,6 +37,14 @@ Keep exactly four enabled API checks in Grafana folder `Atmos` after the protect
 
 Use one available public probe and a 15-minute frequency for every check. Do not create browser checks, a private probe, an access token, an alert, another stack, or a paid feature in SLO-001. SLO-002 owns SLO objects and alerts. The credential-free `Live showcase content smoke` GitHub workflow runs every 15 minutes as a separate content assertion for `rainify.dpdns.org`; it rejects the unavailable fallback and does not substitute for Grafana SLO data.
 
+After the accepted PERF-002 Vercel cutover is implemented, change check `8198` to exercise the
+public same-origin Vercel weather Route Handler with a bounded JSON POST body, `Content-Type:
+application/json`, and `Origin: https://rainify.dpdns.org`. Keep the Worker edge check on `workers.dev`.
+Until the endpoint is deployed and verified and the anonymous-path abuse controls are approved,
+retain the current Worker weather check; do not point synthetics at a planned route. The root-page
+share-link query path is not a substitute for this POST check and must be included in its own abuse
+review.
+
 Grafana's monthly calculator reports 2,976 executions per check and 11,904 for all four checks, 11.904 percent of the 100,000 Cloud Free API allowance. The calculator uses a 31-day month; the equivalent 30-day arithmetic is 11,520. Stop before enabling if projected usage reaches the 70 percent warning threshold.
 
 ## Dashboard

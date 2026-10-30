@@ -128,7 +128,7 @@ test('shows expanded model measurements and a compatible extended outlook withou
       updatedAt: '2026-09-01T10:15:00.000Z',
     },
   };
-  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
     if (route.request().method() === 'OPTIONS') {
       await route.fulfill({
         status: 204,
@@ -188,7 +188,7 @@ test('shows expanded model measurements and a compatible extended outlook withou
 test('keeps older weather responses readable without inventing missing observations', async ({
   page,
 }) => {
-  await page.route('**/api/v1/weather/dashboard?**', async (route) =>
+  await page.route('**/api/public/v1/weather/dashboard', async (route) =>
     route.fulfill({
       json: {
         location: {
@@ -304,7 +304,7 @@ test('explains empty search results and keeps the current city when a selection 
       json: { results: query === 'Nowhere' ? [] : [searchedLocation] },
     });
   });
-  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
     weatherRequests += 1;
     await route.fulfill({ status: 503, json: { error: 'unavailable' } });
   });
@@ -346,7 +346,7 @@ test('debounces and caches keyboard-accessible city suggestions', async ({ page 
     searchRequests += 1;
     await route.fulfill({ json: { results: [london] } });
   });
-  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
     weatherRequests += 1;
     await route.fulfill({
       json: {
@@ -468,7 +468,7 @@ test('refreshes the selected city without changing its share URL and preserves i
   page,
 }) => {
   let weatherRequests = 0;
-  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
     weatherRequests += 1;
     if (weatherRequests > 1) {
       await route.fulfill({ status: 503, json: { error: 'unavailable' } });
@@ -555,10 +555,10 @@ test('restores searched cities from browser Back and Forward history', async ({ 
     const query = new URL(route.request().url()).searchParams.get('q');
     await route.fulfill({ json: { results: query === 'Paris' ? [paris] : [potsdam] } });
   });
-  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
     weatherRequests += 1;
-    const query = new URL(route.request().url()).searchParams;
-    const location = Number(query.get('lat')) < 50 ? paris : potsdam;
+    const input = route.request().postDataJSON();
+    const location = Number(input.latitude) < 50 ? paris : potsdam;
     await route.fulfill({
       json: {
         location,
@@ -681,7 +681,7 @@ test('supports full map view, city previews, and the user management page', asyn
       ),
     });
   });
-  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
     previewWeatherRequests += 1;
     await route.continue();
   });
@@ -857,11 +857,11 @@ test('compares a searched live city without switching until explicitly requested
   await page.route('**/api/v1/locations/search?**', async (route) => {
     await route.fulfill({ json: { results: [potsdam] } });
   });
-  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
     weatherRequests += 1;
-    const url = new URL(route.request().url());
-    const latitude = Number(url.searchParams.get('lat'));
-    const longitude = Number(url.searchParams.get('lon'));
+    const input = route.request().postDataJSON();
+    const latitude = Number(input.latitude);
+    const longitude = Number(input.longitude);
     await route.fulfill({
       json: {
         location: { ...potsdam, latitude, longitude },
@@ -928,10 +928,10 @@ test('compares a searched live city without switching until explicitly requested
 
 test('loads attributed AQI estimates only after the user expands the panel', async ({ page }) => {
   let calls = 0;
-  let requestedUrl = '';
-  await page.route('**/api/v1/weather/air-quality?**', async (route) => {
+  let requestedInput: Record<string, unknown> | undefined;
+  await page.route('**/api/public/v1/weather/air-quality', async (route) => {
     calls += 1;
-    requestedUrl = route.request().url();
+    requestedInput = route.request().postDataJSON();
     await route.fulfill({
       json: {
         observedAt: '2026-09-27T10:00:00.000Z',
@@ -965,8 +965,7 @@ test('loads attributed AQI estimates only after the user expands the panel', asy
   await expect(page.getByText('7.2 µg/m³', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Open-Meteo Air Quality API' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'CAMS ENSEMBLE' })).toBeVisible();
-  expect(new URL(requestedUrl).searchParams.get('lat')).toBe('52.52');
-  expect(new URL(requestedUrl).searchParams.get('lon')).toBe('13.405');
+  expect(requestedInput).toMatchObject({ latitude: 52.52, longitude: 13.405 });
   expect(calls).toBe(1);
   await page.getByRole('button', { name: 'Close weather tools' }).click();
   await expect(page.locator('.air-quality-panel')).not.toHaveAttribute('open', '');
@@ -1021,11 +1020,11 @@ test('loads weather from device coordinates without adding them to the page URL'
 }) => {
   await context.grantPermissions(['geolocation'], { origin: 'http://127.0.0.1:3000' });
   await context.setGeolocation({ latitude: 48.8534, longitude: 2.3488 });
-  let weatherRequest = '';
+  let weatherRequest: Record<string, unknown> | undefined;
   let weatherRequestCount = 0;
-  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
     weatherRequestCount += 1;
-    weatherRequest = route.request().url();
+    weatherRequest = route.request().postDataJSON();
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
@@ -1079,8 +1078,7 @@ test('loads weather from device coordinates without adding them to the page URL'
   await expect(page.locator('.location-status')).toContainText(
     'Showing weather for your current location',
   );
-  expect(new URL(weatherRequest).searchParams.get('lat')).toBe('48.8534');
-  expect(new URL(weatherRequest).searchParams.get('lon')).toBe('2.3488');
+  expect(weatherRequest).toMatchObject({ latitude: 48.8534, longitude: 2.3488 });
   await expect(page).toHaveURL('/');
   const requestsBeforeViews = weatherRequestCount;
   await page
@@ -1245,9 +1243,9 @@ test('authenticates, saves the current place, and switches to an API-returned sa
     removedSavedLocationIds.add(deletedSavedLocationId);
     await route.fulfill({ status: 204, body: '' });
   });
-  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
-    const query = new URL(route.request().url()).searchParams;
-    browserWeatherQueries.push(`${query.get('lat')},${query.get('lon')}`);
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
+    const input = route.request().postDataJSON();
+    browserWeatherQueries.push(`${input.latitude},${input.longitude}`);
     await route.fulfill({
       json: {
         location: {
@@ -1327,7 +1325,7 @@ test('authenticates, saves the current place, and switches to an API-returned sa
     }
     await route.fulfill({ json: { snapshots: savedObservation ? [savedObservation] : [] } });
   });
-  await page.route('**/api/v1/weather/air-quality?**', async (route) => {
+  await page.route('**/api/public/v1/weather/air-quality', async (route) => {
     airQualityRequestCount += 1;
     const observedAt = new Date().toISOString();
     await route.fulfill({

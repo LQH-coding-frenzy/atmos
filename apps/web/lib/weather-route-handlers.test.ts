@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AirQuality, AirQualityInput, Dashboard, LocationInput } from '@atmos/contracts';
-import { createWeatherRouteHandlers } from './weather-route-handlers';
+import {
+  createPublicWeatherRouteHandlers,
+  createWeatherRouteHandlers,
+} from './weather-route-handlers';
 
 const dashboard: Dashboard = {
   location: {
@@ -96,12 +99,15 @@ function post(
   authorizationToken = serviceToken,
   accept?: string,
   resource: 'dashboard' | 'air-quality' = 'dashboard',
+  origin: string | null = 'https://rainify.dpdns.org',
+  contentType = 'application/json',
 ) {
   return new Request(`https://rainify.dpdns.org/api/v1/weather/${resource}`, {
     method: 'POST',
     headers: {
-      'content-type': 'application/json',
+      'content-type': contentType,
       'x-request-id': requestId,
+      ...(origin ? { origin } : {}),
       ...(accept ? { accept } : {}),
       ...(authorizationToken ? { authorization: `Bearer ${authorizationToken}` } : {}),
     },
@@ -394,5 +400,118 @@ describe('Next.js weather transform handlers', () => {
     expect(unauthorized.status).toBe(401);
     expect(getDashboard).not.toHaveBeenCalled();
     expect(getAirQuality).not.toHaveBeenCalled();
+  });
+});
+
+describe('public Next.js weather handlers', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('serves a bounded dashboard without a Worker service credential', async () => {
+    const getDashboard = vi.fn(async () => ({ data: dashboard, cached: false, stale: false }));
+    const handlers = createPublicWeatherRouteHandlers({
+      getDashboard,
+      getAirQuality: vi.fn(async () => ({ data: airQuality, cached: false, stale: false })),
+    });
+    const response = await handlers.dashboard(
+      post(
+        JSON.stringify({
+          latitude: 52.52,
+          longitude: 13.405,
+          timezone: 'Europe/Berlin',
+          units: 'metric',
+        }),
+        'public_dashboard-1',
+        '',
+        undefined,
+        'dashboard',
+        'https://rainify.dpdns.org',
+        'application/json; charset=utf-8',
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('x-cache')).toBe('MISS');
+    expect(response.headers.get('x-request-id')).toBe('public_dashboard-1');
+    expect(response.headers.get('authorization')).toBeNull();
+    await expect(response.json()).resolves.toMatchObject({
+      location: { name: 'Berlin' },
+      meta: { cached: false, stale: false },
+    });
+    expect(getDashboard).toHaveBeenCalledWith({
+      latitude: 52.52,
+      longitude: 13.405,
+      timezone: 'Europe/Berlin',
+      units: 'metric',
+    });
+  });
+
+  it('rejects missing/cross-origin requests and simple content types before provider work', async () => {
+    const getDashboard = vi.fn(async () => ({ data: dashboard, cached: false, stale: false }));
+    const getAirQuality = vi.fn(async () => ({ data: airQuality, cached: false, stale: false }));
+    const handlers = createPublicWeatherRouteHandlers({ getDashboard, getAirQuality });
+    const body = JSON.stringify({
+      latitude: 52.52,
+      longitude: 13.405,
+      timezone: 'Europe/Berlin',
+      units: 'metric',
+    });
+    const missingOrigin = await handlers.dashboard(
+      post(body, 'public_origin_missing-1', '', undefined, 'dashboard', null),
+    );
+    const crossOrigin = await handlers.dashboard(
+      post(body, 'public_origin_cross-1', '', undefined, 'dashboard', 'https://attacker.example'),
+    );
+    const simpleContentType = await handlers.airQuality(
+      post(
+        JSON.stringify({ latitude: 52.52, longitude: 13.405 }),
+        'public_content_type-1',
+        '',
+        undefined,
+        'air-quality',
+        'https://rainify.dpdns.org',
+        'text/plain',
+      ),
+    );
+
+    expect(missingOrigin.status).toBe(403);
+    expect(crossOrigin.status).toBe(403);
+    expect(simpleContentType.status).toBe(415);
+    expect(getDashboard).not.toHaveBeenCalled();
+    expect(getAirQuality).not.toHaveBeenCalled();
+  });
+
+  it('marks a cached AQI fallback stale and logs no request coordinates', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const handlers = createPublicWeatherRouteHandlers({
+      getDashboard: vi.fn(async () => ({ data: dashboard, cached: false, stale: false })),
+      getAirQuality: vi.fn(async () => ({
+        data: airQuality,
+        cached: true,
+        stale: true,
+        providerErrorType: 'Error',
+      })),
+    });
+    const response = await handlers.airQuality(
+      post(
+        JSON.stringify({ latitude: 52.52, longitude: 13.405, includeTimeline: true }),
+        'public_aqi-1',
+        '',
+        undefined,
+        'air-quality',
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-cache')).toBe('STALE');
+    await expect(response.json()).resolves.toMatchObject({
+      timeline: { kind: 'model' },
+      meta: { cached: true, stale: true },
+    });
+    expect(JSON.stringify(warning.mock.calls)).not.toContain('52.52');
+    expect(JSON.stringify(warning.mock.calls)).not.toContain('13.405');
+    expect(JSON.stringify(warning.mock.calls)).not.toContain('private provider');
   });
 });

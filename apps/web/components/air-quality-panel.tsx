@@ -4,11 +4,10 @@ import { airQualitySchema, type AirQuality, type Location } from '@atmos/contrac
 import { Wind } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { classifyEuropeanAqi, classifyUsAqi, formatAqiValue } from '../lib/air-quality';
-import { versionAffinityHeaders } from '../lib/version-affinity';
+import { fetchPublicAirQuality } from '../lib/public-weather-api';
 import { AirQualityTimeline } from './air-quality-timeline';
 
 type AirQualityPanelProps = {
-  gatewayOrigin: string;
   location: Location;
 };
 
@@ -26,7 +25,7 @@ function formatPollutant(value: number | null): string {
   return value === null ? 'Unavailable' : `${value.toFixed(1)} µg/m³`;
 }
 
-export function AirQualityPanel({ gatewayOrigin, location }: AirQualityPanelProps) {
+export function AirQualityPanel({ location }: AirQualityPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const [airQuality, setAirQuality] = useState<AirQuality | null>(null);
   const [loading, setLoading] = useState(false);
@@ -39,17 +38,10 @@ export function AirQualityPanel({ gatewayOrigin, location }: AirQualityPanelProp
     setLoading(true);
     setFailed(false);
     setAirQuality(null);
-    const url = new URL('/api/v1/weather/air-quality', gatewayOrigin);
-    url.search = new URLSearchParams({
-      lat: String(location.latitude),
-      lon: String(location.longitude),
-    }).toString();
-
-    void fetch(url, {
-      cache: 'no-store',
-      headers: versionAffinityHeaders(),
-      signal: controller.signal,
-    })
+    void fetchPublicAirQuality(
+      { latitude: location.latitude, longitude: location.longitude },
+      { signal: controller.signal },
+    )
       .then(async (response) => {
         const parsed = airQualitySchema.safeParse(await response.json().catch(() => undefined));
         if (!response.ok || !parsed.success) throw new Error('Air quality is unavailable');
@@ -63,7 +55,7 @@ export function AirQualityPanel({ gatewayOrigin, location }: AirQualityPanelProp
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [expanded, gatewayOrigin, location.latitude, location.longitude]);
+  }, [expanded, location.latitude, location.longitude]);
 
   const usCategory = airQuality ? classifyUsAqi(airQuality.usAqi) : null;
   const europeanCategory = airQuality ? classifyEuropeanAqi(airQuality.europeanAqi) : null;
@@ -150,7 +142,6 @@ export function AirQualityPanel({ gatewayOrigin, location }: AirQualityPanelProp
             <AirQualityTimeline
               active={expanded && showTimeline}
               key={`${location.latitude}:${location.longitude}`}
-              gatewayOrigin={gatewayOrigin}
               location={location}
             />
             <p className="air-quality-attribution">

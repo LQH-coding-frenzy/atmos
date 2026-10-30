@@ -82,7 +82,7 @@ test('shows selected-day hourly, sun, AQI, planner, and caller-scoped rule conte
     alertAuthorization = route.request().headers().authorization ?? '';
     await route.fulfill({ json: { rules: [rule] } });
   });
-  await page.route('**/api/v1/weather/air-quality?**', async (route) => {
+  await page.route('**/api/public/v1/weather/air-quality', async (route) => {
     aqiRequestCount += 1;
     await route.fulfill({
       json: {

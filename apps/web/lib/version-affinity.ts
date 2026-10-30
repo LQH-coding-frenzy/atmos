@@ -16,29 +16,36 @@ export function getOrCreateAtmosVersionKey(
   return generated;
 }
 
+export function requestCorrelationHeaders(
+  createRequestId = () => crypto.randomUUID(),
+): Record<string, string> {
+  const headers: Record<string, string> = {};
+  try {
+    const requestId = createRequestId();
+    if (versionKeyPattern.test(requestId)) {
+      headers['X-Request-Id'] = requestId;
+      const spanUuid = createRequestId();
+      if (versionKeyPattern.test(spanUuid)) {
+        headers.traceparent = `00-${requestId.replaceAll('-', '')}-${spanUuid.replaceAll('-', '').slice(-16)}-01`;
+      }
+    }
+  } catch {
+    // Correlation is optional; request dispatch must still work if UUID generation is unavailable.
+  }
+  return headers;
+}
+
 export function versionAffinityHeaders(
   createRequestId = () => crypto.randomUUID(),
 ): Record<string, string> {
   if (typeof window === 'undefined') return {};
   try {
     const key = getOrCreateAtmosVersionKey(window.sessionStorage);
-    const headers: Record<string, string> = {
+    return {
       'X-Atmos-Version-Key': key,
       'Cloudflare-Workers-Version-Key': key,
+      ...requestCorrelationHeaders(createRequestId),
     };
-    try {
-      const requestId = createRequestId();
-      if (versionKeyPattern.test(requestId)) {
-        headers['X-Request-Id'] = requestId;
-        const spanUuid = createRequestId();
-        if (versionKeyPattern.test(spanUuid)) {
-          headers.traceparent = `00-${requestId.replaceAll('-', '')}-${spanUuid.replaceAll('-', '').slice(-16)}-01`;
-        }
-      }
-    } catch {
-      // Correlation is optional; preserve version affinity if UUID generation is unavailable.
-    }
-    return headers;
   } catch {
     return {};
   }

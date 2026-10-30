@@ -1,8 +1,8 @@
 ---
 document: Atmos DevSecOps Master Plan
-version: 2.1.0
+version: 2.2.0
 status: cv-showcase-scope
-last_updated: 2026-10-23
+last_updated: 2026-10-30
 validation:
   last_validated: 2026-08-31
   result: GO
@@ -146,11 +146,15 @@ Worker route measured p95 CPU <= 7 ms
 
 Worker route measured p95 CPU > 7 ms
 or repeated 1102 CPU-limit failures
-    -> move compute to Supabase Edge Function
-       or Azure Container Apps Job/Service
+    -> move compute out of the Worker:
+       - Supabase Edge Function for authenticated/data-adjacent logic;
+       - Vercel Next.js for public frontend-owned routes when it can preserve
+         the contract, caching, and provider-budget controls;
+       - Azure Container Apps Job/Service for heavy finite or long-running work.
 ```
 
-The 7 ms threshold is an internal safety margin, not a Cloudflare guarantee.
+The 7 ms threshold is an internal safety margin, not a Cloudflare guarantee. A placement change must
+be an explicit Section 29/ADR decision; absence of Worker samples is not a CPU-gate pass.
 
 ## 0.6 Pre-implementation validation gate
 
@@ -1031,8 +1035,9 @@ Do not proxy Vercel through Cloudflare CDN merely because Cloudflare is present.
 | Work type | Default runtime | Reason |
 |---|---|---|
 | DNS/TLS/routing | Cloudflare | edge ownership |
-| anonymous weather read | Worker | thin fetch/cache/rate-limit path |
-| weather cache hit | Worker Cache API | cheapest/fastest path |
+| public dashboard/AQI weather read | Vercel Next.js Route Handler | public provider-backed contract and normalization are owned by the existing frontend server runtime |
+| public dashboard/AQI response cache | Vercel Next.js server cache | cache the normalized response and preserve explicit fresh/stale metadata |
+| lightweight edge cache (e.g. radar metadata/map tiles) | Worker Cache API | keep only bounded, CPU-light cache work at the edge |
 | auth verification + user DB logic | Supabase Edge Function | close to data; larger CPU budget |
 | saved locations/preferences | Supabase Edge Function + RLS | durable personalized state |
 | activity planner | Supabase Edge Function | deterministic compute may exceed Worker safety budget |
@@ -1056,8 +1061,8 @@ The Worker MAY:
 - perform Turnstile verification on selected flows;
 - normalize simple coordinates/query values;
 - generate/propagate request IDs and W3C trace context;
-- cache public weather responses;
-- call Open-Meteo for lightweight public reads;
+- cache lightweight, bounded edge responses such as radar metadata and map tiles;
+- call Open-Meteo only for lightweight reads outside the expanded dashboard/AQI route;
 - proxy DB-heavy calls to the selected Supabase Edge Function version;
 - enqueue compact notification/event messages;
 - expose health/version metadata.
@@ -3304,7 +3309,7 @@ DONE
 | EDGE-004 | public weather route | EDGE-002, WX-003, WX-004 | API |
 | CACHE-001 | Cache API weather caching | EDGE-004 | cache layer |
 | PERF-001 | Worker CPU measurement gate | EDGE-004 | perf evidence |
-| PERF-002 | Remediate expanded-weather/AQI Worker CPU p95 over budget | PERF-001, FEAT-WX-002, FEAT-AQI-TIMELINE-001, FEAT-CAL-001, ROUTE-001, OBS-007, REL-003, REL-006 | exact-version candidate CPU p95 <= 7 ms |
+| PERF-002 | Move expanded public weather/AQI off the Worker after CPU p95 exceeds budget | PERF-001, FEAT-WX-002, FEAT-AQI-TIMELINE-001, FEAT-CAL-001, ROUTE-001, OBS-007, REL-003, REL-006 | first-party weather/AQI runs on Vercel with contract/cache/stale/provider-budget evidence; remaining Worker traffic has exact-version p95 CPU <= 7 ms |
 | ROUTE-001 | Worker -> versioned Supabase proxy | FUNC-001, EDGE-002 | split runtime |
 | FEAT-LOC-001 | saved locations | FUNC-002, RLS-002 | feature |
 | FEAT-LOC-UI-001 | authenticated saved-locations dashboard UI | AUTH-001, FEAT-LOC-001, ROUTE-001, WEB-002 | feature |

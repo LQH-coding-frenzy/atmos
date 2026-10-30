@@ -28,6 +28,7 @@ import {
   temperatureDifference,
 } from '../lib/weather-comparison';
 import { versionAffinityHeaders } from '../lib/version-affinity';
+import { fetchPublicAirQuality, fetchPublicDashboard } from '../lib/public-weather-api';
 
 type WeatherComparisonPanelProps = {
   current: DashboardData;
@@ -190,18 +191,15 @@ export function WeatherComparisonPanel({
     setSelectionState('loading');
     setSearchState('idle');
     try {
-      const url = new URL('/api/v1/weather/dashboard', gatewayOrigin);
-      url.search = new URLSearchParams({
-        lat: String(location.latitude),
-        lon: String(location.longitude),
-        timezone: location.timezone,
-        units: 'metric',
-      }).toString();
-      const response = await fetch(url, {
-        cache: 'no-store',
-        headers: versionAffinityHeaders(),
-        signal: controller.signal,
-      });
+      const response = await fetchPublicDashboard(
+        {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          timezone: location.timezone,
+          units: 'metric',
+        },
+        { signal: controller.signal },
+      );
       const parsed = dashboardSchema.safeParse(await response.json().catch(() => undefined));
       if (!response.ok || !parsed.success) throw new Error('Comparison weather unavailable');
       if (generation !== requestGeneration.current) return;
@@ -266,17 +264,14 @@ export function WeatherComparisonPanel({
       async ([key, location]) => {
         if (controller.signal.aborted) return;
         try {
-          const url = new URL('/api/v1/weather/air-quality', gatewayOrigin);
-          url.search = new URLSearchParams({
-            lat: String(location.latitude),
-            lon: String(location.longitude),
-            view: 'timeline',
-          }).toString();
-          const response = await fetch(url, {
-            cache: 'no-store',
-            headers: versionAffinityHeaders(),
-            signal: controller.signal,
-          });
+          const response = await fetchPublicAirQuality(
+            {
+              latitude: location.latitude,
+              longitude: location.longitude,
+              includeTimeline: true,
+            },
+            { signal: controller.signal },
+          );
           const parsed = airQualitySchema.safeParse(await response.json().catch(() => undefined));
           if (!response.ok || !parsed.success) throw new Error('AQI comparison unavailable');
           responses.set(key, parsed.data);

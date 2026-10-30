@@ -77,13 +77,13 @@ test('offers all activity profiles, session-local custom thresholds, and opt-in 
   page,
 }, testInfo) => {
   let weatherRequests = 0;
-  const aqiRequests: string[] = [];
-  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+  const aqiRequests: Array<Record<string, unknown>> = [];
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
     weatherRequests += 1;
     await route.fulfill({ json: forecast });
   });
-  await page.route('**/api/v1/weather/air-quality?**', async (route) => {
-    aqiRequests.push(route.request().url());
+  await page.route('**/api/public/v1/weather/air-quality', async (route) => {
+    aqiRequests.push(route.request().postDataJSON());
     await route.fulfill({
       json: {
         observedAt: '2026-10-18T09:00:00.000Z',
@@ -151,10 +151,11 @@ test('offers all activity profiles, session-local custom thresholds, and opt-in 
   await expect(planner).toContainText('Modeled U.S. AQI is included');
   await expect(planner).toContainText('Not station readings.');
   expect(aqiRequests).toHaveLength(1);
-  const aqiUrl = new URL(aqiRequests[0]!);
-  expect(aqiUrl.searchParams.get('view')).toBe('timeline');
-  expect(aqiUrl.searchParams.get('lat')).toBe('52.52');
-  expect(aqiUrl.searchParams.get('lon')).toBe('13.405');
+  expect(aqiRequests[0]).toMatchObject({
+    includeTimeline: true,
+    latitude: 52.52,
+    longitude: 13.405,
+  });
   await expect(planner.locator('.planner-summary')).toContainText('100% input coverage');
   await planner.locator('.planner-window-details').first().locator('summary').click();
   await expect(planner.locator('.planner-window-details').first()).toContainText(

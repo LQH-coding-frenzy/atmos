@@ -4,6 +4,7 @@ import { LegalLinks } from '../components/legal-links';
 import { RetryWeatherButton } from '../components/retry-weather-button';
 import { defaultLocation } from '../lib/default-location';
 import { browserGatewayOrigin, serverGatewayOrigin } from '../lib/gateway-origin';
+import { getPublicDashboard } from '../lib/public-weather-runtime';
 
 // A failed build-time weather request must never be cached as the public page.
 export const dynamic = 'force-dynamic';
@@ -46,9 +47,9 @@ function selectedLocation(searchParams: Record<string, string | string[] | undef
   };
 }
 
-async function getDashboard(
-  location = defaultLocation,
-  apiOrigin = serverGatewayOrigin(),
+async function getDashboardFromGateway(
+  location: typeof defaultLocation,
+  apiOrigin: string,
 ): Promise<DashboardData | undefined> {
   const url = new URL('/api/v1/weather/dashboard', apiOrigin);
   url.search = new URLSearchParams({
@@ -82,15 +83,33 @@ async function getDashboard(
   return undefined;
 }
 
+async function getDashboardFromVercel(
+  location = defaultLocation,
+): Promise<DashboardData | undefined> {
+  try {
+    const dashboard = await getPublicDashboard({
+      latitude: location.latitude,
+      longitude: location.longitude,
+      timezone: location.timezone,
+      units: 'metric',
+    });
+    return { ...dashboard, location };
+  } catch {
+    return undefined;
+  }
+}
+
 export default async function Home({ searchParams }: { searchParams: SearchParams }) {
   const location = selectedLocation(await searchParams);
-  const dashboard = await getDashboard(
-    location,
-    serverGatewayOrigin(
-      process.env.VERCEL_ENV,
-      process.env.ATMOS_SERVER_GATEWAY_URL ?? process.env.ATMOS_GATEWAY_URL,
-    ),
-  );
+  const dashboard = process.env.ATMOS_E2E_GATEWAY_URL
+    ? await getDashboardFromGateway(
+        location,
+        serverGatewayOrigin(
+          process.env.VERCEL_ENV,
+          process.env.ATMOS_SERVER_GATEWAY_URL ?? process.env.ATMOS_GATEWAY_URL,
+        ),
+      )
+    : await getDashboardFromVercel(location);
 
   if (!dashboard) {
     return (

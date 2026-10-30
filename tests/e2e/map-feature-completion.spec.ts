@@ -68,7 +68,7 @@ function dashboard(latitude: number, longitude: number) {
 test('loads bounded AQI point samples and confirms arbitrary map coordinates before selection', async ({
   page,
 }, testInfo) => {
-  const requestedAqi: string[] = [];
+  const requestedAqi: Array<Record<string, unknown>> = [];
   const coordinateQueries: Array<{ latitude: number; longitude: number }> = [];
   let searchRequests = 0;
 
@@ -111,14 +111,14 @@ test('loads bounded AQI point samples and confirms arbitrary map coordinates bef
       ),
     });
   });
-  await page.route('**/api/v1/weather/air-quality?**', async (route) => {
-    requestedAqi.push(route.request().url());
+  await page.route('**/api/public/v1/weather/air-quality', async (route) => {
+    requestedAqi.push(route.request().postDataJSON());
     await route.fulfill({ json: airQuality });
   });
-  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
-    const search = new URL(route.request().url()).searchParams;
-    const latitude = Number(search.get('lat'));
-    const longitude = Number(search.get('lon'));
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
+    const input = route.request().postDataJSON();
+    const latitude = Number(input.latitude);
+    const longitude = Number(input.longitude);
     coordinateQueries.push({ latitude, longitude });
     await route.fulfill({ json: dashboard(latitude, longitude) });
   });
@@ -142,8 +142,7 @@ test('loads bounded AQI point samples and confirms arbitrary map coordinates bef
   await expect(aqiPanel).toContainText('not station readings');
   await expect(aqiPanel.getByRole('link', { name: 'CC BY 4.0' })).toBeVisible();
   expect(requestedAqi).toHaveLength(1);
-  expect(new URL(requestedAqi[0]!).searchParams.get('lat')).toBe('52.52');
-  expect(new URL(requestedAqi[0]!).searchParams.get('lon')).toBe('13.405');
+  expect(requestedAqi[0]).toMatchObject({ latitude: 52.52, longitude: 13.405 });
   expect(await aqiPanel.getByText(/U\.S\. AQI 0/).count()).toBe(0);
   if (!process.env.CI) {
     await page.locator('#map').screenshot({ path: testInfo.outputPath('map-aqi-mobile.png') });
