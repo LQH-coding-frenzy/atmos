@@ -80,9 +80,10 @@ One Vercel WAF Rate Limiting custom rule is configured on the `atmos` project:
    metrics after propagation. Do not use a high-volume probe to manufacture samples.
 4. **Path and behavior test:** the published rule matches `/` OR `/api/public/v1/weather/` and excludes
    compatibility Worker-to-Next routes. The saved configuration is verified as a 600-second fixed
-   window, 60 requests, IP key, and 429 action. The actual 429 threshold behavior has not been
-   load-tested. Verify route behavior with a bounded provider-safe smoke; do not generate extra
-   provider traffic to test the limiter.
+   window, 60 requests, IP key, and 429 action. The protected Vercel production workflow now performs
+   one contract/cache smoke request for each public API before promotion, with no retries and a maximum
+   total 12 weighted provider units including the homepage smoke. The actual 429 threshold behavior has
+   not been load-tested; do not generate extra provider traffic to test the limiter.
 5. **Residual-risk acceptance:** WAF limits are per-region/per-IP and do not enforce a strict
    account-wide monthly provider quota. If a hard aggregate limit is required, this remains insufficient
    and the cutover must HOLD absent another approved solution.

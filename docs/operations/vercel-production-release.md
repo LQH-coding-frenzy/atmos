@@ -8,6 +8,11 @@ The manual `Vercel production release` workflow is the only Git-owned production
 - Use GitHub environment `Production`, restricted to protected branches.
 - Build once with pinned Vercel CLI `59.15.1` and deploy `.vercel/output` with `--prebuilt`.
 - Upload with `--prod --skip-domain`, then smoke the exact deployment URL before promotion.
+- After the homepage smoke, smoke the public dashboard and AQI timeline POST handlers on that same
+  exact deployment before promotion. The bounded script makes one attempt per route, writes response
+  bodies only to the ephemeral runner temp directory, logs only status/cache metadata, and stops on
+  first failure without retries. Maximum estimated Open-Meteo use is 12 weighted units including the
+  existing homepage smoke (5 dashboard + 5 dashboard + 2 AQI timeline); cache hits reduce this amount.
 - Verify HTTP 200, CSP, HSTS, frame denial, MIME sniffing prevention, referrer policy, and permissions policy.
 - Capture the current production deployment before upload.
 - If production-domain smoke fails after promotion, automatically roll back to the captured deployment.

@@ -89,6 +89,14 @@ jobs:
             --silent --show-error --dump-header "$RUNNER_TEMP/candidate-headers" \
             --output "$RUNNER_TEMP/candidate.html" --write-out '%{http_code}')"
           node scripts/verify-frontend-response.mjs "$status" "$RUNNER_TEMP/candidate-headers" "$RUNNER_TEMP/candidate.html"
+      - name: Smoke public dashboard and AQI handlers
+        env:
+          DEPLOYMENT_URL: ${{ steps.candidate.outputs.url }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
+          VERCEL_SCOPE: ${{ vars.VERCEL_SCOPE }}
+        # One dashboard and one timeline-AQI attempt; the script stops on first failure and never retries.
+        run: node scripts/verify-public-weather-smoke.mjs
       - name: Promote exact deployment
         if: ${{ inputs.promote }}
         id: promote

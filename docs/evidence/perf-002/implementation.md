@@ -664,6 +664,11 @@ Limit Requests` as 1,000,000 allowed requests/month included; the authenticated 
 - The active WAF guard is the only production mutation so far. The application deployment and
   first-party route switch are still pending; no weather-provider request has been made during this
   WAF configuration.
+- The protected Vercel production workflow now smokes both public POST handlers on the exact candidate
+  before promotion. Its verifier makes one dashboard and one timeline-AQI attempt, stops on first
+  failure, logs no coordinates/provider payloads, and caps total smoke use with the existing homepage
+  check at 12 weighted provider units. Three local verifier tests pass; the workflow has not run and no
+  provider smoke request has been sent from this session.
 - The implementation/approval plan is recorded at
   `docs/operations/perf-002-public-weather-abuse-control.md`. It prefers a single edge rule for the
   homepage and public POST paths, and explicitly records the regional-counter and global-provider-budget

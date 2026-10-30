@@ -34,6 +34,7 @@ task:
 
   scope:
     include:
+      - .github/workflows/vercel-production.yml
       - packages/contracts/package.json
       - packages/provider-openmeteo/src/index.ts
       - packages/provider-openmeteo/src/full-weather.test.ts
@@ -59,6 +60,8 @@ task:
       - apps/web/lib/public-weather-cache.ts
       - apps/web/lib/public-weather-cache.test.ts
       - apps/web/lib/public-weather-runtime.ts
+      - scripts/verify-public-weather-smoke.mjs
+      - scripts/verify-public-weather-smoke.test.mjs
       - apps/web/app/page.tsx
       - apps/web/components/activity-planner.tsx
       - apps/web/components/air-quality-panel.tsx
@@ -80,6 +83,7 @@ task:
       - docs/adr/0005-public-weather-runtime-placement.md
       - docs/operations/cv-showcase-maintenance.md
       - docs/cost/quota-budget.md
+      - docs/operations/vercel-production-release.md
       - docs/operations/dependency-synthetics.md
       - docs/design/feature-completion-roadmap.md
       - docs/evidence/perf-002/implementation.md
@@ -88,7 +92,7 @@ task:
     exclude:
       - Database schema, migrations, grants, policies, or user-data changes.
       - Raising the 7 ms budget, upgrading Workers plans, or adding paid resources.
-      - Production promotion, rollback, or traffic shifting as part of local implementation.
+      - Production promotion, rollback, or traffic shifting without separate explicit owner approval.
       - Creating/configuring secrets (the transform token remains a separate owner gate), queues, cron, or background work.
       - Unbounded load tests or additional providers.
 
@@ -101,6 +105,7 @@ task:
 
   outputs:
     files:
+      - .github/workflows/vercel-production.yml
       - packages/contracts/package.json
       - packages/provider-openmeteo/src/index.ts
       - packages/provider-openmeteo/src/full-weather.test.ts
@@ -126,6 +131,8 @@ task:
       - apps/web/lib/public-weather-cache.ts
       - apps/web/lib/public-weather-cache.test.ts
       - apps/web/lib/public-weather-runtime.ts
+      - scripts/verify-public-weather-smoke.mjs
+      - scripts/verify-public-weather-smoke.test.mjs
       - apps/web/app/page.tsx
       - apps/web/components/activity-planner.tsx
       - apps/web/components/air-quality-panel.tsx
@@ -143,6 +150,7 @@ task:
       - docs/operations/perf-002-public-weather-abuse-control.md
       - docs/operations/dependency-synthetics.md
       - docs/cost/quota-budget.md
+      - docs/operations/vercel-production-release.md
       - pnpm-lock.yaml
     terraform_resources: []
     database_changes: [none]
@@ -162,6 +170,8 @@ task:
       - corepack pnpm exec vitest run apps/web/lib/weather-route-handlers.test.ts
       - corepack pnpm exec vitest run apps/web/lib/public-weather-cache.test.ts
       - corepack pnpm exec vitest run apps/web/lib/version-affinity.test.ts
+      - node --test scripts/verify-public-weather-smoke.test.mjs
+      - corepack pnpm exec eslint scripts/verify-public-weather-smoke.mjs scripts/verify-public-weather-smoke.test.mjs --max-warnings=0
       - corepack pnpm typecheck
       - corepack pnpm exec eslint packages/provider-openmeteo workers/gateway/src apps/web/app/api/v1/weather apps/web/app/api/public/v1/weather apps/web/lib/weather-route-handlers.ts apps/web/lib/weather-runtime.ts apps/web/lib/public-weather-api.ts apps/web/lib/public-weather-cache.ts apps/web/lib/public-weather-runtime.ts apps/web/lib/version-affinity.ts apps/web/components/weather-calendar-panel.tsx apps/web/components/air-quality-timeline.tsx --max-warnings=0
       - corepack pnpm --filter @atmos/gateway build
@@ -171,6 +181,7 @@ task:
       - Existing 7-day and 16-day response contracts, nullable/unavailable data, timezone/DST behavior, and stale metadata remain compatible.
       - First-party public dashboard/AQI processing runs on Vercel; browser API calls use bounded same-origin POST JSON with coordinates absent from API URLs/logs. The dynamic homepage share-link query path is also included in abuse and provider-budget controls.
       - Vercel Runtime Cache stores the normalized response with five-minute freshness and a one-hour stale-if-error window; cold miss, fresh hit, revalidation success, stale fallback, hard expiry, concurrent requests, cross-instance persistence, and cache failures are tested.
+      - The protected Vercel production release workflow smoke-tests the homepage and both public POST routes on the exact deployment before promotion; it performs one dashboard and one timeline-AQI attempt, stops at first failure, and has a maximum bounded provider use of 12 weighted units including homepage smoke.
       - Before release, project monthly Runtime Cache reads/writes and Open-Meteo weighted calls against expected traffic and verify they remain below the internal 70% warnings; do not enable paid/overage resources or upgrade plans.
       - Authenticated APIs remain on the Worker; first-party weather/AQI requests no longer invoke Worker weather handlers. Worker endpoints remain compatible during the rollback window.
       - Cloudflare Analytics GraphQL is filtered to exact Worker versions and bounded UTC windows; all remaining Worker routes have sufficient samples, 0 errors, and p95 CPU <= 7 ms. No samples or an empty weather route are not a CPU pass.
