@@ -10,17 +10,9 @@ import {
   type AirQualityMetric,
   type AirQualityPeriod,
 } from '../lib/air-quality-timeline';
-import { versionAffinityHeaders } from '../lib/version-affinity';
+import { fetchPublicAirQuality } from '../lib/public-weather-api';
 
-export function AirQualityTimeline({
-  gatewayOrigin,
-  location,
-  active,
-}: {
-  gatewayOrigin: string;
-  location: Location;
-  active: boolean;
-}) {
+export function AirQualityTimeline({ location, active }: { location: Location; active: boolean }) {
   const [data, setData] = useState<AirQuality | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'failed' | 'unsupported'>('loading');
   const [attempt, setAttempt] = useState(0);
@@ -37,17 +29,10 @@ export function AirQualityTimeline({
     const controller = new AbortController();
     setStatus('loading');
     setData(null);
-    const url = new URL('/api/v1/weather/air-quality', gatewayOrigin);
-    url.search = new URLSearchParams({
-      lat: String(location.latitude),
-      lon: String(location.longitude),
-      view: 'timeline',
-    }).toString();
-    void fetch(url, {
-      cache: 'no-store',
-      headers: versionAffinityHeaders(),
-      signal: controller.signal,
-    })
+    void fetchPublicAirQuality(
+      { latitude: location.latitude, longitude: location.longitude, includeTimeline: true },
+      { signal: controller.signal },
+    )
       .then(async (response) => {
         const parsed = airQualitySchema.safeParse(await response.json().catch(() => undefined));
         if (!response.ok || !parsed.success) throw new Error('AQI timeline unavailable');
@@ -59,7 +44,7 @@ export function AirQualityTimeline({
         if (!controller.signal.aborted) setStatus('failed');
       });
     return () => controller.abort();
-  }, [active, gatewayOrigin, location.latitude, location.longitude, attempt]);
+  }, [active, location.latitude, location.longitude, attempt]);
   const hours = data ? selectAirQualityHours(data, period, range) : [];
   const selected = airQualityMetrics.find((item) => item.value === metric)!;
   const plot = createAirQualityPlot(hours, metric);

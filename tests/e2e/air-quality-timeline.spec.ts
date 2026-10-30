@@ -45,8 +45,12 @@ test('loads AQI timelines only on request and switches period, range and metric 
 }) => {
   let currentCalls = 0,
     timelineCalls = 0;
-  await page.route('**/api/v1/weather/air-quality?**', async (route) => {
-    const timeline = new URL(route.request().url()).searchParams.get('view') === 'timeline';
+  await page.route('**/api/public/v1/weather/air-quality', async (route) => {
+    const request = route.request();
+    const headers = request.headers();
+    expect(headers['content-type']).toBe('application/json');
+    expect(headers.origin).toBe(new URL(request.url()).origin);
+    const timeline = request.postDataJSON().includeTimeline === true;
     if (timeline) timelineCalls++;
     else currentCalls++;
     await route.fulfill({ json: fixture(timeline) });
@@ -92,8 +96,8 @@ test('preserves current AQI after a timeline failure and retries with a visibly 
   page,
 }) => {
   let calls = 0;
-  await page.route('**/api/v1/weather/air-quality?**', async (route) => {
-    if (new URL(route.request().url()).searchParams.get('view') !== 'timeline')
+  await page.route('**/api/public/v1/weather/air-quality', async (route) => {
+    if (route.request().postDataJSON().includeTimeline !== true)
       return route.fulfill({ json: fixture(false) });
     calls++;
     if (calls === 1)
@@ -116,7 +120,7 @@ test('preserves current AQI after a timeline failure and retries with a visibly 
 });
 
 test('handles current-only legacy servers without inventing a forecast', async ({ page }) => {
-  await page.route('**/api/v1/weather/air-quality?**', async (route) =>
+  await page.route('**/api/public/v1/weather/air-quality', async (route) =>
     route.fulfill({ json: fixture(false) }),
   );
   await page.goto('/');
@@ -131,7 +135,7 @@ test('handles current-only legacy servers without inventing a forecast', async (
 test('represents an entirely missing model range as unavailable rather than a zero-valued chart', async ({
   page,
 }) => {
-  await page.route('**/api/v1/weather/air-quality?**', async (route) =>
+  await page.route('**/api/public/v1/weather/air-quality', async (route) =>
     route.fulfill({ json: fixture(true, false, true) }),
   );
   await page.goto('/');
@@ -149,8 +153,8 @@ test('cancels hidden timeline work and prevents a late response from replacing a
 }) => {
   let calls = 0;
   let releaseFirst: (() => Promise<void>) | undefined;
-  await page.route('**/api/v1/weather/air-quality?**', async (route) => {
-    if (new URL(route.request().url()).searchParams.get('view') !== 'timeline')
+  await page.route('**/api/public/v1/weather/air-quality', async (route) => {
+    if (route.request().postDataJSON().includeTimeline !== true)
       return route.fulfill({ json: fixture(false) });
     calls++;
     if (calls === 1) {

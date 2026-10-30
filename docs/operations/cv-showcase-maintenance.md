@@ -23,6 +23,25 @@ weather journey backed by credible DevSecOps evidence, not continuous production
 Provider-side retirement completed under the owner-approved CVRET-001 plan. See
 `docs/evidence/cvret-001/2026-09-22.md` for the sanitized release and provider evidence.
 
+## Accepted PERF-002 Target (Not Yet Deployed)
+
+The owner accepted moving first-party public dashboard/AQI requests to same-origin Vercel Next.js
+Route Handlers so provider normalization and normalized-response caching do not execute in Workers
+Free. The Worker remains active for authenticated API proxying, health/version, CORS/security,
+correlation, and other lightweight edge responsibilities. The production browser path has not yet
+been switched; stable Worker `d81923250215` remains at 100%, and candidate `5105fa59910b` remains at
+0% after a bounded provider failure. Do not claim PERF-002 complete until the Next.js cache/stale
+contract is verified and remaining Worker CPU p95 is measured at or below 7 ms.
+Local handlers now enforce and test same-origin/JSON request checks. The production cutover remains
+blocked until a shared abuse control is approved and tested, and account-level Runtime Cache plus
+weighted Open-Meteo usage is projected below the 70% warning thresholds. The control must also cover
+the dynamic homepage's coordinate share-link query path, which can initiate provider work without
+passing through the POST handler. A Vercel WAF rule is now active: 60 requests/10 minutes per source
+IP on `/` and `/api/public/v1/weather/`, 429 on excess. Hobby includes 1,000,000 allowed requests/month
+with a 700K HOLD threshold. Team Usage shows 9.7K CDN requests/1M in the last 30 days but no
+WAF-specific meter; the limit is per-region, not a global provider quota. See
+`docs/cost/quota-budget.md`, `docs/operations/perf-002-public-weather-abuse-control.md`, and ADR 0005.
+
 ## Maintenance Routine
 
 ### Monthly

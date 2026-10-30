@@ -2,7 +2,7 @@ task:
   id: PERF-002
   title: Remediate expanded weather/AQI Worker CPU p95 over budget
   status: IN_PROGRESS
-  objective: Identify and reduce Worker CPU for expanded weather and AQI request paths so an exact-version candidate meets the 7 ms p95 gate without changing response semantics, paid tier, or CPU threshold.
+  objective: Move first-party expanded weather/AQI processing and response caching to the existing Vercel runtime, preserve public contracts and cache/stale semantics, and keep the Worker as the gateway for authenticated and lightweight edge APIs without weakening its 7 ms p95 gate.
 
   depends_on:
     [
@@ -19,14 +19,18 @@ task:
   external_policy_checks:
     - Current post-release telemetry reports CPU p95 above the 7 ms internal gate; do not claim the gate passes until an exact candidate is measured.
     - Keep the Workers Free plan and existing Open-Meteo non-commercial/weighted-call budget; do not raise CPU limits or add paid services.
-    - Any candidate upload, bounded provider workload, production route/traffic change, or rollback requires separate explicit owner approval.
-    - The Worker-to-Next.js service credential must be owner-approved and configured separately; do not create or rotate it in this local remediation.
+    - Vercel Runtime Cache must remain within the existing Hobby included allowance (1,000,000 reads and 200,000 writes per month); stop before any overage or plan upgrade.
+    - Before public cutover, enforce and test the same-origin POST policy and an owner-approved, free-tier-compatible abuse/provider-budget control covering both anonymous POST handlers and the dynamic homepage share-link query path; the current per-instance in-flight map and provider quota guard are not global limits.
+    - Project shared team-level Vercel Runtime Cache and Open-Meteo usage below the 70% warning thresholds before release; no production capacity claim is valid without a measured request-volume baseline.
+    - Vercel CLI pricing confirms Hobby includes 1,000,000 WAF allowed requests/month. The approved rule is active at 60 requests per 10 minutes/IP for `/` OR `/api/public/v1/weather/`; Team Usage showed 9.7K CDN requests/1M over 30 days but no WAF-specific meter. HOLD at 700,000/month and stop before any charge/plan change. Per-region counters are not a global provider quota.
+    - Any candidate upload, bounded provider workload, production route/traffic change, WAF rule configuration/publish, or rollback requires separate explicit owner approval.
+    - The Worker-to-Next.js service credential remains necessary only for the retained compatibility transform routes; do not create or rotate it in this local remediation. New public routes do not use it.
     - Use only sanitized analytics; do not log raw URLs, query strings, coordinates, provider payloads, user IDs, emails, JWTs, or credentials.
 
   runtime_placement:
     allowed: [cloudflare-worker, vercel-nextjs]
     selected: vercel-nextjs
-    reason: Keep the Worker as a thin validated/cached gateway and move expanded weather/AQI-timeline normalization and cache-variant serialization to the existing Next.js server runtime rather than raising the threshold; keep only lightweight cache operations at the edge.
+    reason: Exact-version CPU remained above 7 ms after moving provider normalization and cache-variant serialization. Move first-party public weather/AQI handling and normalized-response caching to the existing Next.js runtime; retain the Worker for authenticated APIs and lightweight edge controls.
 
   scope:
     include:
@@ -45,16 +49,38 @@ task:
       - apps/web/app/api/v1/weather/dashboard/route.ts
       - apps/web/app/api/v1/weather/air-quality/route.ts
       - apps/web/app/api/v1/weather/transform-health/route.ts
+      - apps/web/app/api/public/v1/weather/dashboard/route.ts
+      - apps/web/app/api/public/v1/weather/air-quality/route.ts
+      - apps/web/package.json
       - apps/web/lib/weather-route-handlers.ts
       - apps/web/lib/weather-route-handlers.test.ts
       - apps/web/lib/weather-runtime.ts
+      - apps/web/lib/public-weather-api.ts
+      - apps/web/lib/public-weather-cache.ts
+      - apps/web/lib/public-weather-cache.test.ts
+      - apps/web/lib/public-weather-runtime.ts
+      - apps/web/app/page.tsx
+      - apps/web/components/activity-planner.tsx
+      - apps/web/components/air-quality-panel.tsx
+      - apps/web/components/air-quality-timeline.tsx
+      - apps/web/components/dashboard.tsx
+      - apps/web/components/dashboard-map.tsx
+      - apps/web/components/in-app-alerts-panel.tsx
+      - apps/web/components/weather-calendar-panel.tsx
+      - apps/web/components/weather-comparison-panel.tsx
       - tests/e2e/weather-calendar.spec.ts
       - tests/e2e/air-quality-timeline.spec.ts
       - .agent/status.yaml
       - .agent/tasks/perf-002.yaml
       - pnpm-lock.yaml
       - docs/operations/production-worker-canary.md
+      - docs/operations/perf-002-public-weather-abuse-control.md
       - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/architecture/INDEX.md
+      - docs/adr/0005-public-weather-runtime-placement.md
+      - docs/operations/cv-showcase-maintenance.md
+      - docs/cost/quota-budget.md
+      - docs/operations/dependency-synthetics.md
       - docs/design/feature-completion-roadmap.md
       - docs/evidence/perf-002/implementation.md
       - .agent/status.yaml
@@ -71,7 +97,7 @@ task:
       - Existing provider contracts and cache behavior.
       - Existing Cloudflare Analytics GraphQL access for exact-version CPU verification after separate approval.
     required_secrets:
-      - Shared weather-transform service token (Cloudflare Worker `WEATHER_TRANSFORM_TOKEN`; Vercel `ATMOS_WEATHER_TRANSFORM_TOKEN`)
+      - Existing shared weather-transform service token is required only if the retained Worker-to-Next.js compatibility routes are exercised; it is not required by the new public routes. Do not create or rotate it here.
 
   outputs:
     files:
@@ -90,14 +116,39 @@ task:
       - apps/web/app/api/v1/weather/dashboard/route.ts
       - apps/web/app/api/v1/weather/air-quality/route.ts
       - apps/web/app/api/v1/weather/transform-health/route.ts
+      - apps/web/app/api/public/v1/weather/dashboard/route.ts
+      - apps/web/app/api/public/v1/weather/air-quality/route.ts
+      - apps/web/package.json
       - apps/web/lib/weather-route-handlers.ts
       - apps/web/lib/weather-route-handlers.test.ts
       - apps/web/lib/weather-runtime.ts
+      - apps/web/lib/public-weather-api.ts
+      - apps/web/lib/public-weather-cache.ts
+      - apps/web/lib/public-weather-cache.test.ts
+      - apps/web/lib/public-weather-runtime.ts
+      - apps/web/app/page.tsx
+      - apps/web/components/activity-planner.tsx
+      - apps/web/components/air-quality-panel.tsx
+      - apps/web/components/air-quality-timeline.tsx
+      - apps/web/components/dashboard.tsx
+      - apps/web/components/dashboard-map.tsx
+      - apps/web/components/in-app-alerts-panel.tsx
+      - apps/web/components/weather-calendar-panel.tsx
+      - apps/web/components/weather-comparison-panel.tsx
+      - docs/adr/0005-public-weather-runtime-placement.md
+      - docs/architecture/INDEX.md
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/operations/cv-showcase-maintenance.md
+      - docs/operations/production-worker-canary.md
+      - docs/operations/perf-002-public-weather-abuse-control.md
+      - docs/operations/dependency-synthetics.md
+      - docs/cost/quota-budget.md
       - pnpm-lock.yaml
     terraform_resources: []
     database_changes: [none]
     deployed_units:
-      - Stable Cloudflare Worker 2503a1f0-985f-4026-a368-bd9bb5504d23 / release d81923250215 at 100%; candidate 3bf55c39-8865-4fe6-ac41-cafba8c11143 / release b57d8bf399bf at 0% in deployment c72a0e37-bbe3-41f3-8df2-b61b5dc801c7
+      - Stable Cloudflare Worker 2503a1f0-985f-4026-a368-bd9bb5504d23 / release d81923250215 at 100%; candidate a998dabc-c89b-48bc-a336-ae9358e3bce6 / release 5105fa59910b at 0% in deployment ccafc4af-8010-4aec-ac7f-4493264a6049
+      - 'Vercel Hobby WAF rule `PERF-002 public weather abuse guard` active: `/` OR `/api/public/v1/weather/`, 60 requests/10 minutes/IP, 429 on excess, published 2026-10-30 after owner approval.'
 
   compatibility:
     requires_expand_contract: false
@@ -109,28 +160,39 @@ task:
       - corepack pnpm exec vitest run packages/provider-openmeteo packages/contracts workers/gateway/src/index.test.ts workers/gateway/src/air-quality-timeline.test.ts workers/gateway/src/request-analytics.test.ts
       - corepack pnpm exec vitest run packages/provider-openmeteo/src/full-weather.test.ts packages/provider-openmeteo/src/air-quality-timeline.test.ts
       - corepack pnpm exec vitest run apps/web/lib/weather-route-handlers.test.ts
+      - corepack pnpm exec vitest run apps/web/lib/public-weather-cache.test.ts
       - corepack pnpm exec vitest run apps/web/lib/version-affinity.test.ts
       - corepack pnpm typecheck
-      - corepack pnpm exec eslint packages/provider-openmeteo workers/gateway/src apps/web/app/api/v1/weather apps/web/lib/weather-route-handlers.ts apps/web/lib/weather-runtime.ts apps/web/lib/version-affinity.ts apps/web/components/weather-calendar-panel.tsx apps/web/components/air-quality-timeline.tsx --max-warnings=0
+      - corepack pnpm exec eslint packages/provider-openmeteo workers/gateway/src apps/web/app/api/v1/weather apps/web/app/api/public/v1/weather apps/web/lib/weather-route-handlers.ts apps/web/lib/weather-runtime.ts apps/web/lib/public-weather-api.ts apps/web/lib/public-weather-cache.ts apps/web/lib/public-weather-runtime.ts apps/web/lib/version-affinity.ts apps/web/components/weather-calendar-panel.tsx apps/web/components/air-quality-timeline.tsx --max-warnings=0
       - corepack pnpm --filter @atmos/gateway build
       - corepack pnpm --filter @atmos/web build
       - corepack pnpm exec playwright test tests/e2e/weather-calendar.spec.ts tests/e2e/air-quality-timeline.spec.ts --workers=1
     expected:
-      - Existing 7-day and 16-day response contracts, nullable/unavailable data, timezone/DST behavior, and old cached responses remain compatible.
-      - Cache-hit and cache-miss CPU costs are measured separately; do not infer route CPU from wall duration or sampled Worker Tail.
-      - Cloudflare Analytics GraphQL is filtered to the exact candidate Worker version and bounded UTC window; candidate p95 is at or below 7 ms with a sufficient bounded sample and no Worker errors before ordinary traffic exposure.
-      - Insufficient samples or p95 above 7 ms means HOLD; if optimization is insufficient, use the approved Next.js placement rather than weakening the gate.
+      - Existing 7-day and 16-day response contracts, nullable/unavailable data, timezone/DST behavior, and stale metadata remain compatible.
+      - First-party public dashboard/AQI processing runs on Vercel; browser API calls use bounded same-origin POST JSON with coordinates absent from API URLs/logs. The dynamic homepage share-link query path is also included in abuse and provider-budget controls.
+      - Vercel Runtime Cache stores the normalized response with five-minute freshness and a one-hour stale-if-error window; cold miss, fresh hit, revalidation success, stale fallback, hard expiry, concurrent requests, cross-instance persistence, and cache failures are tested.
+      - Before release, project monthly Runtime Cache reads/writes and Open-Meteo weighted calls against expected traffic and verify they remain below the internal 70% warnings; do not enable paid/overage resources or upgrade plans.
+      - Authenticated APIs remain on the Worker; first-party weather/AQI requests no longer invoke Worker weather handlers. Worker endpoints remain compatible during the rollback window.
+      - Cloudflare Analytics GraphQL is filtered to exact Worker versions and bounded UTC windows; all remaining Worker routes have sufficient samples, 0 errors, and p95 CPU <= 7 ms. No samples or an empty weather route are not a CPU pass.
+      - Insufficient samples or p95 above 7 ms means HOLD; never weaken the CPU threshold.
       - No user data, provider payload, token, or credential is logged or returned in evidence.
 
   security_checks:
     - Preserve public input validation, cache isolation, CORS, and sanitized error behavior.
     - Authenticate Worker-to-Next.js requests with the shared service token; never forward browser credentials.
+    - Keep new public weather routes anonymous and read-only; apply strict request bounds and keep provider access server-only.
+    - Enforce the intended same-origin request policy; reject cross-origin simple content types before provider work. CORS alone is not a request-abuse control.
+    - Apply abuse/provider-budget controls to every anonymous provider entry point, including the dynamic homepage's share-link query parameters.
     - Bound server-route JSON bodies; do not forward coordinates in query strings or log request bodies/provider payloads.
     - No PII or provider payload logging.
     - Existing protected scans and contract tests pass.
 
   budget_checks:
     worker_cpu_budget_ms: 7
+    vercel_runtime_cache_reads_month: 1000000
+    vercel_runtime_cache_writes_month: 200000
+    vercel_waf_rate_limit_requests_month: 1000000
+    included_budget_warning_ratio: 0.7
     creates_paid_resource: false
     requires_student_credit: false
 
@@ -144,8 +206,8 @@ task:
     - docs/evidence/perf-002/implementation.md
 
   rollback:
-    strategy: Revert the CPU optimization or placement change; retain prior immutable Worker and Supabase function versions; no database rollback is needed.
+    strategy: Revert the frontend weather/AQI calls to the retained Worker path and restore the previous Vercel deployment if needed; retain the stable Worker/function versions; no database rollback is needed.
 
   human_approval:
     required: true
-    reason: Creating or configuring the shared service token, any candidate upload or generated provider workload, production promotion, traffic shift, or rollback requires a separate explicit owner decision.
+    reason: Creating or configuring the shared service token, any candidate upload or generated provider workload, WAF rule configuration/publish, production promotion, traffic shift, or rollback requires a separate explicit owner decision.

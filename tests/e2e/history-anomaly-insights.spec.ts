@@ -55,7 +55,7 @@ test('requires baseline coverage and labels deterministic anomalies from recorde
   await page.route('**/api/v1/locations', async (route) => {
     await route.fulfill({ json: { locations: [], preferencesInitialized: true } });
   });
-  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
     await route.fulfill({
       json: {
         location: {

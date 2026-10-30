@@ -86,11 +86,15 @@ Ordinary `/version` requests must continue returning the stable. Target the cand
 Cloudflare-Workers-Version-Overrides: atmos-gateway="<candidate-version-id>"
 ```
 
-Require candidate `/health`, `/version`, weather, and unauthenticated protected-route smoke to pass. The override applies only while the candidate is part of the current deployment.
+Require candidate `/health`, `/version`, and unauthenticated protected-route smoke to pass. Smoke only
+the public routes included in the approved task; do not generate provider traffic outside its bounded
+budget. The override applies only while the candidate is part of the current deployment.
 
-For PERF-002 candidates, also require override-only `GET /health/transform` to pass before weather
-traffic. This probe verifies the authenticated Worker-to-Next.js path without calling Open-Meteo; it
-fails closed when the tagged Worker has no valid transform origin or service token.
+For legacy PERF-002 Worker candidates that still use the internal Worker-to-Next.js transform, also
+require override-only `GET /health/transform` to pass before any provider request. This probe does not
+call Open-Meteo and fails closed when the tagged Worker has no valid transform origin or service
+token. After the accepted Vercel placement is implemented, smoke the public weather/AQI Route
+Handlers on their exact Next.js deployment; do not use a Worker weather request as that smoke.
 
 ## Rollback
 

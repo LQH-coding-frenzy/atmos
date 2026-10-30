@@ -61,6 +61,7 @@ import {
   reserveAutomaticCityPreviewSlot,
   type MapCity,
 } from '../lib/map-city';
+import { fetchPublicAirQuality, fetchPublicDashboard } from '../lib/public-weather-api';
 import { versionAffinityHeaders } from '../lib/version-affinity';
 import {
   formatRadarTimestamp,
@@ -476,18 +477,15 @@ export function DashboardMap({
 
             void (async () => {
               try {
-                const url = new URL('/api/v1/weather/dashboard', propsRef.current.gatewayOrigin);
-                url.search = new URLSearchParams({
-                  lat: String(city.latitude),
-                  lon: String(city.longitude),
-                  timezone: 'auto',
-                  units: 'metric',
-                }).toString();
-                const response = await fetch(url, {
-                  cache: 'no-store',
-                  headers: versionAffinityHeaders(),
-                  signal: controller.signal,
-                });
+                const response = await fetchPublicDashboard(
+                  {
+                    latitude: city.latitude,
+                    longitude: city.longitude,
+                    timezone: 'auto',
+                    units: 'metric',
+                  },
+                  { signal: controller.signal },
+                );
                 const parsed = dashboardSchema.safeParse(await response.json());
                 if (!response.ok || !parsed.success) throw new Error('City weather unavailable');
                 if (disposed || generation !== previewGeneration.current) return;
@@ -882,16 +880,10 @@ export function DashboardMap({
       if (controller.signal.aborted) return;
       startedRequests += 1;
       try {
-        const url = new URL('/api/v1/weather/air-quality', gatewayOrigin);
-        url.search = new URLSearchParams({
-          lat: String(candidate.latitude),
-          lon: String(candidate.longitude),
-        }).toString();
-        const response = await fetch(url, {
-          cache: 'no-store',
-          headers: versionAffinityHeaders(),
-          signal: controller.signal,
-        });
+        const response = await fetchPublicAirQuality(
+          { latitude: candidate.latitude, longitude: candidate.longitude },
+          { signal: controller.signal },
+        );
         const parsed = airQualitySchema.safeParse(await response.json().catch(() => undefined));
         if (!response.ok || !parsed.success) throw new Error('AQI sample unavailable');
         storePoint(candidate, {
@@ -1077,20 +1069,17 @@ export function DashboardMap({
       return;
     }
     setPreview({ city, status: 'loading' });
-    const url = new URL('/api/v1/weather/dashboard', gatewayOrigin);
-    url.search = new URLSearchParams({
-      lat: String(city.latitude),
-      lon: String(city.longitude),
-      timezone: 'auto',
-      units: 'metric',
-    }).toString();
     const controller = new AbortController();
     previewController.current = controller;
-    void fetch(url, {
-      cache: 'no-store',
-      headers: versionAffinityHeaders(),
-      signal: controller.signal,
-    })
+    void fetchPublicDashboard(
+      {
+        latitude: city.latitude,
+        longitude: city.longitude,
+        timezone: 'auto',
+        units: 'metric',
+      },
+      { signal: controller.signal },
+    )
       .then(async (response) => {
         const parsed = dashboardSchema.safeParse(await response.json());
         if (!response.ok || !parsed.success) throw new Error('City weather unavailable');

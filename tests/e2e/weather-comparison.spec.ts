@@ -156,8 +156,8 @@ function comparisonDashboard(
 test('compares a bounded set of cities with expanded metrics and opt-in AQI suitability', async ({
   page,
 }, testInfo) => {
-  const weatherRequests: string[] = [];
-  const aqiRequests: string[] = [];
+  const weatherRequests: Array<Record<string, unknown>> = [];
+  const aqiRequests: Array<Record<string, unknown>> = [];
   let activeAqiRequests = 0;
   let maximumActiveAqiRequests = 0;
 
@@ -167,11 +167,11 @@ test('compares a bounded set of cities with expanded metrics and opt-in AQI suit
       json: { results: cities.filter((city) => city.name.toLowerCase().includes(query)) },
     });
   });
-  await page.route('**/api/v1/weather/dashboard?**', async (route) => {
-    weatherRequests.push(route.request().url());
-    const params = new URL(route.request().url()).searchParams;
-    const latitude = Number(params.get('lat'));
-    const longitude = Number(params.get('lon'));
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
+    const input = route.request().postDataJSON();
+    weatherRequests.push(input);
+    const latitude = Number(input.latitude);
+    const longitude = Number(input.longitude);
     const place = cities.find(
       (city) => city.latitude === latitude && city.longitude === longitude,
     ) ?? {
@@ -187,15 +187,15 @@ test('compares a bounded set of cities with expanded metrics and opt-in AQI suit
       json: comparisonDashboard(place, cityWeather[key] ?? cityWeather.berlin!),
     });
   });
-  await page.route('**/api/v1/weather/air-quality?**', async (route) => {
-    aqiRequests.push(route.request().url());
+  await page.route('**/api/public/v1/weather/air-quality', async (route) => {
+    const input = route.request().postDataJSON();
+    aqiRequests.push(input);
     activeAqiRequests += 1;
     maximumActiveAqiRequests = Math.max(maximumActiveAqiRequests, activeAqiRequests);
     await new Promise((resolve) => setTimeout(resolve, 25));
-    const params = new URL(route.request().url()).searchParams;
     const city = cities.find(
       (item) =>
-        item.latitude === Number(params.get('lat')) && item.longitude === Number(params.get('lon')),
+        item.latitude === Number(input.latitude) && item.longitude === Number(input.longitude),
     );
     const usAqi = city?.id === 'munich-de' ? 200 : city?.id === 'hamburg-de' ? 75 : 35;
     try {

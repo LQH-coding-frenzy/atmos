@@ -4,11 +4,14 @@ import {
   airQualitySchema,
   dashboardSchema,
   locationInputSchema,
+  type AirQualityInput,
   type AirQuality,
   type Dashboard,
   type AirQualityProvider,
+  type LocationInput,
   type WeatherProvider,
 } from '@atmos/contracts';
+import type { PublicWeatherCacheResult } from './public-weather-cache';
 
 const requestBodyLimitBytes = 2_048;
 const timezonePattern = /^[A-Za-z_+-]+(?:\/[A-Za-z_+-]+)*$/;
@@ -32,6 +35,11 @@ type WeatherRequestError = {
 type WeatherRouteProvider = Pick<WeatherProvider, 'getDashboard'> &
   Partial<Pick<AirQualityProvider, 'getAirQuality'>>;
 
+type PublicWeatherCache = {
+  getDashboard: (input: LocationInput) => Promise<PublicWeatherCacheResult<Dashboard>>;
+  getAirQuality: (input: AirQualityInput) => Promise<PublicWeatherCacheResult<AirQuality>>;
+};
+
 function routeRequestId(request: Request) {
   const candidate = request.headers.get('x-request-id');
   return candidate && requestIdPattern.test(candidate) ? candidate : crypto.randomUUID();
@@ -41,7 +49,7 @@ function errorResponse(
   requestId: string,
   code: string,
   message: string,
-  status: 400 | 401 | 413 | 503,
+  status: 400 | 401 | 403 | 413 | 415 | 503,
 ) {
   return Response.json(
     { error: { code, message, request_id: requestId } },
@@ -204,6 +212,40 @@ function bodyErrorResponse(requestId: string, error: unknown) {
   return errorResponse(requestId, 'INVALID_REQUEST', 'A valid weather request is required.', 400);
 }
 
+function publicRequestPolicyError(request: Request, requestId: string) {
+  const origin = request.headers.get('origin');
+  let isSameOrigin = false;
+  if (origin) {
+    try {
+      const parsedOrigin = new URL(origin);
+      isSameOrigin =
+        parsedOrigin.origin === origin && parsedOrigin.origin === new URL(request.url).origin;
+    } catch {
+      isSameOrigin = false;
+    }
+  }
+  if (!isSameOrigin) {
+    return errorResponse(
+      requestId,
+      'ORIGIN_NOT_ALLOWED',
+      'Requests must come from the same origin.',
+      403,
+    );
+  }
+
+  const mediaType = request.headers.get('content-type')?.split(';', 1)[0]?.trim().toLowerCase();
+  if (mediaType !== 'application/json') {
+    return errorResponse(
+      requestId,
+      'UNSUPPORTED_MEDIA_TYPE',
+      'A JSON weather request is required.',
+      415,
+    );
+  }
+
+  return undefined;
+}
+
 function logProviderFailure(
   requestId: string,
   resource: 'dashboard' | 'air_quality',
@@ -214,6 +256,23 @@ function logProviderFailure(
       event: `weather_${resource}_provider_failed`,
       request_id: requestId,
       error_type: error instanceof Error ? error.name : 'unknown',
+    }),
+  );
+}
+
+function logPublicWeatherFailure(
+  requestId: string,
+  resource: 'dashboard' | 'air_quality',
+  event: 'cache_read_failed' | 'cache_write_failed' | 'provider_failed',
+  errorType: string,
+  stale = false,
+) {
+  console.warn(
+    JSON.stringify({
+      event: `weather_${resource}_${event}`,
+      request_id: requestId,
+      ...(stale ? { cache_status: 'STALE' } : {}),
+      error_type: errorType,
     }),
   );
 }
@@ -356,4 +415,158 @@ export function createWeatherRouteHandlers(provider: WeatherRouteProvider, expec
   }
 
   return { dashboard, airQuality, transformHealth };
+}
+
+export function createPublicWeatherRouteHandlers(cache: PublicWeatherCache) {
+  async function dashboard(request: Request) {
+    const requestId = routeRequestId(request);
+    const policyError = publicRequestPolicyError(request, requestId);
+    if (policyError) return policyError;
+
+    let body: unknown;
+    try {
+      body = await readJsonBody(request);
+    } catch (error) {
+      return bodyErrorResponse(requestId, error);
+    }
+
+    const parsedInput = locationInputSchema.strict().safeParse(body);
+    if (
+      !parsedInput.success ||
+      parsedInput.data.timezone.length > 64 ||
+      !timezonePattern.test(parsedInput.data.timezone)
+    ) {
+      return errorResponse(
+        requestId,
+        'INVALID_LOCATION',
+        'Valid latitude, longitude, timezone, and units are required.',
+        400,
+      );
+    }
+
+    try {
+      const result = await cache.getDashboard(parsedInput.data);
+      if (result.cacheReadErrorType) {
+        logPublicWeatherFailure(
+          requestId,
+          'dashboard',
+          'cache_read_failed',
+          result.cacheReadErrorType,
+        );
+      }
+      if (result.cacheWriteErrorType) {
+        logPublicWeatherFailure(
+          requestId,
+          'dashboard',
+          'cache_write_failed',
+          result.cacheWriteErrorType,
+        );
+      }
+      if (result.providerErrorType) {
+        logPublicWeatherFailure(
+          requestId,
+          'dashboard',
+          'provider_failed',
+          result.providerErrorType,
+          result.stale,
+        );
+      }
+      return Response.json(
+        {
+          ...result.data,
+          meta: { ...result.data.meta, cached: result.cached, stale: result.stale },
+        },
+        {
+          headers: {
+            'cache-control': 'no-store',
+            'x-cache': result.stale ? 'STALE' : result.cached ? 'HIT' : 'MISS',
+            'x-request-id': requestId,
+          },
+        },
+      );
+    } catch (error) {
+      logProviderFailure(requestId, 'dashboard', error);
+      return errorResponse(
+        requestId,
+        'WEATHER_UNAVAILABLE',
+        'Weather is temporarily unavailable.',
+        503,
+      );
+    }
+  }
+
+  async function airQuality(request: Request) {
+    const requestId = routeRequestId(request);
+    const policyError = publicRequestPolicyError(request, requestId);
+    if (policyError) return policyError;
+
+    let body: unknown;
+    try {
+      body = await readJsonBody(request);
+    } catch (error) {
+      return bodyErrorResponse(requestId, error);
+    }
+
+    const parsedInput = airQualityInputSchema.strict().safeParse(body);
+    if (!parsedInput.success) {
+      return errorResponse(
+        requestId,
+        'INVALID_LOCATION',
+        'Valid latitude and longitude are required.',
+        400,
+      );
+    }
+
+    try {
+      const result = await cache.getAirQuality(parsedInput.data);
+      if (result.cacheReadErrorType) {
+        logPublicWeatherFailure(
+          requestId,
+          'air_quality',
+          'cache_read_failed',
+          result.cacheReadErrorType,
+        );
+      }
+      if (result.cacheWriteErrorType) {
+        logPublicWeatherFailure(
+          requestId,
+          'air_quality',
+          'cache_write_failed',
+          result.cacheWriteErrorType,
+        );
+      }
+      if (result.providerErrorType) {
+        logPublicWeatherFailure(
+          requestId,
+          'air_quality',
+          'provider_failed',
+          result.providerErrorType,
+          result.stale,
+        );
+      }
+      return Response.json(
+        {
+          ...result.data,
+          meta: { ...result.data.meta, cached: result.cached, stale: result.stale },
+        },
+        {
+          headers: {
+            'cache-control': 'no-store',
+            'x-cache': result.stale ? 'STALE' : result.cached ? 'HIT' : 'MISS',
+            'x-request-id': requestId,
+          },
+        },
+      );
+    } catch (error) {
+      logProviderFailure(requestId, 'air_quality', error);
+      return errorResponse(
+        requestId,
+        'AIR_QUALITY_UNAVAILABLE',
+        'Air quality is temporarily unavailable.',
+        503,
+      );
+    }
+  }
+
+  return { dashboard, airQuality };
 }
