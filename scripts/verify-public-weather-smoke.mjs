@@ -124,6 +124,10 @@ function runRouteSmoke(deploymentUrl, bypass, resource, input, tempDirectory) {
       '--protection-bypass',
       bypass,
       '--',
+      '--connect-timeout',
+      '10',
+      '--max-time',
+      '30',
       '--silent',
       '--show-error',
       '--request',
@@ -141,7 +145,7 @@ function runRouteSmoke(deploymentUrl, bypass, resource, input, tempDirectory) {
       '--write-out',
       '%{http_code}',
     ],
-    { encoding: 'utf8' },
+    { encoding: 'utf8', timeout: 120_000 },
   );
 
   if (response.error || response.status !== 0) {

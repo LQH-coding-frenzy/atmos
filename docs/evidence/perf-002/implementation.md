@@ -677,8 +677,9 @@ Limit Requests` as 1,000,000 allowed requests/month included; the authenticated 
   for a hard distributed limiter; cache eviction, regional behavior, and concurrent writers make a
   cache-backed counter unsuitable for strict quota enforcement.
 - The local cross-instance unit test uses a shared in-memory test store; it does not prove Vercel's
-  live regional cache persistence, eviction behavior, or account-level usage. A Vercel runtime smoke
-  and usage check still require separate owner approval.
+  live regional cache persistence or eviction behavior. The owner authorized the protected Vercel
+  production propagation; its new workflow smoke has not run yet. The Vercel CLI billing query did not
+  return usage data, so the 9.7K Team CDN figure is only a coarse baseline.
 - Local validation after hardening: 19 focused route/cache tests, typecheck, targeted ESLint, web
   production build, and all 43 E2E tests passed. Playwright emitted existing React development `eval`
   notices and OpenFreeMap font-range 404s; those did not fail the tests. No live weather-provider
