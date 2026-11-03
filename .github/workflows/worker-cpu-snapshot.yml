@@ -1,0 +1,48 @@
+name: Worker CPU snapshot
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_id:
+        description: Exact deployed Cloudflare Worker version UUID (query only; no traffic is generated)
+        required: true
+        type: string
+      lookback_minutes:
+        description: Bounded natural-traffic lookback window (1 to 1440 minutes)
+        required: true
+        default: '60'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker-cpu-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: Staging
+    steps:
+      - name: Require protected main
+        run: test "$GITHUB_REF" = "refs/heads/main"
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.14.1
+      - name: Query exact-version CPU metrics from natural traffic
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ANALYTICS_TOKEN: ${{ secrets.CLOUDFLARE_ANALYTICS_TOKEN }}
+          WORKER_VERSION_ID: ${{ inputs.version_id }}
+          LOOKBACK_MINUTES: ${{ inputs.lookback_minutes }}
+        run: >-
+          node scripts/worker-cpu-snapshot.mjs
+          --version-id "$WORKER_VERSION_ID"
+          --lookback-minutes "$LOOKBACK_MINUTES"
