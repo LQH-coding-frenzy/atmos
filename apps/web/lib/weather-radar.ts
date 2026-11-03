@@ -3,7 +3,9 @@ import type { OpenWeatherMapLayer } from '@atmos/contracts';
 const rainViewerTileHost = 'https://tilecache.rainviewer.com';
 
 export const rainViewerMaximumZoom = 7;
-export const rainViewerPlaybackIntervalMilliseconds = 15_000;
+export const rainViewerPlaybackIntervalMilliseconds = 2_000;
+export const rainViewerPlaybackMaxAdvances = 4;
+export const rainViewerPlaybackCooldownMilliseconds = 60_000;
 
 export function rainViewerTileTemplate(path: string) {
   if (!/^\/v2\/radar\/[A-Za-z0-9_-]{1,64}$/.test(path)) return undefined;

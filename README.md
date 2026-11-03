@@ -17,6 +17,8 @@ A live, location-aware weather dashboard and public DevSecOps case study.
 - Sign in to save locations, record current observations, and delete entries from a personal 7/30/90-day history.
 - Mark saved places as favorites, assign home/work/university/travel categories, reorder them, and sync a default place with your account.
 - Reopen one of eight recent selections stored locally, or enter coordinates directly.
+- Click or tap a city or map point to select it immediately; browser Back and Forward restore map selections.
+- Play a short, bounded sequence of recent RainViewer radar frames; playback pauses on map interactions and has a cooldown.
 - Use the dashboard on desktop or mobile without mock-data fallbacks.
 
 Berlin remains the reliable default. The public weather journey works without an account; users may
@@ -30,19 +32,25 @@ remain deferred; no earlier observations are backfilled.
 ```text
 Browser
   -> Next.js dashboard on Vercel
-  -> Cloudflare Worker + Hono gateway
-  -> Open-Meteo forecast, geocoding, and on-demand air-quality APIs
+      -> same-origin dashboard/AQI handlers and normalized-response cache
+          -> Open-Meteo forecast and on-demand air-quality APIs
+      -> Cloudflare Worker + Hono API gateway
+          -> location search, bounded map/radar APIs, health, and authenticated API proxy
+              -> versioned Supabase Edge Function -> Postgres/Auth/RLS
+      -> OpenFreeMap base-map and RainViewer past-radar tiles
 
-Protected backend boundary
-  -> Supabase Edge Functions, Postgres, Auth, and RLS
+Optional current-map layers
+  -> OpenWeather through the Cloudflare Worker
 
 One-time recovery evidence
   -> Encrypted Cloudflare R2 archive + Azure Container Instance restore drill
 ```
 
-The Worker validates bounded public inputs, canonicalizes cache keys, coalesces concurrent location
-searches per isolate, and returns typed sanitized errors. A protected release path uses a zero-percent
-Worker candidate, exact smoke checks, and a content-gated Vercel promotion.
+First-party public dashboard and AQI requests use same-origin Vercel handlers, which own provider
+normalization and normalized-response caching. The Worker remains responsible for bounded location
+search and map-related APIs, health/version, and the authenticated Supabase API proxy. Legacy expanded
+weather Worker routes remain as compatibility paths; they are not the first-party browser data path.
+Protected release workflows preserve exact-deployment smoke checks and rollback controls.
 
 ## Engineering Decisions
 
@@ -80,8 +88,9 @@ corepack pnpm test
 corepack pnpm build
 ```
 
-The dashboard fetches public Open-Meteo data through the deployed gateway by default, so no provider
-credentials are required locally. Set `ATMOS_GATEWAY_URL` only to use another compatible gateway.
+The public dashboard and AQI journey use same-origin Vercel handlers and require no provider
+credentials locally. `ATMOS_GATEWAY_URL` controls the Worker-backed map, location-search, and
+authenticated API paths; set it only when using another compatible gateway.
 
 Hosted authentication setup is documented in [docs/auth.md](docs/auth.md).
 

@@ -5,6 +5,18 @@ export type ShareLocationUrl =
 
 const locationQueryKeys = ['lat', 'lon', 'timezone', 'name', 'country'];
 
+export function locationShareSearchParams(
+  location: Pick<LocationSearchResult, 'latitude' | 'longitude' | 'timezone' | 'name' | 'country'>,
+): URLSearchParams {
+  return new URLSearchParams({
+    lat: String(location.latitude),
+    lon: String(location.longitude),
+    timezone: location.timezone,
+    name: location.name,
+    country: location.country,
+  });
+}
+
 export function locationFromShareUrl(url: URL): ShareLocationUrl {
   const hasLocationParameters = locationQueryKeys.some((key) => url.searchParams.has(key));
   if (!hasLocationParameters) return { kind: 'root' };

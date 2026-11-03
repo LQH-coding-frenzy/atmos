@@ -6,12 +6,30 @@ import {
   orderSavedLocations,
   parseRecentSearches,
   readRecentSearches,
+  reconcileLocalSavedPlacePreferences,
   parseSavedPlacePreferences,
   savedPlacePreferencesKey,
   savedPlacePreferencesFromLocations,
 } from './saved-place-preferences';
 
 describe('saved place preferences', () => {
+  it('reconciles local order and default against the caller’s current saved places', () => {
+    const locations = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+    expect(
+      reconcileLocalSavedPlacePreferences(locations, {
+        defaultLocationId: 'b',
+        orderedLocationIds: ['missing', 'b', 'a'],
+      }),
+    ).toEqual({ defaultLocationId: 'b', orderedLocationIds: ['b', 'a', 'c'] });
+    expect(
+      reconcileLocalSavedPlacePreferences(locations, {
+        defaultLocationId: 'missing',
+        orderedLocationIds: ['missing'],
+      }),
+    ).toEqual({ orderedLocationIds: ['a', 'b', 'c'] });
+    expect(locations.map((location) => location.id)).toEqual(['a', 'b', 'c']);
+  });
+
   it('parses valid user-local preferences and removes malformed or duplicate IDs', () => {
     expect(
       parseSavedPlacePreferences({

@@ -90,6 +90,24 @@ export function savedPlacePreferencesFromLocations(
   };
 }
 
+export function reconcileLocalSavedPlacePreferences(
+  locations: readonly Pick<SavedLocation, 'id'>[],
+  preferences: SavedPlacePreferences,
+): SavedPlacePreferences {
+  const availableIds = new Set(locations.map((location) => location.id));
+  return {
+    ...(preferences.defaultLocationId && availableIds.has(preferences.defaultLocationId)
+      ? { defaultLocationId: preferences.defaultLocationId }
+      : {}),
+    orderedLocationIds: [
+      ...preferences.orderedLocationIds.filter((id) => availableIds.has(id)),
+      ...locations
+        .filter((location) => !preferences.orderedLocationIds.includes(location.id))
+        .map((location) => location.id),
+    ],
+  };
+}
+
 export const recentSearchesStorageKey = 'atmos.recent-searches.v1';
 export const maximumRecentSearches = 8;
 

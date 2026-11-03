@@ -10,7 +10,6 @@ import {
   type UnitSystem,
 } from '@atmos/contracts';
 import {
-  formatTemperature,
   formatWindSpeed,
   planActivity,
   plannerActivityLabels,
@@ -29,6 +28,7 @@ import {
 } from '../lib/weather-comparison';
 import { versionAffinityHeaders } from '../lib/version-affinity';
 import { fetchPublicAirQuality, fetchPublicDashboard } from '../lib/public-weather-api';
+import { conditionLabel, temperatureWithDegree as temperature } from '../lib/dashboard-format';
 
 type WeatherComparisonPanelProps = {
   current: DashboardData;
@@ -40,14 +40,6 @@ type WeatherComparisonPanelProps = {
 type SearchState = 'idle' | 'searching' | 'empty' | 'invalid' | 'failed';
 type SelectionState = 'idle' | 'loading' | 'failed' | 'duplicate' | 'limit';
 type ComparisonAqiState = 'idle' | 'loading' | 'ready' | 'partial' | 'failed';
-
-function temperature(value: number, units: UnitSystem) {
-  return formatTemperature(value, units).replace(' deg', '°');
-}
-
-function conditionLabel(condition: string) {
-  return condition.replace('-', ' ');
-}
 
 function formatOptionalNumber(value: number | null | undefined, suffix: string) {
   return value === null || value === undefined || !Number.isFinite(value)

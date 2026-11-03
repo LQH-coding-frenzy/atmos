@@ -4,6 +4,7 @@ import type { LocationSearchResult } from '@atmos/contracts';
 import { LayoutDashboard, Map, UserRound } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { defaultLocation } from '../lib/default-location';
+import { locationShareSearchParams } from '../lib/location-url';
 import { LegalLinks } from './legal-links';
 import { SavedLocationsPanel } from './saved-locations-panel';
 
@@ -15,13 +16,7 @@ export function UserManagementPage({ gatewayOrigin }: UserManagementPageProps) {
   const router = useRouter();
 
   async function openSavedLocation(location: LocationSearchResult) {
-    const search = new URLSearchParams({
-      lat: String(location.latitude),
-      lon: String(location.longitude),
-      timezone: location.timezone,
-      name: location.name,
-      country: location.country,
-    });
+    const search = locationShareSearchParams(location);
     router.push(`/?${search.toString()}`);
     return true;
   }
@@ -69,14 +64,11 @@ export function UserManagementPage({ gatewayOrigin }: UserManagementPageProps) {
             presentation="page"
           />
           <aside className="panel user-management-guide">
-            <p className="eyebrow">Your account</p>
-            <h2>Manage your weather workspace</h2>
+            <h2>About your account</h2>
             <ul>
               <li>Sign in with email or Google.</li>
               <li>Review, rename, reorder, and remove saved places.</li>
-              <li>
-                Sync place favorites, categories, ordering, and your default place to your account.
-              </li>
+              <li>Sync favorites, categories, ordering, and your default place.</li>
               <li>Request permanent account and saved-data deletion.</li>
             </ul>
             <a href="/">Return to the dashboard</a>

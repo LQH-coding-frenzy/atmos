@@ -28,6 +28,10 @@ test('renders the responsive live-weather dashboard', async ({ page }) => {
   const hero = await page.locator('.hero-temperature').boundingBox();
   expect(hero!.y + hero!.height).toBeLessThan(844);
   await page.getByRole('button', { name: 'Open weather tools' }).click();
+  const tools = page.getByRole('dialog', { name: 'Weather tools' });
+  for (const group of ['Places', 'Weather details', 'Personal']) {
+    await expect(tools.getByRole('heading', { name: group })).toBeVisible();
+  }
   await page.keyboard.press('Shift+Tab');
   await expect(page.locator('.preferences-panel > summary')).toBeFocused();
   await page.keyboard.press('Tab');
@@ -150,6 +154,8 @@ test('shows expanded model measurements and a compatible extended outlook withou
   await page.goto('/');
   await page.getByRole('button', { name: 'Refresh weather' }).click();
   await expect(page.locator('.hero-temperature')).toContainText('20');
+  await expect(page.locator('.weather-offline')).toBeVisible();
+  await expect(page.getByText('Weather data: Open-Meteo.', { exact: true })).toBeVisible();
   const details = page.locator('.weather-extra-details');
   await details.locator('summary').click();
   await expect(details).toContainText('SW · 225°');
@@ -714,13 +720,16 @@ test('supports full map view, city previews, and the user management page', asyn
 
   const radarSlider = page.getByRole('slider', { name: 'Radar frame time' });
   await expect(radarSlider).toBeVisible();
-  await page.getByRole('button', { name: 'Play radar animation' }).click();
-  await expect(page.getByRole('button', { name: 'Pause radar animation' })).toBeVisible();
   const previousFrameTileRequest = page.waitForRequest((request) =>
     request.url().includes(`${previousRadarPath}/`),
   );
-  await page.getByRole('button', { name: 'Next radar frame' }).click();
+  await page.getByRole('button', { name: 'Play radar animation' }).click();
+  await expect(page.getByRole('button', { name: 'Pause radar animation' })).toBeVisible();
   await previousFrameTileRequest;
+  await expect(radarSlider).toHaveValue('0');
+  await expect(radarSlider).toHaveValue('1', { timeout: 18_000 });
+  await page.getByRole('button', { name: 'Next radar frame' }).click();
+  await expect(page.getByRole('button', { name: 'Play radar animation' })).toBeVisible();
   const openWeatherTileRequest = page.waitForRequest((request) =>
     request.url().includes('/api/v1/weather/maps/openweather/precipitation_new/'),
   );
@@ -743,17 +752,21 @@ test('supports full map view, city previews, and the user management page', asyn
   expect(berlinOptionValue).not.toBeNull();
   await cityPicker.selectOption(berlinOptionValue!);
 
-  await expect(page.getByRole('region', { name: 'Weather preview for Berlin' })).toBeVisible();
   await expect(page.locator('.location-name')).toHaveText('Berlin');
   expect(previewWeatherRequests).toBe(previewRequestsBeforeSelection);
   expect(mapWorkerAsset.ok()).toBe(true);
-  await page.getByRole('button', { name: 'Open Berlin' }).click();
-  await expect(page).toHaveURL(/lat=52.52/);
   await page.getByRole('link', { name: 'User management' }).click();
   await expect(page).toHaveURL(/\/user$/);
   await expect(page.getByRole('heading', { name: 'User management', level: 1 })).toBeVisible();
   await expect(page.getByLabel('Email')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
+});
+
+test('labels the account form by its current action', async ({ page }) => {
+  await page.goto('/user');
+  await expect(page.getByRole('heading', { name: 'Sign in to Atmos' })).toBeVisible();
+  await page.getByRole('button', { name: 'Need an account? Create one' }).click();
+  await expect(page.getByRole('heading', { name: 'Create an account' })).toBeVisible();
 });
 
 test('publishes Google OAuth privacy and terms pages linked from the homepage', async ({

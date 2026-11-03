@@ -83,10 +83,7 @@ export function WeatherTools({ children }: { children: ReactNode }) {
         }}
       >
         <header className="tools-heading">
-          <div>
-            <p className="eyebrow">A little more perspective</p>
-            <h2 id="weather-tools-title">Weather tools</h2>
-          </div>
+          <h2 id="weather-tools-title">Weather tools</h2>
           <button
             className="icon-button"
             type="button"

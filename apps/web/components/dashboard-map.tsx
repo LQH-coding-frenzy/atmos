@@ -9,12 +9,11 @@ import {
   type SavedLocation,
   type OpenWeatherMapLayer,
   type UnitSystem,
-  type WeatherCondition,
   weatherMapConfigurationSchema,
   weatherRadarTimelineSchema,
   type WeatherRadarTimeline,
 } from '@atmos/contracts';
-import { formatTemperature, formatWindSpeed } from '@atmos/domain';
+import { formatWindSpeed } from '@atmos/domain';
 import type {
   GeoJSONSource,
   Map as MapLibreMap,
@@ -35,6 +34,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createLocationMapData } from '../lib/location-map';
+import { conditionLabel, temperatureWithDegree as temperature } from '../lib/dashboard-format';
 import {
   aqiMapCacheMilliseconds,
   aqiMapSampleKey,
@@ -68,6 +68,8 @@ import {
   openWeatherTileTemplate,
   rainViewerMaximumZoom,
   rainViewerPlaybackIntervalMilliseconds,
+  rainViewerPlaybackMaxAdvances,
+  rainViewerPlaybackCooldownMilliseconds,
   rainViewerTileTemplate,
 } from '../lib/weather-radar';
 
@@ -95,6 +97,8 @@ type SelectedWeatherMapLayer = 'cities' | 'rainviewer' | 'aqi' | OpenWeatherMapL
 
 const weatherOverlaySourceId = 'atmos-weather-overlay';
 const weatherOverlayLayerId = 'atmos-weather-overlay-layer';
+const radarPlaybackStorageKey = 'atmos.radar.fast-playback-start';
+let lastRadarPlaybackStart = 0;
 const openWeatherLayerLabels: Record<OpenWeatherMapLayer, string> = {
   precipitation_new: 'Precipitation',
   clouds_new: 'Cloud cover',
@@ -102,14 +106,6 @@ const openWeatherLayerLabels: Record<OpenWeatherMapLayer, string> = {
   wind_new: 'Wind',
   temp_new: 'Temperature',
 };
-
-function temperature(value: number, units: UnitSystem) {
-  return formatTemperature(value, units).replace(' deg', '°');
-}
-
-function conditionLabel(condition: WeatherCondition) {
-  return condition.replace('-', ' ');
-}
 
 function locationForCity(city: MapCity): LocationSearchResult {
   return {
@@ -180,6 +176,11 @@ export function DashboardMap({
   const [openWeatherAvailable, setOpenWeatherAvailable] = useState(false);
   const [selectedRadarTimestamp, setSelectedRadarTimestamp] = useState<number>();
   const [radarPlaying, setRadarPlaying] = useState(false);
+  const [radarTileError, setRadarTileError] = useState(false);
+  const [radarCooldownUntil, setRadarCooldownUntil] = useState(0);
+  const [radarCooldownNow, setRadarCooldownNow] = useState(0);
+  const [radarPlaybackMessage, setRadarPlaybackMessage] = useState('');
+  const radarAdvancesRemaining = useRef(0);
   const [radarOpacity, setRadarOpacity] = useState(0.58);
   const [cityLayersAvailable, setCityLayersAvailable] = useState(false);
   const [visibleCities, setVisibleCities] = useState<MapCity[]>([]);
@@ -188,6 +189,7 @@ export function DashboardMap({
   const [aqiMapStatus, setAqiMapStatus] = useState<AqiMapStatus>('idle');
   const [aqiMapRetry, setAqiMapRetry] = useState(0);
   const [preview, setPreview] = useState<CityPreview>();
+  const [selection, setSelection] = useState<{ city: MapCity; status: 'loading' | 'failed' }>();
   const [pickerValue, setPickerValue] = useState('');
   const [openingCity, setOpeningCity] = useState(false);
   const previewCache = useRef(new Map<string, { data: DashboardData; storedAt: number }>());
@@ -203,6 +205,9 @@ export function DashboardMap({
   const closeTimer = useRef<number | undefined>(undefined);
   const activeCityKey = useRef<string | undefined>(undefined);
   const previewPanelHovered = useRef(false);
+  const selectionGeneration = useRef(0);
+  const selectionActive = useRef(false);
+  const selectCityRef = useRef<(city: MapCity) => void>(() => {});
   const radarTimelineRef = useRef<WeatherRadarTimeline | undefined>(undefined);
   const selectedRadarTimestampRef = useRef<number | undefined>(undefined);
   const weatherOverlayProviderRef = useRef<'openweather' | 'rainviewer' | undefined>(undefined);
@@ -217,6 +222,75 @@ export function DashboardMap({
     .join('|');
   radarTimelineRef.current = radarTimeline;
   selectedRadarTimestampRef.current = selectedRadarTimestamp;
+
+  useEffect(() => {
+    try {
+      const stored = Number(window.sessionStorage.getItem(radarPlaybackStorageKey));
+      if (Number.isFinite(stored) && stored > lastRadarPlaybackStart)
+        lastRadarPlaybackStart = stored;
+    } catch {
+      // The module-level value retains the cooldown while this tab stays open.
+    }
+    const now = Date.now();
+    setRadarCooldownNow(now);
+    setRadarCooldownUntil(
+      Math.min(
+        lastRadarPlaybackStart + rainViewerPlaybackCooldownMilliseconds,
+        now + rainViewerPlaybackCooldownMilliseconds,
+      ),
+    );
+  }, []);
+
+  useEffect(() => {
+    if (radarCooldownUntil <= radarCooldownNow) return;
+    const timer = window.setInterval(() => setRadarCooldownNow(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, [radarCooldownNow, radarCooldownUntil]);
+
+  selectCityRef.current = (city) => {
+    const generation = ++selectionGeneration.current;
+    selectionActive.current = true;
+    if (debounceTimer.current) window.clearTimeout(debounceTimer.current);
+    if (closeTimer.current) window.clearTimeout(closeTimer.current);
+    previewController.current?.abort();
+    previewGeneration.current += 1;
+    activeCityKey.current = undefined;
+    setPreview(undefined);
+    setSelection({ city, status: 'loading' });
+
+    const current = propsRef.current.dashboard;
+    const cached = previewCache.current.get(city.key);
+    if (
+      Math.abs(city.latitude - current.location.latitude) < 0.001 &&
+      Math.abs(city.longitude - current.location.longitude) < 0.001
+    ) {
+      propsRef.current.onSelectLocation(current);
+      selectionActive.current = false;
+      setSelection(undefined);
+      return;
+    }
+    if (cached && Date.now() - cached.storedAt < cityPreviewCacheMilliseconds) {
+      propsRef.current.onSelectLocation(cached.data);
+      selectionActive.current = false;
+      setSelection(undefined);
+      return;
+    }
+    void propsRef.current
+      .onOpenLocation(locationForCity(city))
+      .catch(() => false)
+      .then((opened) => {
+        if (generation !== selectionGeneration.current) return;
+        selectionActive.current = !opened;
+        setSelection(opened ? undefined : { city, status: 'failed' });
+      });
+  };
+
+  useEffect(
+    () => () => {
+      selectionGeneration.current += 1;
+    },
+    [],
+  );
 
   useEffect(() => {
     if (observatory) {
@@ -526,6 +600,7 @@ export function DashboardMap({
         };
 
         const handlePointerMove = (event: MapMouseEvent) => {
+          if (selectionActive.current) return;
           const layers = [
             ...cityLayerIds,
             'atmos-saved-location-points',
@@ -579,7 +654,7 @@ export function DashboardMap({
               ? asCity(feature)
               : undefined;
           const point = event.lngLat;
-          showPreview(
+          selectCityRef.current(
             city ?? {
               key: `coordinates:${point.lat.toFixed(5)}:${point.lng.toFixed(5)}`,
               name: `${point.lat.toFixed(2)}°, ${point.lng.toFixed(2)}°`,
@@ -588,7 +663,6 @@ export function DashboardMap({
               longitude: point.lng,
               placeClass: 'coordinates',
             },
-            0,
           );
         };
 
@@ -621,7 +695,18 @@ export function DashboardMap({
           collectVisibleSavedLocations();
         });
 
-        instance.on('error', () => {
+        instance.on('error', (event) => {
+          const error = event.error;
+          if (
+            error &&
+            'url' in error &&
+            typeof error.url === 'string' &&
+            error.url.startsWith('https://tilecache.rainviewer.com/')
+          ) {
+            setRadarPlaying(false);
+            setRadarTileError(true);
+            setRadarPlaybackMessage('Radar tiles could not be loaded. Playback stopped.');
+          }
           if (!mapLoadComplete && !disposed) setMapError(true);
         });
         instance.once('load', () => {
@@ -1017,17 +1102,54 @@ export function DashboardMap({
     if (!radarPlaying || !radarVisible || (radarTimeline?.frames.length ?? 0) < 2) return;
     const timer = window.setInterval(() => {
       const frames = radarTimelineRef.current?.frames ?? [];
-      if (frames.length < 2) return;
+      if (frames.length < 2) {
+        setRadarPlaying(false);
+        return;
+      }
       const currentIndex = frames.findIndex(
         (frame) => frame.timestamp === selectedRadarTimestampRef.current,
       );
-      const nextFrame = frames[(Math.max(currentIndex, 0) + 1) % frames.length];
-      if (!nextFrame) return;
+      const nextFrame = frames[currentIndex + 1];
+      if (!nextFrame || radarAdvancesRemaining.current <= 0) {
+        setRadarPlaying(false);
+        setRadarPlaybackMessage('Playback complete.');
+        return;
+      }
       selectedRadarTimestampRef.current = nextFrame.timestamp;
       setSelectedRadarTimestamp(nextFrame.timestamp);
+      radarAdvancesRemaining.current -= 1;
+      if (radarAdvancesRemaining.current === 0 || currentIndex + 1 === frames.length - 1) {
+        setRadarPlaying(false);
+        setRadarPlaybackMessage('Playback complete.');
+      }
     }, rainViewerPlaybackIntervalMilliseconds);
     return () => window.clearInterval(timer);
   }, [radarPlaying, radarTimeline, radarVisible]);
+
+  useEffect(() => {
+    if (!radarPlaying) return;
+    const map = mapRef.current;
+    const stop = () => {
+      setRadarPlaying(false);
+      setRadarPlaybackMessage('Playback paused because the map changed.');
+    };
+    const onVisibility = () => {
+      if (document.hidden) stop();
+    };
+    map?.on('movestart', stop);
+    map?.on('zoomstart', stop);
+    document.addEventListener('visibilitychange', onVisibility);
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => !entry.isIntersecting)) stop();
+    });
+    if (mapElement.current) observer.observe(mapElement.current);
+    return () => {
+      map?.off('movestart', stop);
+      map?.off('zoomstart', stop);
+      document.removeEventListener('visibilitychange', onVisibility);
+      observer.disconnect();
+    };
+  }, [radarPlaying]);
 
   useEffect(() => {
     mapRef.current?.easeTo({
@@ -1051,56 +1173,7 @@ export function DashboardMap({
     setPickerValue(cityKey);
     const city = visibleCities.find((item) => item.key === cityKey);
     if (!city) return;
-    if (debounceTimer.current) window.clearTimeout(debounceTimer.current);
-    if (closeTimer.current) window.clearTimeout(closeTimer.current);
-    previewController.current?.abort();
-    const generation = ++previewGeneration.current;
-    activeCityKey.current = undefined;
-    const matchingCurrent =
-      Math.abs(city.latitude - dashboard.location.latitude) < 0.001 &&
-      Math.abs(city.longitude - dashboard.location.longitude) < 0.001;
-    if (matchingCurrent) {
-      setPreview({ city, status: 'ready', dashboard });
-      return;
-    }
-    const cached = previewCache.current.get(city.key);
-    if (cached && Date.now() - cached.storedAt < cityPreviewCacheMilliseconds) {
-      setPreview({ city, status: 'ready', dashboard: cached.data });
-      return;
-    }
-    setPreview({ city, status: 'loading' });
-    const controller = new AbortController();
-    previewController.current = controller;
-    void fetchPublicDashboard(
-      {
-        latitude: city.latitude,
-        longitude: city.longitude,
-        timezone: 'auto',
-        units: 'metric',
-      },
-      { signal: controller.signal },
-    )
-      .then(async (response) => {
-        const parsed = dashboardSchema.safeParse(await response.json());
-        if (!response.ok || !parsed.success) throw new Error('City weather unavailable');
-        if (generation !== previewGeneration.current) return;
-        const cityDashboard: DashboardData = {
-          ...parsed.data,
-          location: {
-            ...parsed.data.location,
-            id: `map:${city.key}`,
-            name: city.name,
-            country: city.country ?? parsed.data.location.country,
-            latitude: city.latitude,
-            longitude: city.longitude,
-          },
-        };
-        previewCache.current.set(city.key, { data: cityDashboard, storedAt: Date.now() });
-        setPreview({ city, status: 'ready', dashboard: cityDashboard });
-      })
-      .catch(() => {
-        if (generation === previewGeneration.current) setPreview({ city, status: 'unavailable' });
-      });
+    selectCityRef.current(city);
   }
 
   async function openPreviewCity() {
@@ -1122,6 +1195,7 @@ export function DashboardMap({
     if (!frame) return;
     selectedRadarTimestampRef.current = frame.timestamp;
     setSelectedRadarTimestamp(frame.timestamp);
+    if (radarPlaying) setRadarPlaybackMessage('Playback paused.');
     setRadarPlaying(false);
   }
 
@@ -1133,6 +1207,32 @@ export function DashboardMap({
     );
     const nextIndex = (Math.max(currentIndex, 0) + direction + frames.length) % frames.length;
     selectRadarFrame(nextIndex);
+  }
+
+  function startRadarPlayback() {
+    const now = Date.now();
+    if (
+      now < radarCooldownUntil ||
+      now < lastRadarPlaybackStart + rainViewerPlaybackCooldownMilliseconds ||
+      radarTileError ||
+      !radarTimeline?.frames.length
+    )
+      return;
+    const first = radarTimeline.frames[0];
+    if (!first || radarTimeline.frames.length < 2) return;
+    lastRadarPlaybackStart = now;
+    try {
+      window.sessionStorage.setItem(radarPlaybackStorageKey, String(now));
+    } catch {
+      // Playback remains bounded for this page if browser storage is blocked.
+    }
+    setRadarCooldownNow(now);
+    setRadarCooldownUntil(now + rainViewerPlaybackCooldownMilliseconds);
+    radarAdvancesRemaining.current = rainViewerPlaybackMaxAdvances;
+    selectedRadarTimestampRef.current = first.timestamp;
+    setSelectedRadarTimestamp(first.timestamp);
+    setRadarPlaybackMessage('Playing up to four recent radar frames.');
+    setRadarPlaying(true);
   }
 
   function recenter() {
@@ -1158,10 +1258,7 @@ export function DashboardMap({
       <div className="local-map-canvas" ref={mapElement} aria-label="Interactive weather map" />
       <header className="map-overlay-heading">
         <div>
-          <p className="eyebrow">
-            {observatory ? 'Map-first perspective' : 'A change of perspective'}
-          </p>
-          <h2 id="map-title">{observatory ? 'Observatory' : 'Weather, beyond your window.'}</h2>
+          <h2 id="map-title">{observatory ? 'Observatory' : 'Weather map'}</h2>
         </div>
         <div className="map-overlay-actions">
           <a
@@ -1210,7 +1307,11 @@ export function DashboardMap({
                 setSelectedMapLayer(openWeatherLayer.data);
               }
             }
-            if (value !== 'rainviewer') setRadarPlaying(false);
+            if (value !== 'rainviewer') {
+              if (radarPlaying)
+                setRadarPlaybackMessage('Playback paused because the layer changed.');
+              setRadarPlaying(false);
+            }
           }}
         >
           <option value="cities">City map only</option>
@@ -1399,7 +1500,7 @@ export function DashboardMap({
             <div>
               <p className="eyebrow">Recent radar</p>
               <p className="map-radar-source">
-                RainViewer · past 2 h · 10-minute frames · 15 s playback
+                RainViewer · past 2 h · up to 4 advances · 2 s per frame
               </p>
             </div>
             <div className="map-radar-playback">
@@ -1416,8 +1517,17 @@ export function DashboardMap({
                 type="button"
                 aria-label={radarPlaying ? 'Pause radar animation' : 'Play radar animation'}
                 title={radarPlaying ? 'Pause radar animation' : 'Play radar animation'}
-                disabled={radarFrames.length < 2}
-                onClick={() => setRadarPlaying((playing) => !playing)}
+                disabled={
+                  radarFrames.length < 2 ||
+                  radarTileError ||
+                  (!radarPlaying && radarCooldownNow < radarCooldownUntil)
+                }
+                onClick={() => {
+                  if (radarPlaying) {
+                    setRadarPlaying(false);
+                    setRadarPlaybackMessage('Playback paused.');
+                  } else startRadarPlayback();
+                }}
               >
                 {radarPlaying ? (
                   <Pause size={15} aria-hidden="true" />
@@ -1436,6 +1546,35 @@ export function DashboardMap({
               </button>
             </div>
           </div>
+          {radarPlaybackMessage || radarCooldownNow < radarCooldownUntil ? (
+            <p className="map-radar-status" role="status">
+              {radarPlaybackMessage}{' '}
+              {radarCooldownNow < radarCooldownUntil
+                ? 'Fast playback is available again after the 60-second cooldown.'
+                : ''}
+            </p>
+          ) : null}
+          {radarCooldownNow < radarCooldownUntil ? (
+            <p className="map-radar-status" aria-hidden="true">
+              Available in {Math.ceil((radarCooldownUntil - radarCooldownNow) / 1_000)}s
+            </p>
+          ) : null}
+          {radarTileError ? (
+            <button
+              className="map-radar-status"
+              type="button"
+              onClick={() => {
+                const source = mapRef.current?.getSource(weatherOverlaySourceId) as
+                  RasterTileSource | undefined;
+                if (!source) return;
+                setRadarTileError(false);
+                setRadarPlaybackMessage('Retry requested. Radar tiles may still be unavailable.');
+                source.setTiles([...source.tiles]);
+              }}
+            >
+              Retry radar tiles
+            </button>
+          ) : null}
           {radarStatus === 'loading' ? (
             <p className="map-radar-status" role="status">
               Loading radar frames…
@@ -1493,12 +1632,14 @@ export function DashboardMap({
       ) : null}
       {mapReady && !cityLayersAvailable ? (
         <p className="map-feedback" role="status">
-          City labels are unavailable in this map style. City search is still available above.
+          This map style doesn&apos;t offer selectable city labels. Click anywhere to choose
+          coordinates, or search above.
         </p>
       ) : null}
       {mapReady && cityLayersAvailable && visibleCities.length === 0 ? (
         <p className="map-feedback" role="status">
-          No city labels are visible here yet. Pan or zoom the map to explore another area.
+          No selectable city names are in view. Pan or zoom, click anywhere to choose coordinates,
+          or search above.
         </p>
       ) : null}
       {!aqiVisible && visibleCities.length > 0 ? (
@@ -1519,6 +1660,23 @@ export function DashboardMap({
             ))}
           </select>
         </label>
+      ) : null}
+      {selection ? (
+        <div className="map-weather-preview" role="status" aria-live="polite">
+          {selection.status === 'loading' ? (
+            <p>Loading weather for {selection.city.name}…</p>
+          ) : (
+            <>
+              <p>
+                Weather for {selection.city.name} could not be loaded. Your previous location is
+                still selected.
+              </p>
+              <button type="button" onClick={() => selectCityRef.current(selection.city)}>
+                Try again
+              </button>
+            </>
+          )}
+        </div>
       ) : null}
       {preview ? (
         <section
@@ -1604,7 +1762,7 @@ export function DashboardMap({
         </section>
       ) : null}
       <p className="map-caption">
-        Choose a label or click the map to preview a place. Use coordinate search above for keyboard
+        Choose a label or click the map to select a place. Use coordinate search above for keyboard
         entry.
       </p>
     </article>

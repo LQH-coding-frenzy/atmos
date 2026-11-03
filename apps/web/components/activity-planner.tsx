@@ -154,8 +154,7 @@ export function ActivityPlanner({
     <article className="planner-card panel" id="activities" aria-labelledby="activity-title">
       <div className="card-heading">
         <div>
-          <p className="eyebrow">Make time for outside</p>
-          <h2 id="activity-title">Find your window.</h2>
+          <h2 id="activity-title">Activity planner</h2>
         </div>
         <label className="planner-profile-picker" htmlFor={`${id}-activity`}>
           <span>Activity profile</span>

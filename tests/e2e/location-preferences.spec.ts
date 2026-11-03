@@ -98,6 +98,9 @@ test('uses recent selections locally, excludes device GPS, and supports direct c
   await expect(page.locator('.location-name')).toHaveText('Your location');
   expect(await page.evaluate(() => localStorage.getItem('atmos.recent-searches.v1'))).toBeNull();
 
+  await expect(page.locator('.coordinate-search > summary')).not.toBeVisible();
+  await input.focus();
+  await expect(page.locator('.coordinate-search > summary')).toBeVisible();
   await page.locator('.coordinate-search > summary').click();
   const requestsBeforeInvalidCoordinates = dashboardRequests.length;
   await page.getByLabel('Latitude').fill('91');

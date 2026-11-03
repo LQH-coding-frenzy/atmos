@@ -9,11 +9,11 @@ import {
   type UnitSystem,
   type WeatherSnapshot,
 } from '@atmos/contracts';
-import { formatTemperature } from '@atmos/domain';
 import type { Session } from '@supabase/supabase-js';
 import { Download, History, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { getSupabaseBrowserClient } from '../lib/supabase-browser';
+import { temperature } from '../lib/dashboard-format';
 import { versionAffinityHeaders } from '../lib/version-affinity';
 import { weatherHistoryToCsv } from '../lib/weather-history-export';
 import {
@@ -64,10 +64,6 @@ function formatObservedTime(value: string, timezone: string): string {
     minute: '2-digit',
     timeZone: timezone,
   }).format(new Date(value));
-}
-
-function temperature(value: number, units: UnitSystem): string {
-  return formatTemperature(value, units).replace(' deg', '');
 }
 
 async function fetchHistory(
