@@ -779,7 +779,28 @@ Limit Requests` as 1,000,000 allowed requests/month included; the authenticated 
   `INSUFFICIENT_DATA`: stable had 8 weighted samples, 0% errors, and p95 wall time `1,105 ms`; the
   0%-candidate had no row. This is wall-duration/sample-count evidence, not Worker CPU evidence, and
   it did not generate traffic.
-- The local shell has no Cloudflare API/Analytics token or account ID configured. Wrangler OAuth can
-  list deployments, but this environment has no direct `workersInvocationsAdaptive` query path, so
-  current exact-version CPU p50/p95/p99 could not be refreshed. No extra Worker or weather-provider
-  requests were made. Keep PERF-002 `IN_PROGRESS`/HOLD and do not infer a CPU pass from this check.
+- During this first local state check, the shell had no Cloudflare API/Analytics token or account ID
+  configured. Wrangler OAuth could list deployments, but no local `workersInvocationsAdaptive` query
+  path was available then. No extra Worker or weather-provider requests were made; the subsequent
+  protected CPU query workflow is recorded below.
+
+## Protected exact-version CPU snapshot — 2026-11-03 UTC
+
+- PR #344 merged the protected, read-only CPU snapshot workflow; PR #345 fixed its summary handling
+  when Cloudflare returns no CPU quantiles for a sparse window. Both PRs passed required security,
+  quality, database, browser, and preview checks. The workflow uses the existing Staging-scoped
+  Analytics secret and does not generate Worker/provider requests.
+- Corrected 60-minute run
+  [41700549194](https://github.com/LQH-coding-frenzy/atmos/actions/runs/41700549194) queried stable
+  version `2503a1f0-985f-4026-a368-bd9bb5504d23` over
+  `2026-11-03T17:59:29.935Z`–`2026-11-03T18:59:29.935Z`. It returned 8 natural requests, 0 errors,
+  and no CPU quantiles, so the result was `INSUFFICIENT_DATA` below the fixed 30-request floor.
+- A read-only 24-hour query
+  [41700768472](https://github.com/LQH-coding-frenzy/atmos/actions/runs/41700768472) for the same
+  exact stable version covered `2026-11-02T19:00:52.572Z`–`2026-11-03T19:00:52.572Z` and returned
+  350 natural requests, 0 errors, CPU p50 `5.189 ms`, p95 `16.587 ms`, and p99 `20.112 ms`. The
+  workflow decision is `HOLD`: exact-version p95 exceeds the unchanged 7 ms budget.
+- The query only read existing Cloudflare analytics. The stable Worker remains at 100% and candidate
+  `a998dabc-c89b-48bc-a336-ae9358e3bce6` remains at 0%; no Worker deployment, traffic shift, or
+  provider request occurred. The stable-version result does not measure the 0%-candidate version.
+  PERF-002 remains `IN_PROGRESS`/HOLD. Vercel monthly WAF/Runtime Cache usage also remains unmeasured.
