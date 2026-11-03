@@ -708,8 +708,30 @@ Limit Requests` as 1,000,000 allowed requests/month included; the authenticated 
   rethrew to the page fallback without logging a sanitized provider failure class.
 - This local follow-up adds a safe failure-class event to that hard-miss catch and tests that no error
   message, URL, coordinates, payload, or credential is serialized. It preserves the generic unavailable
-  page, stale-cache behavior, and client response contract. This diagnostic change is not deployed and
-  no application request or retry was sent during this follow-up.
+  page, stale-cache behavior, and client response contract. PR #340 merged the diagnostics to `main`.
+- Owner-approved diagnostic run [41683631585](https://github.com/LQH-coding-frenzy/atmos/actions/runs/41683631585)
+  used `promote=false`, uploaded an unaliased artifact, and stopped at the same exact-homepage content
+  check. Dashboard/AQI smokes and promotion were skipped; the production alias and Worker traffic were
+  unchanged. The exact-deployment runtime-log query returned no records, so the failure class was not
+  observed. No retry followed.
 - Local verification passed: 48 focused provider/cache/route/runtime tests; the full suite (252 Vitest
   plus 81 Node script tests); repository typecheck and lint; web production build; and format/runbook
   checks. These results do not explain the failed production smoke or change the current deployment.
+
+## Local frontend-smoke marker reproduction — 2026-11-04
+
+- A local production-mode Next.js server using the E2E mock gateway returned the live-weather text with
+  React's empty text-boundary comment between adjacent nodes: `Live weather data<!-- -->: Open-Meteo.`
+  The old verifier's raw substring check failed while the normalized text still contained the live
+  marker and did not contain the unavailable-state message. This is a strong reproduction of the
+  release-smoke mismatch, but the Vercel candidate body was not retained, so the exact production HTML
+  cannot be confirmed from this evidence.
+- The local verifier update removes only empty React comment separators before checking the same exact
+  live marker and unavailable state; it does not relax status or security-header checks. Unit tests
+  cover both the split live marker and continued rejection of unavailable weather. This change is
+  local-only and has not been committed, pushed, or deployed.
+- The reproduction used only the local mock gateway. No production route, provider, Vercel deployment,
+  or Worker was requested during this check.
+- Validation after the verifier change passed: 252 Vitest tests, 82 Node script tests, repository
+  typecheck/lint, and format/runbook checks. The workflow script still requires the live marker; this
+  fix only normalizes React's empty comment boundaries.

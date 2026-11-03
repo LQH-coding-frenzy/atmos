@@ -19,6 +19,12 @@ test('accepts a successful hardened frontend response', () => {
   );
 });
 
+test('accepts live weather text split by React HTML text-boundary comments', () => {
+  const body = '<main>Live weather data<!-- -->: Open-Meteo.</main>';
+
+  assert.doesNotThrow(() => verifyFrontendResponse(200, headersFromCurlDump(validHeaders), body));
+});
+
 test('uses the final response block from a curl header dump', () => {
   const headers = headersFromCurlDump(
     `HTTP/1.1 307 Temporary Redirect\nlocation: /\n\n${validHeaders}`,
@@ -54,6 +60,15 @@ test('rejects unavailable or non-weather frontend content', () => {
         200,
         headersFromCurlDump(validHeaders),
         `${liveWeatherBody}Weather data is temporarily unavailable.`,
+      ),
+    /unavailable weather state/,
+  );
+  assert.throws(
+    () =>
+      verifyFrontendResponse(
+        200,
+        headersFromCurlDump(validHeaders),
+        '<main>Live weather data<!-- -->: Open-Meteo. Weather data<!-- --> is temporarily unavailable.</main>',
       ),
     /unavailable weather state/,
   );

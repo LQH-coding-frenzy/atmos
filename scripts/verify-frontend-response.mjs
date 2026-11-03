@@ -38,10 +38,12 @@ export function verifyFrontendResponse(status, headers, body) {
     }
   }
 
-  if (!body?.includes('Live weather data: Open-Meteo.')) {
+  // React can insert empty HTML comments between adjacent text nodes in streamed markup.
+  const renderedText = body?.replace(/<!--\s*-->/g, '') ?? '';
+  if (!renderedText.includes('Live weather data: Open-Meteo.')) {
     throw new Error('Frontend response does not contain live weather content.');
   }
-  if (body.includes('Weather data is temporarily unavailable.')) {
+  if (renderedText.includes('Weather data is temporarily unavailable.')) {
     throw new Error('Frontend response rendered the unavailable weather state.');
   }
 }
