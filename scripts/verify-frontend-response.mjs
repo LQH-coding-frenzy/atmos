@@ -38,10 +38,14 @@ export function verifyFrontendResponse(status, headers, body) {
     }
   }
 
-  if (!body?.includes('Live weather data: Open-Meteo.')) {
+  // React can insert empty HTML comments between adjacent text nodes in streamed markup.
+  const responseBody = body ?? '';
+  const liveWeatherContent = /Live weather data(?:<!--\s*-->)?: Open-Meteo\./;
+  if (!liveWeatherContent.test(responseBody)) {
     throw new Error('Frontend response does not contain live weather content.');
   }
-  if (body.includes('Weather data is temporarily unavailable.')) {
+  const unavailableWeatherContent = /Weather data(?:<!--\s*-->)? is temporarily unavailable\./;
+  if (unavailableWeatherContent.test(responseBody)) {
     throw new Error('Frontend response rendered the unavailable weather state.');
   }
 }
