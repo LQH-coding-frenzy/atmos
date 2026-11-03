@@ -726,12 +726,35 @@ Limit Requests` as 1,000,000 allowed requests/month included; the authenticated 
   marker and did not contain the unavailable-state message. This is a strong reproduction of the
   release-smoke mismatch, but the Vercel candidate body was not retained, so the exact production HTML
   cannot be confirmed from this evidence.
-- The local verifier update removes only empty React comment separators before checking the same exact
-  live marker and unavailable state; it does not relax status or security-header checks. Unit tests
-  cover both the split live marker and continued rejection of unavailable weather. This change is
-  local-only and has not been committed, pushed, or deployed.
+- The initial local verifier update removed empty React comment separators before checking the exact
+  live marker and unavailable state. After CodeQL flagged mutation of the HTML body, the final
+  implementation was changed to read-only regex matching for the optional separator; status,
+  security-header, and unavailable-state checks remain strict. Unit tests cover the split live marker
+  and continued rejection of unavailable weather. At this point, the fix was still local-only.
 - The reproduction used only the local mock gateway. No production route, provider, Vercel deployment,
   or Worker was requested during this check.
 - Validation after the verifier change passed: 252 Vitest tests, 82 Node script tests, repository
   typecheck/lint, and format/runbook checks. The workflow script still requires the live marker; this
-  fix only normalizes React's empty comment boundaries.
+  fix only recognizes React's empty comment boundary between adjacent rendered text.
+
+## Successful bounded Vercel release retry — 2026-11-03 UTC
+
+- PR #341 merged to `main` as `693fd27a905dbdda2491008341b253fdebd5c547` after its PR, security,
+  database, quality, preview, and browser checks passed. The final verifier uses read-only matching;
+  both CodeQL checks passed. The initial Playwright run had one failure in an unchanged
+  location-preferences request-count assertion; the focused local test and CI rerun passed.
+- The owner-approved protected Vercel release run
+  [41690495219](https://github.com/LQH-coding-frenzy/atmos/actions/runs/41690495219) ran on that
+  exact `main` commit with `promote=true`. The unaliased candidate uploaded successfully. Its exact
+  homepage returned HTTP 200 and passed content/security-header checks; the dashboard route smoke
+  passed with `cache=HIT`, and the timeline-AQI route smoke passed with `cache=MISS`.
+- The exact candidate was promoted and the production-domain homepage smoke passed. The rollback
+  guard was not triggered. This was one fixed smoke sequence with no retries. The dashboard smoke
+  was a cache hit and the AQI smoke was a cache miss; the workflow does not report an authoritative
+  weighted-provider-unit total, so actual provider usage is not claimed as measured. This was the
+  single owner-approved bounded run, with a ceiling of 17 weighted units; the ceiling is an approved
+  bound, not an observed consumption figure. This does not establish monthly WAF, Runtime Cache, or
+  provider-budget utilization.
+- No Cloudflare Worker deployment, version change, or traffic shift occurred. PERF-002 remains
+  `IN_PROGRESS`/HOLD: this frontend release does not resolve the separate exact-version Worker CPU
+  p95 gate, nor does it supply the outstanding monthly usage measurements.
