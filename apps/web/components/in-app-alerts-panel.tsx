@@ -31,6 +31,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getSupabaseBrowserClient } from '../lib/supabase-browser';
 import { versionAffinityHeaders } from '../lib/version-affinity';
 import { fetchPublicAirQuality } from '../lib/public-weather-api';
+import { formatTimestamp } from '../lib/dashboard-format';
 
 type InAppAlertMetric = AlertThresholdMetric | AlertOccurrenceMetric;
 type Comparison = 'above' | 'below';
@@ -110,17 +111,9 @@ function scheduleSummary(schedule: AlertRuleRecord['schedule'], timezone: string
     schedule.weekdays.length === scheduleWeekdays.length
       ? 'Every day'
       : schedule.weekdays.map((day) => weekdayLabels[day as ScheduleWeekday]).join(', ');
-  const formatInstant = (value: string) =>
-    new Intl.DateTimeFormat('en', {
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZone: timezone,
-    }).format(new Date(value));
   const window = [
-    schedule.startsAt ? `from ${formatInstant(schedule.startsAt)}` : '',
-    schedule.endsAt ? `until ${formatInstant(schedule.endsAt)}` : '',
+    schedule.startsAt ? `from ${formatTimestamp(schedule.startsAt, timezone)}` : '',
+    schedule.endsAt ? `until ${formatTimestamp(schedule.endsAt, timezone)}` : '',
   ]
     .filter(Boolean)
     .join(' ');

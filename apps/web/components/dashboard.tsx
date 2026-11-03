@@ -10,7 +10,7 @@ import {
   type WeatherCondition,
   timezonePreferenceSchema,
 } from '@atmos/contracts';
-import { formatTemperature, formatWindSpeed } from '@atmos/domain';
+import { formatWindSpeed } from '@atmos/domain';
 import {
   Cloud,
   CloudLightning,
@@ -34,14 +34,7 @@ import { DashboardMap } from './dashboard-map';
 import { ActivityPlanner } from './activity-planner';
 import { ForecastTrendChart } from './forecast-trend-chart';
 import { LocationSearch } from './location-search';
-import { SavedLocationsPanel } from './saved-locations-panel';
-import { WeatherHistoryPanel } from './weather-history-panel';
-import { AirQualityPanel } from './air-quality-panel';
-import { InAppAlertsPanel } from './in-app-alerts-panel';
-import { PreferencesPanel } from './preferences-panel';
-import { WeatherComparisonPanel } from './weather-comparison-panel';
-import { SevereWeatherPanel } from './severe-weather-panel';
-import { WeatherCalendarPanel } from './weather-calendar-panel';
+import { DashboardTools } from './dashboard-tools';
 import {
   forecastTrendAvailable,
   forecastTrendMetricLabels,
@@ -54,10 +47,17 @@ import {
   readOfflineDashboard,
   saveOfflineDashboard,
 } from '../lib/offline-dashboard';
-import { locationFromShareUrl } from '../lib/location-url';
+import { locationFromShareUrl, locationShareSearchParams } from '../lib/location-url';
 import { fetchPublicDashboard } from '../lib/public-weather-api';
+import {
+  conditionLabel,
+  formatDashboardDate,
+  formatForecastDate,
+  formatHour,
+  formatTimestamp,
+  temperature,
+} from '../lib/dashboard-format';
 import { LegalLinks } from './legal-links';
-import { WeatherTools } from './weather-tools';
 import { CurrentMeasurements, HourlyMeasurements, DailyMeasurements } from './weather-measurements';
 
 type DashboardProps = {
@@ -75,49 +75,6 @@ function WeatherIcon({ condition, size = 22 }: { condition: WeatherCondition; si
   if (condition === 'thunderstorm') return <CloudLightning {...iconProps} />;
   if (condition === 'snow') return <Snowflake {...iconProps} />;
   return <CloudRain {...iconProps} />;
-}
-
-function conditionLabel(condition: WeatherCondition): string {
-  return condition.replace('-', ' ');
-}
-
-function temperature(value: number, units: UnitSystem): string {
-  return formatTemperature(value, units).replace(' deg', '');
-}
-
-function formatHour(value: string, timezone: string): string {
-  return new Intl.DateTimeFormat('en', { hour: 'numeric', timeZone: timezone }).format(
-    new Date(value),
-  );
-}
-
-function formatDashboardDate(value: string, timezone: string): string {
-  return new Intl.DateTimeFormat('en', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    timeZone: timezone,
-  }).format(new Date(value));
-}
-
-function formatForecastDate(value: string): string {
-  const [year = 0, month = 1, day = 1] = value.split('-').map(Number);
-  return new Intl.DateTimeFormat('en', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  }).format(new Date(Date.UTC(year, month - 1, day)));
-}
-
-function formatTimestamp(value: string, timezone: string): string {
-  return new Intl.DateTimeFormat('en', {
-    day: 'numeric',
-    month: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: timezone,
-  }).format(new Date(value));
 }
 
 export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
@@ -254,6 +211,19 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
     }
   }, [connectivityReady, dashboard, isOnline]);
 
+  function pushLocationToHistory(
+    location: Pick<
+      LocationSearchResult,
+      'latitude' | 'longitude' | 'timezone' | 'name' | 'country'
+    >,
+  ) {
+    const locationUrl = new URL(window.location.href);
+    locationUrl.search = locationShareSearchParams(location).toString();
+    // Preserve the App Router's current entry metadata for Back and Forward.
+    window.history.pushState({ ...window.history.state }, '', locationUrl);
+    locationSearchRef.current = locationUrl.search;
+  }
+
   async function selectLocation(
     location: LocationSearchResult,
     urlBehavior: LocationUrlBehavior = 'push',
@@ -285,18 +255,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
       };
       setDashboard({ ...parsed.data, location: selectedLocation });
       if (urlBehavior === 'push') {
-        const locationUrl = new URL(window.location.href);
-        locationUrl.search = new URLSearchParams({
-          lat: String(selectedLocation.latitude),
-          lon: String(selectedLocation.longitude),
-          timezone: selectedLocation.timezone,
-          name: selectedLocation.name,
-          country: selectedLocation.country,
-        }).toString();
-        // Preserve the App Router's current entry metadata. Weather selection is
-        // local state; a queued router URL transition must not overwrite Back.
-        window.history.pushState({ ...window.history.state }, '', locationUrl);
-        locationSearchRef.current = locationUrl.search;
+        pushLocationToHistory(selectedLocation);
       } else if (urlBehavior === 'clear') {
         window.history.replaceState(
           { ...window.history.state },
@@ -351,21 +310,19 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
   }
 
   function selectMapLocation(selectedDashboard: DashboardData) {
+    const currentLocation = currentLocationRef.current;
     setDashboard(selectedDashboard);
     setRefreshStatus('idle');
     refreshRequestGeneration.current += 1;
     locationRequestController.current?.abort();
     locationRequestGeneration.current += 1;
-    const locationUrl = new URL(window.location.href);
-    locationUrl.search = new URLSearchParams({
-      lat: String(selectedDashboard.location.latitude),
-      lon: String(selectedDashboard.location.longitude),
-      timezone: selectedDashboard.location.timezone,
-      name: selectedDashboard.location.name,
-      country: selectedDashboard.location.country,
-    }).toString();
-    window.history.pushState({ ...window.history.state }, '', locationUrl);
-    locationSearchRef.current = locationUrl.search;
+    if (
+      selectedDashboard.location.latitude === currentLocation.latitude &&
+      selectedDashboard.location.longitude === currentLocation.longitude &&
+      selectedDashboard.location.name === currentLocation.name
+    )
+      return;
+    pushLocationToHistory(selectedDashboard.location);
   }
 
   function useCurrentLocation() {
@@ -479,52 +436,19 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
               <Map size={18} aria-hidden="true" />
               <span>Map</span>
             </a>
-            <WeatherTools>
-              <SavedLocationsPanel
-                gatewayOrigin={gatewayOrigin}
-                currentLocation={dashboard.location}
-                initialLocationExplicit={initialDashboard.location.id !== 'berlin-de'}
-                onSelect={selectLocation}
-                onLocationsChange={setSavedLocations}
-              />
-              <WeatherCalendarPanel
-                gatewayOrigin={gatewayOrigin}
-                dashboard={dashboard}
-                units={units}
-              />
-              <AirQualityPanel location={dashboard.location} />
-              <SevereWeatherPanel location={dashboard.location} />
-              <WeatherComparisonPanel
-                current={dashboard}
-                gatewayOrigin={gatewayOrigin}
-                units={units}
-                onUseAsCurrent={selectLocation}
-              />
-              <WeatherHistoryPanel
-                gatewayOrigin={gatewayOrigin}
-                location={dashboard.location}
-                current={dashboard.current}
-                provider={dashboard.meta.provider}
-                stale={dashboard.meta.stale}
-                units={units}
-              />
-              <InAppAlertsPanel
-                gatewayOrigin={gatewayOrigin}
-                location={dashboard.location}
-                current={dashboard.current}
-                hourly={dashboard.hourly}
-                stale={dashboard.meta.stale}
-              />
-              <PreferencesPanel
-                gatewayOrigin={gatewayOrigin}
-                units={units}
-                theme={theme}
-                timezonePreference={timezonePreference}
-                onUnitsChange={setUnits}
-                onThemeChange={setTheme}
-                onTimezoneChange={setTimezonePreference}
-              />
-            </WeatherTools>
+            <DashboardTools
+              dashboard={dashboard}
+              gatewayOrigin={gatewayOrigin}
+              initialLocationExplicit={initialDashboard.location.id !== 'berlin-de'}
+              units={units}
+              theme={theme}
+              timezonePreference={timezonePreference}
+              onSelectLocation={selectLocation}
+              onLocationsChange={setSavedLocations}
+              onUnitsChange={setUnits}
+              onThemeChange={setTheme}
+              onTimezoneChange={setTimezonePreference}
+            />
             <a
               className="user-management-link"
               href="/user"
@@ -602,6 +526,11 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
           <p className="weather-offline" role="status" aria-live="polite">
             Offline · showing {dashboard.location.name}'s last city forecast saved on this device.
             Reconnect to refresh.
+          </p>
+        ) : null}
+        {isOnline && dashboard.meta.stale ? (
+          <p className="weather-stale" role="status">
+            Showing cached weather while Open-Meteo is unavailable.
           </p>
         ) : null}
         {refreshStatus === 'failed' ? (
@@ -746,14 +675,7 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
           <article className="overview-card panel" id="trends" aria-labelledby="trend-title">
             <div className="card-heading">
               <div>
-                <p className="eyebrow">The bigger picture</p>
-                <h2 id="trend-title">
-                  {chartRange === '12h'
-                    ? 'The hours ahead.'
-                    : chartRange === '7d'
-                      ? 'A week in view.'
-                      : 'The next sixteen days.'}
-                </h2>
+                <h2 id="trend-title">Forecast trends</h2>
               </div>
               <label className="chart-series-picker" htmlFor="forecast-chart-series">
                 Measure
@@ -825,11 +747,10 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
           <article className="forecast-card panel" id="forecast" aria-labelledby="forecast-title">
             <div className="card-heading">
               <div>
-                <p className="eyebrow">Looking ahead</p>
                 <h2 id="forecast-title">
                   {forecastDays === 7
-                    ? 'The next seven days.'
-                    : `The next ${Math.min(16, outlook.length)} days.`}
+                    ? '7-day forecast'
+                    : `${Math.min(16, outlook.length)}-day forecast`}
                 </h2>
               </div>
               <span className="forecast-unit">°{units === 'metric' ? 'C' : 'F'}</span>
@@ -945,22 +866,18 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
             location={dashboard.location}
             displayTimezone={displayTimezone}
           />
-
-          {isOnline && dashboard.meta.stale ? (
-            <p className="weather-stale" role="status">
-              Showing cached weather while Open-Meteo is unavailable.
-            </p>
-          ) : null}
         </section>
         <a className="observatory-invitation" href="#map">
           <Map size={20} aria-hidden="true" />
           <span>
-            There’s a bigger picture.<small>Explore radar and weather layers in Observatory.</small>
+            Explore the map<small>View radar and weather layers in Observatory.</small>
           </span>
           <ArrowUpRight size={22} aria-hidden="true" />
         </a>
         <footer>
-          <span>Live weather data: Open-Meteo.</span>
+          <span>
+            {isOnline && !dashboard.meta.stale ? 'Live weather data' : 'Weather data'}: Open-Meteo.
+          </span>
           <span>Maps: OpenFreeMap · © OpenMapTiles · © OpenStreetMap contributors.</span>
           <LegalLinks />
         </footer>

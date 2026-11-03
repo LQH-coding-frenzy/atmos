@@ -28,8 +28,8 @@
   --shadow: 0 12px 40px light-dark(rgb(44 65 97 / 7%), rgb(0 0 0 / 16%));
   --floating-shadow: 0 12px 36px light-dark(rgb(34 55 84 / 14%), rgb(0 0 0 / 26%));
   --map-control-icon-filter: none;
-  --radius-control: 14px;
-  --radius-panel: 26px;
+  --radius-control: 12px;
+  --radius-panel: 18px;
 }
 
 html[data-theme='light'] {

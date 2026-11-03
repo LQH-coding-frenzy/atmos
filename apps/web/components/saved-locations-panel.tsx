@@ -31,6 +31,7 @@ import {
   moveSavedLocation,
   orderSavedLocations,
   readSavedPlacePreferences,
+  reconcileLocalSavedPlacePreferences,
   savedPlacePreferencesKey,
   writeSavedPlacePreferences,
   savedPlacePreferencesFromLocations,
@@ -201,19 +202,7 @@ export function SavedLocationsPanel({
         } catch {
           localPreferences = { ...emptySavedPlacePreferences };
         }
-        const availableIds = new Set(nextLocations.map((location) => location.id));
-        nextPreferences = {
-          ...(localPreferences.defaultLocationId &&
-          availableIds.has(localPreferences.defaultLocationId)
-            ? { defaultLocationId: localPreferences.defaultLocationId }
-            : {}),
-          orderedLocationIds: [
-            ...localPreferences.orderedLocationIds.filter((id) => availableIds.has(id)),
-            ...nextLocations
-              .filter((location) => !localPreferences.orderedLocationIds.includes(location.id))
-              .map((location) => location.id),
-          ],
-        };
+        nextPreferences = reconcileLocalSavedPlacePreferences(nextLocations, localPreferences);
         try {
           if (nextLocations.length > 100)
             throw new Error('Account preference sync is bounded to 100 saved places');
@@ -713,7 +702,9 @@ export function SavedLocationsPanel({
           {presentation === 'page'
             ? session
               ? 'Your saved places'
-              : 'Make yourself at home.'
+              : authMode === 'sign-up'
+                ? 'Create an account'
+                : 'Sign in to Atmos'
             : 'Your places'}
         </h2>
         {!authReady ? <p role="status">Checking account…</p> : null}

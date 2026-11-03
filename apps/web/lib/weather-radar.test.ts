@@ -4,6 +4,8 @@ import {
   openWeatherTileTemplate,
   rainViewerMaximumZoom,
   rainViewerPlaybackIntervalMilliseconds,
+  rainViewerPlaybackMaxAdvances,
+  rainViewerPlaybackCooldownMilliseconds,
   rainViewerTileTemplate,
 } from './weather-radar';
 
@@ -13,7 +15,9 @@ describe('RainViewer map helpers', () => {
       'https://tilecache.rainviewer.com/v2/radar/9d080488b7e9/256/{z}/{x}/{y}/2/1_0.png',
     );
     expect(rainViewerMaximumZoom).toBe(7);
-    expect(rainViewerPlaybackIntervalMilliseconds).toBe(15_000);
+    expect(rainViewerPlaybackIntervalMilliseconds).toBe(2_000);
+    expect(rainViewerPlaybackMaxAdvances).toBe(4);
+    expect(rainViewerPlaybackCooldownMilliseconds).toBe(60_000);
   });
 
   it('rejects unsafe radar paths and formats the frame time', () => {

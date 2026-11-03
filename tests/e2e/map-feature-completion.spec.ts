@@ -65,7 +65,7 @@ function dashboard(latitude: number, longitude: number) {
   };
 }
 
-test('loads bounded AQI point samples and confirms arbitrary map coordinates before selection', async ({
+test('loads bounded AQI point samples and selects arbitrary map coordinates directly', async ({
   page,
 }, testInfo) => {
   const requestedAqi: Array<Record<string, unknown>> = [];
@@ -129,6 +129,7 @@ test('loads bounded AQI point samples and confirms arbitrary map coordinates bef
 
   await page.goto('/');
   await page.locator('.maplibregl-canvas').waitFor();
+  await expect(page.getByText(/doesn't offer selectable city labels/)).toBeVisible();
   const layerPicker = page.getByRole('combobox', { name: 'Weather map layer' });
   await layerPicker.selectOption('aqi');
   const aqiPanel = page.getByRole('region', { name: 'Air quality map samples' });
@@ -159,10 +160,6 @@ test('loads bounded AQI point samples and confirms arbitrary map coordinates bef
     },
   });
 
-  const placePreview = page.getByRole('region', { name: /Weather preview for/ });
-  await expect(placePreview).toBeVisible();
-  await expect(placePreview).toContainText('Selected map point');
-  await expect(page.getByRole('button', { name: 'Use this location' })).toBeEnabled();
   await expect.poll(() => coordinateQueries.length).toBe(1);
   expect(coordinateQueries[0]!.latitude).toBeGreaterThanOrEqual(-90);
   expect(coordinateQueries[0]!.latitude).toBeLessThanOrEqual(90);
@@ -170,7 +167,6 @@ test('loads bounded AQI point samples and confirms arbitrary map coordinates bef
   expect(coordinateQueries[0]!.longitude).toBeLessThanOrEqual(180);
   expect(searchRequests).toBe(0);
 
-  await page.getByRole('button', { name: 'Use this location' }).click();
   await expect(page).toHaveURL(/lat=.*lon=/);
   const currentUrl = new URL(page.url());
   expect(Number(currentUrl.searchParams.get('lat'))).toBeCloseTo(coordinateQueries[0]!.latitude, 4);
@@ -202,4 +198,199 @@ test('loads bounded AQI point samples and confirms arbitrary map coordinates bef
   if (!process.env.CI) {
     await page.locator('#map').screenshot({ path: testInfo.outputPath('map-aqi-320px.png') });
   }
+});
+
+test('keeps the previous location when direct selection fails and allows retry', async ({
+  page,
+}) => {
+  let requests = 0;
+  await page.route('**/styles/liberty', (route) =>
+    route.fulfill({
+      json: {
+        version: 8,
+        sources: {},
+        layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#ddd' } }],
+      },
+    }),
+  );
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
+    requests++;
+    if (requests === 1) {
+      await route.fulfill({ status: 503, json: { error: 'unavailable' } });
+      return;
+    }
+    const input = route.request().postDataJSON();
+    await route.fulfill({ json: dashboard(Number(input.latitude), Number(input.longitude)) });
+  });
+  await page.goto('/#map');
+  const canvas = page.locator('.maplibregl-canvas');
+  await canvas.waitFor();
+  const bounds = await canvas.boundingBox();
+  expect(bounds).not.toBeNull();
+  await canvas.click({ position: { x: bounds!.width * 0.75, y: bounds!.height * 0.65 } });
+  await expect(page.getByText(/could not be loaded. Your previous location/)).toBeVisible();
+  await expect(page.locator('.location-name')).toHaveText('Berlin');
+  await expect(page).not.toHaveURL(/lat=/);
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(page).toHaveURL(/lat=.*lon=/);
+  await expect(page.getByText(/could not be loaded. Your previous location/)).toHaveCount(0);
+  expect(requests).toBe(2);
+});
+
+test('keeps the latest map selection when an earlier response arrives late', async ({ page }) => {
+  let requests = 0;
+  let releaseFirst: () => void = () => {};
+  const firstPending = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+  const coordinates: Array<{ latitude: number; longitude: number }> = [];
+  await page.route('**/styles/liberty', (route) =>
+    route.fulfill({
+      json: {
+        version: 8,
+        sources: {},
+        layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#ddd' } }],
+      },
+    }),
+  );
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
+    const input = route.request().postDataJSON();
+    const point = { latitude: Number(input.latitude), longitude: Number(input.longitude) };
+    coordinates.push(point);
+    const requestNumber = ++requests;
+    if (requestNumber === 1) await firstPending;
+    await route.fulfill({ json: dashboard(point.latitude, point.longitude) }).catch(() => {});
+  });
+  try {
+    await page.goto('/#map');
+    const canvas = page.locator('.maplibregl-canvas');
+    await canvas.waitFor();
+    const bounds = await canvas.boundingBox();
+    expect(bounds).not.toBeNull();
+    await canvas.click({ position: { x: bounds!.width * 0.7, y: bounds!.height * 0.6 } });
+    await expect.poll(() => requests).toBe(1);
+    await canvas.click({ position: { x: bounds!.width * 0.8, y: bounds!.height * 0.55 } });
+    await expect.poll(() => requests).toBe(2);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('lat'))
+      .toBe(String(coordinates[1]!.latitude));
+    releaseFirst();
+    await expect(page).toHaveURL(new RegExp(`lat=${coordinates[1]!.latitude}`));
+  } finally {
+    releaseFirst();
+  }
+});
+
+test('does not select a location while dragging the map', async ({ page }) => {
+  let requests = 0;
+  await page.route('**/styles/liberty', (route) =>
+    route.fulfill({
+      json: {
+        version: 8,
+        sources: {},
+        layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#ddd' } }],
+      },
+    }),
+  );
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
+    requests++;
+    await route.fulfill({ status: 503, json: { error: 'unexpected selection' } });
+  });
+  await page.goto('/#map');
+  const canvas = page.locator('.maplibregl-canvas');
+  await canvas.waitFor();
+  const bounds = await canvas.boundingBox();
+  expect(bounds).not.toBeNull();
+  const x = bounds!.x + bounds!.width * 0.7;
+  const y = bounds!.y + bounds!.height * 0.55;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 80, y + 30, { steps: 5 });
+  await page.mouse.up();
+  await expect(page).not.toHaveURL(/lat=/);
+  await expect(page.locator('.location-name')).toHaveText('Berlin');
+  expect(requests).toBe(0);
+});
+
+test('supports choosing the current map city with the keyboard', async ({ page }) => {
+  await page.route('**/styles/liberty', (route) =>
+    route.fulfill({
+      json: {
+        version: 8,
+        sources: {},
+        layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#ddd' } }],
+      },
+    }),
+  );
+  await page.goto('/#map');
+  const picker = page.getByRole('combobox', { name: 'Browse cities visible on the map' });
+  await expect(picker).toBeVisible();
+  await picker.focus();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(picker).toHaveValue(/selected:/);
+  await expect(page.locator('.location-name')).toHaveText('Berlin');
+  await expect(page.getByRole('button', { name: 'Open Berlin' })).toHaveCount(0);
+});
+
+test('restores direct map selections with browser Back and Forward', async ({ page }) => {
+  await page.route('**/styles/liberty', (route) =>
+    route.fulfill({
+      json: {
+        version: 8,
+        sources: {},
+        layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#ddd' } }],
+      },
+    }),
+  );
+  await page.route('**/api/public/v1/weather/dashboard', async (route) => {
+    const input = route.request().postDataJSON();
+    await route.fulfill({ json: dashboard(Number(input.latitude), Number(input.longitude)) });
+  });
+  await page.goto('/#map');
+  const canvas = page.locator('.maplibregl-canvas');
+  await canvas.waitFor();
+  const bounds = await canvas.boundingBox();
+  expect(bounds).not.toBeNull();
+  await canvas.click({ position: { x: bounds!.width * 0.75, y: bounds!.height * 0.65 } });
+  await expect(page).toHaveURL(/lat=.*lon=/);
+  const selectedUrl = page.url();
+  const selectedName = await page.locator('.location-name').textContent();
+  expect(selectedName).not.toBe('Berlin');
+  await page.goBack();
+  await expect(page.locator('.location-name')).toHaveText('Berlin');
+  await page.goForward();
+  await expect(page).toHaveURL(selectedUrl);
+  await expect(page.locator('.location-name')).toHaveText(selectedName!);
+});
+
+test('keeps mobile map controls clear of the offline notice', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 740 });
+  await page.route('**/api/v1/weather/map/layers', (route) =>
+    route.fulfill({ json: { openWeatherAvailable: false } }),
+  );
+  await page.route('**/api/v1/weather/radar/frames*', (route) => {
+    const timestamp = Math.floor(Date.now() / 1000);
+    return route.fulfill({
+      json: {
+        generatedAt: timestamp,
+        tileHost: 'https://tilecache.rainviewer.com',
+        frames: [{ timestamp, path: '/v2/radar/test-frame' }],
+      },
+    });
+  });
+  await page.goto('/#map');
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    window.dispatchEvent(new Event('offline'));
+  });
+  const notice = page.locator('.weather-offline');
+  const controls = page.locator('.map-radar-controls');
+  await expect(notice).toBeVisible();
+  await expect(controls).toBeVisible();
+  const noticeBounds = await notice.boundingBox();
+  const controlBounds = await controls.boundingBox();
+  expect(noticeBounds).not.toBeNull();
+  expect(controlBounds).not.toBeNull();
+  expect(controlBounds!.y + controlBounds!.height).toBeLessThanOrEqual(noticeBounds!.y);
 });

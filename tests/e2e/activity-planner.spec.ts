@@ -167,7 +167,7 @@ test('offers all activity profiles, session-local custom thresholds, and opt-in 
     await planner.screenshot({ path: testInfo.outputPath('activity-planner-desktop.png') });
     await page.setViewportSize({ width: 390, height: 844 });
     const mobileTitle = await planner
-      .getByRole('heading', { name: 'Find your window.' })
+      .getByRole('heading', { name: 'Activity planner' })
       .boundingBox();
     expect(mobileTitle?.width).toBeGreaterThan(250);
     await planner.screenshot({ path: testInfo.outputPath('activity-planner-mobile.png') });
