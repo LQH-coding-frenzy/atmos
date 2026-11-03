@@ -106,6 +106,22 @@ export const openMeteoQuotaLimits: OpenMeteoQuotaLimits = {
 
 export type OpenMeteoQuotaWindow = keyof OpenMeteoQuotaLimits;
 
+export type OpenMeteoFailureClass =
+  | 'quota_exceeded'
+  | 'timeout'
+  | 'network_error'
+  | 'upstream_3xx'
+  | 'upstream_4xx'
+  | 'upstream_5xx'
+  | 'invalid_json'
+  | 'invalid_response'
+  | 'provider_error';
+
+export type OpenMeteoProviderFailureClass = Exclude<
+  OpenMeteoFailureClass,
+  'quota_exceeded' | 'provider_error'
+>;
+
 const quotaWindowDurations: Record<OpenMeteoQuotaWindow, number> = {
   minute: 60_000,
   hour: 60 * 60_000,
@@ -119,8 +135,79 @@ export interface OpenMeteoUsageSnapshot {
 }
 
 export class OpenMeteoQuotaError extends Error {
+  readonly failureClass = 'quota_exceeded' as const;
+
   constructor(readonly window: OpenMeteoQuotaWindow) {
     super(`Open-Meteo ${window} quota exceeded`);
+  }
+}
+
+const providerFailureMessages: Record<OpenMeteoProviderFailureClass, string> = {
+  timeout: 'Open-Meteo request timed out',
+  network_error: 'Open-Meteo request failed',
+  upstream_3xx: 'Open-Meteo returned an unexpected redirect',
+  upstream_4xx: 'Open-Meteo returned an unsuccessful HTTP response',
+  upstream_5xx: 'Open-Meteo returned an unsuccessful HTTP response',
+  invalid_json: 'Open-Meteo returned invalid JSON',
+  invalid_response: 'Open-Meteo returned an invalid response',
+};
+
+export class OpenMeteoProviderError extends Error {
+  constructor(
+    readonly failureClass: OpenMeteoProviderFailureClass,
+    safeMessage = providerFailureMessages[failureClass],
+  ) {
+    super(safeMessage);
+    this.name = failureClass === 'timeout' ? 'AbortError' : 'OpenMeteoProviderError';
+  }
+}
+
+export function openMeteoFailureClass(error: unknown): OpenMeteoFailureClass {
+  if (error instanceof OpenMeteoQuotaError || error instanceof OpenMeteoProviderError) {
+    return error.failureClass;
+  }
+  return 'provider_error';
+}
+
+function upstreamHttpFailureClass(status: number): OpenMeteoProviderFailureClass {
+  if (status >= 500) return 'upstream_5xx';
+  if (status >= 400) return 'upstream_4xx';
+  if (status >= 300) return 'upstream_3xx';
+  return 'invalid_response';
+}
+
+async function fetchOpenMeteoJson(fetcher: typeof fetch, url: URL): Promise<unknown> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 5_000);
+
+  try {
+    const response = await fetcher(url, { signal: controller.signal });
+    if (!response.ok) {
+      void response.body?.cancel().catch(() => undefined);
+      throw new OpenMeteoProviderError(upstreamHttpFailureClass(response.status));
+    }
+
+    const body = await response.text();
+    try {
+      return JSON.parse(body) as unknown;
+    } catch {
+      throw new OpenMeteoProviderError('invalid_json');
+    }
+  } catch (error) {
+    if (error instanceof OpenMeteoProviderError) throw error;
+    if (
+      timedOut ||
+      (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError'))
+    ) {
+      throw new OpenMeteoProviderError('timeout');
+    }
+    throw new OpenMeteoProviderError('network_error');
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -255,23 +342,31 @@ function conditionFromCode(code: number): WeatherCondition {
 }
 
 function toIso(time: number): string {
-  return new Date(time * 1_000).toISOString();
+  const date = new Date(time * 1_000);
+  if (!Number.isFinite(date.getTime())) throw new OpenMeteoProviderError('invalid_response');
+  return date.toISOString();
 }
 
 function localDateFormatter(timezone: string): Intl.DateTimeFormat {
-  return new Intl.DateTimeFormat('en', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
+  try {
+    return new Intl.DateTimeFormat('en', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+  } catch {
+    throw new OpenMeteoProviderError('invalid_response');
+  }
 }
 
 function localDate(time: number, formatter: Intl.DateTimeFormat): string {
   let year = '';
   let month = '';
   let day = '';
-  for (const part of formatter.formatToParts(new Date(time * 1_000))) {
+  const date = new Date(time * 1_000);
+  if (!Number.isFinite(date.getTime())) throw new OpenMeteoProviderError('invalid_response');
+  for (const part of formatter.formatToParts(date)) {
     if (part.type === 'year') year = part.value;
     else if (part.type === 'month') month = part.value;
     else if (part.type === 'day') day = part.value;
@@ -391,7 +486,7 @@ function sunlightTime(value: number | null | undefined) {
 function dayFlag(value: number | null | undefined) {
   if (value === undefined) return undefined;
   if (value === null) return null;
-  if (value !== 0 && value !== 1) throw new Error('Invalid provider day flag');
+  if (value !== 0 && value !== 1) throw new OpenMeteoProviderError('invalid_response');
   return value === 1;
 }
 
@@ -419,7 +514,9 @@ function isOpenMeteoAirQualityResponse(value: unknown): value is OpenMeteoAirQua
 }
 
 function normalizeAirQualityTimeline(value: unknown) {
-  if (!value || typeof value !== 'object') throw new Error('Air-quality timeline is unavailable');
+  if (!value || typeof value !== 'object') {
+    throw new OpenMeteoProviderError('invalid_response', 'Air-quality timeline is unavailable');
+  }
   const series = value as Record<string, unknown>;
   const times = series.time;
   if (
@@ -433,7 +530,10 @@ function normalizeAirQualityTimeline(value: unknown) {
         series[key].every(isAirQualityValue),
     )
   ) {
-    throw new Error('Air-quality timeline has an invalid shape');
+    throw new OpenMeteoProviderError(
+      'invalid_response',
+      'Air-quality timeline has an invalid shape',
+    );
   }
   const values = series as Record<(typeof airQualityVariables)[number], Array<number | null>>;
   return {
@@ -479,22 +579,20 @@ export class OpenMeteoProvider
     url.searchParams.set('wind_speed_unit', 'kmh');
     url.searchParams.set('precipitation_unit', 'mm');
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    let response: Response;
-    try {
-      response = await this.fetcher(url, { signal: controller.signal });
-    } finally {
-      clearTimeout(timeout);
+    const data = await fetchOpenMeteoJson(this.fetcher, url);
+    if (!isOpenMeteoResponse(data)) {
+      throw new OpenMeteoProviderError(
+        'invalid_response',
+        'Open-Meteo response has an invalid shape',
+      );
     }
-    if (!response.ok) {
-      throw new Error(`Open-Meteo request failed with ${response.status}`);
-    }
-
-    const data: unknown = await response.json();
-    if (!isOpenMeteoResponse(data)) throw new Error('Open-Meteo response has an invalid shape');
     const firstForecastHour = data.hourly.time.findIndex((time) => time >= data.current.time);
-    if (firstForecastHour < 0) throw new Error('Open-Meteo response has no future hourly forecast');
+    if (firstForecastHour < 0) {
+      throw new OpenMeteoProviderError(
+        'invalid_response',
+        'Open-Meteo response has no future hourly forecast',
+      );
+    }
     const locationName = `${input.latitude.toFixed(2)}, ${input.longitude.toFixed(2)}`;
     const currentHour = data.hourly.time.findIndex(
       (time) => time <= data.current.time && data.current.time < time + 3600,
@@ -605,7 +703,11 @@ export class OpenMeteoProvider
       },
     };
 
-    return dashboardSchema.parse(dashboard);
+    try {
+      return dashboardSchema.parse(dashboard);
+    } catch {
+      throw new OpenMeteoProviderError('invalid_response');
+    }
   }
 
   async getAirQuality(input: AirQualityInput): Promise<AirQuality> {
@@ -622,42 +724,38 @@ export class OpenMeteoProvider
       url.searchParams.set('timezone', 'UTC');
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    let response: Response;
-    try {
-      response = await this.fetcher(url, { signal: controller.signal });
-    } finally {
-      clearTimeout(timeout);
-    }
-    if (!response.ok) {
-      throw new Error(`Open-Meteo air-quality request failed with ${response.status}`);
-    }
-
-    const data: unknown = await response.json();
+    const data = await fetchOpenMeteoJson(this.fetcher, url);
     if (!isOpenMeteoAirQualityResponse(data)) {
-      throw new Error('Open-Meteo air-quality response has an invalid shape');
+      throw new OpenMeteoProviderError(
+        'invalid_response',
+        'Open-Meteo air-quality response has an invalid shape',
+      );
     }
-    return airQualitySchema.parse({
-      observedAt: toIso(data.current.time),
-      usAqi: data.current.us_aqi,
-      europeanAqi: data.current.european_aqi,
-      timeline: input.includeTimeline ? normalizeAirQualityTimeline(data.hourly) : undefined,
-      pollutants: {
-        pm25: data.current.pm2_5,
-        pm10: data.current.pm10,
-        carbonMonoxide: data.current.carbon_monoxide,
-        nitrogenDioxide: data.current.nitrogen_dioxide,
-        sulphurDioxide: data.current.sulphur_dioxide,
-        ozone: data.current.ozone,
-      },
-      meta: {
-        provider: 'open-meteo',
-        cached: false,
-        stale: false,
-        updatedAt: new Date().toISOString(),
-      },
-    });
+    try {
+      return airQualitySchema.parse({
+        observedAt: toIso(data.current.time),
+        usAqi: data.current.us_aqi,
+        europeanAqi: data.current.european_aqi,
+        timeline: input.includeTimeline ? normalizeAirQualityTimeline(data.hourly) : undefined,
+        pollutants: {
+          pm25: data.current.pm2_5,
+          pm10: data.current.pm10,
+          carbonMonoxide: data.current.carbon_monoxide,
+          nitrogenDioxide: data.current.nitrogen_dioxide,
+          sulphurDioxide: data.current.sulphur_dioxide,
+          ozone: data.current.ozone,
+        },
+        meta: {
+          provider: 'open-meteo',
+          cached: false,
+          stale: false,
+          updatedAt: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      if (error instanceof OpenMeteoProviderError) throw error;
+      throw new OpenMeteoProviderError('invalid_response');
+    }
   }
 
   async searchLocations(query: string): Promise<LocationSearchResult[]> {
@@ -668,19 +766,21 @@ export class OpenMeteoProvider
     url.searchParams.set('language', 'en');
     url.searchParams.set('format', 'json');
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    let response: Response;
-    try {
-      response = await this.fetcher(url, { signal: controller.signal });
-    } finally {
-      clearTimeout(timeout);
+    const responseData = await fetchOpenMeteoJson(this.fetcher, url);
+    if (!responseData || typeof responseData !== 'object' || Array.isArray(responseData)) {
+      throw new OpenMeteoProviderError(
+        'invalid_response',
+        'Open-Meteo geocoding response has an invalid shape',
+      );
     }
-    if (!response.ok)
-      throw new Error(`Open-Meteo geocoding request failed with ${response.status}`);
-
-    const data = (await response.json()) as OpenMeteoGeocodingResponse;
-    if (!Array.isArray(data.results)) return [];
+    const data = responseData as OpenMeteoGeocodingResponse;
+    if (data.results === undefined) return [];
+    if (!Array.isArray(data.results)) {
+      throw new OpenMeteoProviderError(
+        'invalid_response',
+        'Open-Meteo geocoding response has an invalid shape',
+      );
+    }
     return data.results
       .filter(
         (result) =>

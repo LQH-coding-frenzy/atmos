@@ -7,7 +7,12 @@ import {
   type Dashboard,
   type LocationInput,
 } from '@atmos/contracts';
-import { OpenMeteoProvider } from '@atmos/provider-openmeteo';
+import {
+  OpenMeteoProvider,
+  OpenMeteoProviderError,
+  openMeteoFailureClass,
+  type OpenMeteoFailureClass,
+} from '@atmos/provider-openmeteo';
 import { getCache } from '@vercel/functions';
 
 const cacheSchemaVersion = 1;
@@ -26,9 +31,9 @@ export type PublicWeatherCacheResult<T> = {
   data: T;
   cached: boolean;
   stale: boolean;
-  cacheReadErrorType?: string;
-  cacheWriteErrorType?: string;
-  providerErrorType?: string;
+  cacheReadErrorType?: 'cache_error';
+  cacheWriteErrorType?: 'cache_error';
+  providerFailureClass?: OpenMeteoFailureClass;
 };
 
 export type PublicWeatherCacheStore = {
@@ -40,10 +45,6 @@ export type PublicWeatherProvider = {
   getDashboard(input: LocationInput): Promise<Dashboard>;
   getAirQuality(input: AirQualityInput): Promise<AirQuality>;
 };
-
-function safeErrorType(error: unknown) {
-  return error instanceof Error ? error.name : 'unknown';
-}
 
 function cacheKey(scope: 'dashboard' | 'air-quality', parts: Array<string | number | boolean>) {
   const digest = createHash('sha256').update(JSON.stringify(parts)).digest('hex');
@@ -123,11 +124,11 @@ export function createPublicWeatherCache(
 
     const pending = (async () => {
       let cached: ReturnType<typeof parseCacheRecord<T>>;
-      let cacheReadErrorType: string | undefined;
+      let cacheReadErrorType: PublicWeatherCacheResult<T>['cacheReadErrorType'];
       try {
         cached = parseCacheRecord(await store.get(key), parse);
-      } catch (error) {
-        cacheReadErrorType = safeErrorType(error);
+      } catch {
+        cacheReadErrorType = 'cache_error';
       }
 
       const ageMilliseconds = cached ? now() - cached.generatedAt : Number.POSITIVE_INFINITY;
@@ -148,9 +149,9 @@ export function createPublicWeatherCache(
 
       try {
         const data = parse(await fetchFresh());
-        if (!data) throw new Error('Weather provider response did not match its contract');
+        if (!data) throw new OpenMeteoProviderError('invalid_response');
 
-        let cacheWriteErrorType: string | undefined;
+        let cacheWriteErrorType: PublicWeatherCacheResult<T>['cacheWriteErrorType'];
         try {
           const entry: CachedWeatherRecord<T> = {
             schema: cacheSchemaVersion,
@@ -158,8 +159,8 @@ export function createPublicWeatherCache(
             data,
           };
           await store.set(key, entry, cacheTtlSeconds, entryName);
-        } catch (error) {
-          cacheWriteErrorType = safeErrorType(error);
+        } catch {
+          cacheWriteErrorType = 'cache_error';
         }
 
         return {
@@ -175,7 +176,7 @@ export function createPublicWeatherCache(
             data: stale.data,
             cached: true,
             stale: true,
-            providerErrorType: safeErrorType(error),
+            providerFailureClass: openMeteoFailureClass(error),
             ...(cacheReadErrorType ? { cacheReadErrorType } : {}),
           };
         }

@@ -286,7 +286,9 @@ describe('Next.js weather transform handlers', () => {
     const handlers = createWeatherRouteHandlers(
       {
         getDashboard: vi.fn(async () => {
-          throw new Error('private provider payload and coordinates');
+          throw new Error(
+            `private provider payload at https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.405 with credential ${serviceToken}`,
+          );
         }),
       },
       serviceToken,
@@ -300,8 +302,21 @@ describe('Next.js weather transform handlers', () => {
     expect(body).toContain('WEATHER_UNAVAILABLE');
     expect(body).not.toContain('private provider payload');
     expect(warning).toHaveBeenCalledOnce();
-    expect(warning.mock.calls[0]?.[0]).not.toContain('52.52');
-    expect(warning.mock.calls[0]?.[0]).not.toContain('private provider payload');
+    const logLine = String(warning.mock.calls[0]?.[0]);
+    expect(JSON.parse(logLine)).toEqual({
+      event: 'weather_dashboard_provider_failed',
+      request_id: 'weather_route_test-1',
+      failure_class: 'provider_error',
+    });
+    for (const sensitiveValue of [
+      '52.52',
+      '13.405',
+      'private provider payload',
+      'https://api.open-meteo.com',
+      serviceToken,
+    ]) {
+      expect(logLine).not.toContain(sensitiveValue);
+    }
   });
 
   it('supports the bounded AQI timeline request contract', async () => {
@@ -491,7 +506,7 @@ describe('public Next.js weather handlers', () => {
         data: airQuality,
         cached: true,
         stale: true,
-        providerErrorType: 'Error',
+        providerFailureClass: 'timeout' as const,
       })),
     });
     const response = await handlers.airQuality(
@@ -513,5 +528,55 @@ describe('public Next.js weather handlers', () => {
     expect(JSON.stringify(warning.mock.calls)).not.toContain('52.52');
     expect(JSON.stringify(warning.mock.calls)).not.toContain('13.405');
     expect(JSON.stringify(warning.mock.calls)).not.toContain('private provider');
+    const logLine = String(warning.mock.calls[0]?.[0]);
+    expect(logLine).toContain('"failure_class":"timeout"');
+    expect(logLine).not.toContain('https://');
+    expect(logLine).not.toContain(serviceToken);
+  });
+
+  it('logs cache reads and writes as separate sanitized failure events', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const handlers = createPublicWeatherRouteHandlers({
+      getDashboard: vi.fn(async () => ({
+        data: dashboard,
+        cached: false,
+        stale: false,
+        cacheReadErrorType: 'cache_error' as const,
+        cacheWriteErrorType: 'cache_error' as const,
+      })),
+      getAirQuality: vi.fn(async () => ({ data: airQuality, cached: false, stale: false })),
+    });
+    const response = await handlers.dashboard(
+      post(
+        JSON.stringify({
+          latitude: 52.52,
+          longitude: 13.405,
+          timezone: 'Europe/Berlin',
+          units: 'metric',
+        }),
+        'public_cache_errors-1',
+        serviceToken,
+        undefined,
+        'dashboard',
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    expect(warning.mock.calls.map(([line]) => JSON.parse(String(line)))).toEqual([
+      {
+        event: 'weather_dashboard_cache_read_failed',
+        request_id: 'public_cache_errors-1',
+        error_type: 'cache_error',
+      },
+      {
+        event: 'weather_dashboard_cache_write_failed',
+        request_id: 'public_cache_errors-1',
+        error_type: 'cache_error',
+      },
+    ]);
+    const logLines = warning.mock.calls.map(([line]) => String(line)).join('\n');
+    for (const sensitiveValue of ['52.52', '13.405', 'https://', serviceToken]) {
+      expect(logLines).not.toContain(sensitiveValue);
+    }
   });
 });

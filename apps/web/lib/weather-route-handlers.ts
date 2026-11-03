@@ -12,6 +12,7 @@ import {
   type WeatherProvider,
 } from '@atmos/contracts';
 import type { PublicWeatherCacheResult } from './public-weather-cache';
+import { openMeteoFailureClass } from '@atmos/provider-openmeteo';
 
 const requestBodyLimitBytes = 2_048;
 const timezonePattern = /^[A-Za-z_+-]+(?:\/[A-Za-z_+-]+)*$/;
@@ -255,7 +256,7 @@ function logProviderFailure(
     JSON.stringify({
       event: `weather_${resource}_provider_failed`,
       request_id: requestId,
-      error_type: error instanceof Error ? error.name : 'unknown',
+      failure_class: openMeteoFailureClass(error),
     }),
   );
 }
@@ -272,7 +273,7 @@ function logPublicWeatherFailure(
       event: `weather_${resource}_${event}`,
       request_id: requestId,
       ...(stale ? { cache_status: 'STALE' } : {}),
-      error_type: errorType,
+      ...(event === 'provider_failed' ? { failure_class: errorType } : { error_type: errorType }),
     }),
   );
 }
@@ -462,12 +463,12 @@ export function createPublicWeatherRouteHandlers(cache: PublicWeatherCache) {
           result.cacheWriteErrorType,
         );
       }
-      if (result.providerErrorType) {
+      if (result.providerFailureClass) {
         logPublicWeatherFailure(
           requestId,
           'dashboard',
           'provider_failed',
-          result.providerErrorType,
+          result.providerFailureClass,
           result.stale,
         );
       }
@@ -535,12 +536,12 @@ export function createPublicWeatherRouteHandlers(cache: PublicWeatherCache) {
           result.cacheWriteErrorType,
         );
       }
-      if (result.providerErrorType) {
+      if (result.providerFailureClass) {
         logPublicWeatherFailure(
           requestId,
           'air_quality',
           'provider_failed',
-          result.providerErrorType,
+          result.providerFailureClass,
           result.stale,
         );
       }

@@ -1,14 +1,19 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import type { LocationInput } from '@atmos/contracts';
+import { openMeteoFailureClass } from '@atmos/provider-openmeteo';
 import { createPublicWeatherRouteHandlers } from './weather-route-handlers';
 import { publicWeatherCache } from './public-weather-cache';
+import { dashboardProviderFailureLogLine } from './public-weather-logging';
 
 export const publicWeatherRouteHandlers = createPublicWeatherRouteHandlers(publicWeatherCache);
 
 export async function getPublicDashboard(input: LocationInput) {
-  const result = await publicWeatherCache.getDashboard(input);
   const requestId = randomUUID();
+  const result = await publicWeatherCache.getDashboard(input).catch((error: unknown) => {
+    console.warn(dashboardProviderFailureLogLine(requestId, openMeteoFailureClass(error), 'MISS'));
+    throw error;
+  });
   if (result.cacheReadErrorType) {
     console.warn(
       JSON.stringify({
@@ -27,14 +32,13 @@ export async function getPublicDashboard(input: LocationInput) {
       }),
     );
   }
-  if (result.providerErrorType) {
+  if (result.providerFailureClass) {
     console.warn(
-      JSON.stringify({
-        event: 'weather_dashboard_provider_failed',
-        request_id: requestId,
-        cache_status: result.stale ? 'STALE' : 'MISS',
-        error_type: result.providerErrorType,
-      }),
+      dashboardProviderFailureLogLine(
+        requestId,
+        result.providerFailureClass,
+        result.stale ? 'STALE' : 'MISS',
+      ),
     );
   }
   return {

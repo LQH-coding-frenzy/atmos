@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AirQuality, AirQualityInput, LocationInput } from '@atmos/contracts';
-import { MockWeatherProvider } from '@atmos/provider-openmeteo';
+import { MockWeatherProvider, OpenMeteoProviderError } from '@atmos/provider-openmeteo';
 import { createPublicWeatherCache, type PublicWeatherCacheStore } from './public-weather-cache';
 
 const dashboardInput: LocationInput = {
@@ -120,8 +120,22 @@ describe('Vercel public weather cache', () => {
     clock.now += 300_001;
     getDashboard.mockRejectedValueOnce(new Error('provider details must stay private'));
     const stale = await cache.getDashboard(dashboardInput);
-    expect(stale).toMatchObject({ cached: true, stale: true, providerErrorType: 'Error' });
+    expect(stale).toMatchObject({
+      cached: true,
+      stale: true,
+      providerFailureClass: 'provider_error',
+    });
     expect(stale.data).toEqual(refreshed.data);
+
+    clock.now += 300_001;
+    getDashboard.mockRejectedValueOnce(new OpenMeteoProviderError('timeout'));
+    const timedOut = await cache.getDashboard(dashboardInput);
+    expect(timedOut).toMatchObject({
+      cached: true,
+      stale: true,
+      providerFailureClass: 'timeout',
+    });
+    expect(timedOut.data).toEqual(refreshed.data);
   });
 
   it('does not serve entries past one hour and treats cache write failures as non-fatal', async () => {
@@ -152,7 +166,7 @@ describe('Vercel public weather cache', () => {
     await expect(writeFailureCache.getDashboard(dashboardInput)).resolves.toMatchObject({
       cached: false,
       stale: false,
-      cacheWriteErrorType: 'Error',
+      cacheWriteErrorType: 'cache_error',
     });
   });
 
@@ -205,8 +219,8 @@ describe('Vercel public weather cache', () => {
     await expect(cache.getDashboard(dashboardInput)).resolves.toMatchObject({
       cached: false,
       stale: false,
-      cacheReadErrorType: 'Error',
-      cacheWriteErrorType: 'Error',
+      cacheReadErrorType: 'cache_error',
+      cacheWriteErrorType: 'cache_error',
     });
     expect(getDashboard).toHaveBeenCalledOnce();
   });
