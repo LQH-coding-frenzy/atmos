@@ -689,3 +689,27 @@ Limit Requests` as 1,000,000 allowed requests/month included; the authenticated 
   and provider budget are verified, team-level usage remains below the 70% warnings, and exact-version
   CPU p95 for remaining Worker traffic is at or below 7 ms. No app deployment or weather-provider
   smoke request has been made by this continuation yet.
+
+## Vercel UI release attempt and homepage hard-miss diagnostic follow-up — 2026-11-03
+
+- PR #339 merged to `main` as `c8d6ada9010e96fee9a788b22df6be2b09ee3811` with the UI/README-only
+  scope. Protected Vercel release run [41677663077](https://github.com/LQH-coding-frenzy/atmos/actions/runs/41677663077)
+  was dispatched with promotion requested.
+- The workflow built and uploaded an unaliased production artifact. Its exact-deployment homepage
+  returned HTTP 200 and passed the required security-header checks, but the verifier did not find the
+  `Live weather data: Open-Meteo.` marker. It stopped at that first failure; the dashboard/AQI smoke,
+  promotion, production-domain smoke, and rollback steps were skipped. Read-only `vercel inspect`
+  confirmed the prior production alias remained `READY`; no Worker deployment or traffic shift
+  occurred. The workflow sent no retries; conservatively count at most five weighted Open-Meteo units
+  for the single homepage smoke, with actual provider use unconfirmed.
+- A read-only runtime-log query for the exact unaliased deployment returned no records. The failed
+  marker can be caused by unavailable or stale server-rendered data; the evidence does not distinguish
+  those cases or establish a root cause. The homepage's `getPublicDashboard()` hard-miss path previously
+  rethrew to the page fallback without logging a sanitized provider failure class.
+- This local follow-up adds a safe failure-class event to that hard-miss catch and tests that no error
+  message, URL, coordinates, payload, or credential is serialized. It preserves the generic unavailable
+  page, stale-cache behavior, and client response contract. This diagnostic change is not deployed and
+  no application request or retry was sent during this follow-up.
+- Local verification passed: 48 focused provider/cache/route/runtime tests; the full suite (252 Vitest
+  plus 81 Node script tests); repository typecheck and lint; web production build; and format/runbook
+  checks. These results do not explain the failed production smoke or change the current deployment.

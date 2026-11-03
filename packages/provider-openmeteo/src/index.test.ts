@@ -5,6 +5,7 @@ import {
   OpenMeteoQuotaError,
   OpenMeteoUsageGuard,
   openMeteoAttribution,
+  openMeteoFailureClass,
 } from './index';
 
 describe('weather providers', () => {
@@ -151,6 +152,16 @@ describe('weather providers', () => {
     ]);
   });
 
+  it('classifies malformed geocoding response shapes', async () => {
+    const provider = new OpenMeteoProvider(
+      async () => new Response(JSON.stringify({ results: 'private provider payload' })),
+    );
+
+    await expect(provider.searchLocations('Berlin')).rejects.toMatchObject({
+      failureClass: 'invalid_response',
+    });
+  });
+
   it('aborts an unresponsive provider after five seconds without retrying', async () => {
     vi.useFakeTimers();
     const fetcher = vi.fn(
@@ -167,12 +178,82 @@ describe('weather providers', () => {
       timezone: 'Europe/Berlin',
       units: 'metric',
     });
-    const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+    const rejection = expect(request).rejects.toMatchObject({
+      name: 'AbortError',
+      failureClass: 'timeout',
+    });
 
     await vi.advanceTimersByTimeAsync(5000);
 
     await rejection;
     expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    [302, 'upstream_3xx'],
+    [429, 'upstream_4xx'],
+    [503, 'upstream_5xx'],
+  ] as const)(
+    'classifies Open-Meteo HTTP %i failures without retaining the body',
+    async (status, failureClass) => {
+      const provider = new OpenMeteoProvider(
+        async () => new Response('private upstream body with coordinates 52.52,13.405', { status }),
+      );
+
+      await expect(
+        provider.getDashboard({
+          latitude: 52.52,
+          longitude: 13.405,
+          timezone: 'Europe/Berlin',
+          units: 'metric',
+        }),
+      ).rejects.toMatchObject({ failureClass });
+    },
+  );
+
+  it.each([
+    ['non-JSON body', 'private provider payload 52.52,13.405', 'invalid_json'],
+    ['invalid response shape', JSON.stringify({ private: 'provider data' }), 'invalid_response'],
+  ] as const)(
+    'classifies an Open-Meteo %s without exposing response data',
+    async (_case, body, failureClass) => {
+      const provider = new OpenMeteoProvider(async () => new Response(body));
+
+      let failure: unknown;
+      try {
+        await provider.getDashboard({
+          latitude: 52.52,
+          longitude: 13.405,
+          timezone: 'Europe/Berlin',
+          units: 'metric',
+        });
+      } catch (error) {
+        failure = error;
+      }
+
+      expect(failure).toMatchObject({ failureClass });
+      expect(failure).not.toHaveProperty('url');
+      expect(failure).not.toHaveProperty('payload');
+      expect(String(failure)).not.toContain(body);
+      expect(String(failure)).not.toContain('52.52');
+      expect(String(failure)).not.toContain('13.405');
+    },
+  );
+
+  it('classifies provider network errors without preserving fetcher details', async () => {
+    const provider = new OpenMeteoProvider(async () => {
+      throw new Error('secret at https://api.open-meteo.com/?token=provider-secret');
+    });
+
+    const failure = provider.getDashboard({
+      latitude: 52.52,
+      longitude: 13.405,
+      timezone: 'Europe/Berlin',
+      units: 'metric',
+    });
+
+    await expect(failure).rejects.toMatchObject({ failureClass: 'network_error' });
+    await expect(failure).rejects.not.toThrow('provider-secret');
   });
 
   it('reports warnings and rejects requests beyond a quota', () => {
@@ -181,6 +262,13 @@ describe('weather providers', () => {
     expect(guard.reserve(1_000).warnings).toEqual([]);
     expect(guard.reserve(2_000).warnings).toEqual(['minute']);
     expect(() => guard.reserve(3_000)).toThrow(new OpenMeteoQuotaError('minute'));
+    let quotaError: unknown;
+    try {
+      guard.reserve(3_000);
+    } catch (error) {
+      quotaError = error;
+    }
+    expect(openMeteoFailureClass(quotaError)).toBe('quota_exceeded');
   });
 
   it('resets the monthly quota at the UTC calendar boundary', () => {

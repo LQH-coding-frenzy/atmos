@@ -18,6 +18,7 @@ task:
 
   external_policy_checks:
     - Current post-release telemetry reports CPU p95 above the 7 ms internal gate; do not claim the gate passes until an exact candidate is measured.
+    - Protected Vercel release run 41677663077 uploaded an unaliased production artifact but its exact-deployment homepage smoke failed the live-weather-content check. Dashboard/AQI smokes and promotion were skipped; the existing production alias remains in place. No retry was sent; root cause is still unknown from available runtime logs.
     - Keep the Workers Free plan and existing Open-Meteo non-commercial/weighted-call budget; do not raise CPU limits or add paid services.
     - Vercel Runtime Cache must remain within the existing Hobby included allowance (1,000,000 reads and 200,000 writes per month); stop before any overage or plan upgrade.
     - Before public cutover, enforce and test the same-origin POST policy and an owner-approved, free-tier-compatible abuse/provider-budget control covering both anonymous POST handlers and the dynamic homepage share-link query path; the current per-instance in-flight map and provider quota guard are not global limits.
@@ -60,6 +61,9 @@ task:
       - apps/web/lib/public-weather-cache.ts
       - apps/web/lib/public-weather-cache.test.ts
       - apps/web/lib/public-weather-runtime.ts
+      - apps/web/lib/public-weather-logging.ts
+      - apps/web/lib/public-weather-logging.test.ts
+      - apps/web/lib/public-weather-runtime.test.ts
       - scripts/verify-public-weather-smoke.mjs
       - scripts/verify-public-weather-smoke.test.mjs
       - apps/web/app/page.tsx
@@ -131,6 +135,9 @@ task:
       - apps/web/lib/public-weather-cache.ts
       - apps/web/lib/public-weather-cache.test.ts
       - apps/web/lib/public-weather-runtime.ts
+      - apps/web/lib/public-weather-logging.ts
+      - apps/web/lib/public-weather-logging.test.ts
+      - apps/web/lib/public-weather-runtime.test.ts
       - scripts/verify-public-weather-smoke.mjs
       - scripts/verify-public-weather-smoke.test.mjs
       - apps/web/app/page.tsx
@@ -169,16 +176,19 @@ task:
       - corepack pnpm exec vitest run packages/provider-openmeteo/src/full-weather.test.ts packages/provider-openmeteo/src/air-quality-timeline.test.ts
       - corepack pnpm exec vitest run apps/web/lib/weather-route-handlers.test.ts
       - corepack pnpm exec vitest run apps/web/lib/public-weather-cache.test.ts
+      - corepack pnpm exec vitest run apps/web/lib/public-weather-logging.test.ts
+      - corepack pnpm exec vitest run apps/web/lib/public-weather-runtime.test.ts
       - corepack pnpm exec vitest run apps/web/lib/version-affinity.test.ts
       - node --test scripts/verify-public-weather-smoke.test.mjs
       - corepack pnpm exec eslint scripts/verify-public-weather-smoke.mjs scripts/verify-public-weather-smoke.test.mjs --max-warnings=0
       - corepack pnpm typecheck
-      - corepack pnpm exec eslint packages/provider-openmeteo workers/gateway/src apps/web/app/api/v1/weather apps/web/app/api/public/v1/weather apps/web/lib/weather-route-handlers.ts apps/web/lib/weather-runtime.ts apps/web/lib/public-weather-api.ts apps/web/lib/public-weather-cache.ts apps/web/lib/public-weather-runtime.ts apps/web/lib/version-affinity.ts apps/web/components/weather-calendar-panel.tsx apps/web/components/air-quality-timeline.tsx --max-warnings=0
+      - corepack pnpm exec eslint packages/provider-openmeteo workers/gateway/src apps/web/app/api/v1/weather apps/web/app/api/public/v1/weather apps/web/lib/weather-route-handlers.ts apps/web/lib/weather-runtime.ts apps/web/lib/public-weather-api.ts apps/web/lib/public-weather-cache.ts apps/web/lib/public-weather-runtime.ts apps/web/lib/public-weather-logging.ts apps/web/lib/version-affinity.ts apps/web/components/weather-calendar-panel.tsx apps/web/components/air-quality-timeline.tsx --max-warnings=0
       - corepack pnpm --filter @atmos/gateway build
       - corepack pnpm --filter @atmos/web build
       - corepack pnpm exec playwright test tests/e2e/weather-calendar.spec.ts tests/e2e/air-quality-timeline.spec.ts --workers=1
     expected:
       - Existing 7-day and 16-day response contracts, nullable/unavailable data, timezone/DST behavior, and stale metadata remain compatible.
+      - Homepage provider hard misses emit only a safe failure class and request ID before the existing unavailable page; stale fallback and public error responses remain unchanged.
       - First-party public dashboard/AQI processing runs on Vercel; browser API calls use bounded same-origin POST JSON with coordinates absent from API URLs/logs. The dynamic homepage share-link query path is also included in abuse and provider-budget controls.
       - Vercel Runtime Cache stores the normalized response with five-minute freshness and a one-hour stale-if-error window; cold miss, fresh hit, revalidation success, stale fallback, hard expiry, concurrent requests, cross-instance persistence, and cache failures are tested.
       - The protected Vercel production release workflow smoke-tests the homepage and both public POST routes on the exact deployment before promotion; it performs one dashboard and one timeline-AQI attempt, stops at first failure, and has a maximum bounded provider use of 12 weighted units including homepage smoke.
