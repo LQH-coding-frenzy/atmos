@@ -758,3 +758,28 @@ Limit Requests` as 1,000,000 allowed requests/month included; the authenticated 
 - No Cloudflare Worker deployment, version change, or traffic shift occurred. PERF-002 remains
   `IN_PROGRESS`/HOLD: this frontend release does not resolve the separate exact-version Worker CPU
   p95 gate, nor does it supply the outstanding monthly usage measurements.
+
+## Read-only post-release state check — 2026-11-03 UTC
+
+- Vercel CLI `inspect` of `https://rainify.dpdns.org` in the production team scope returned deployment
+  `dpl_5DvyKMTH2GCiBYXBXYgcCEARDy31`, target `production`, state `READY`, created at
+  `2026-11-03T18:06:48.472Z`. This matches the candidate timing in successful run `41690495219`; no
+  additional public homepage request was sent for this check.
+- Read-only `vercel usage --format json` in the same team scope returned `Costs not found (404)`.
+  Current billing data was therefore unavailable, not zero. Month-to-date WAF and Runtime Cache
+  utilization remain unmeasured.
+- Wrangler OAuth was available for read-only deployment inventory. Its latest listed Worker
+  deployment was `ccafc4af-8010-4aec-ac7f-4493264a6049`, created `2026-10-29T19:06:33.520444Z`, with
+  stable version `2503a1f0-985f-4026-a368-bd9bb5504d23` (`d81923250215`) at 100% and candidate
+  `a998dabc-c89b-48bc-a336-ae9358e3bce6` (`5105fa59910b`) at 0%. No Worker version or traffic change
+  occurred during or after the Vercel release.
+- Read-only WAE workflow run
+  [41694681015](https://github.com/LQH-coding-frenzy/atmos/actions/runs/41694681015) queried the
+  production dataset with a 60-minute window and 30-weighted-sample floor. It returned
+  `INSUFFICIENT_DATA`: stable had 8 weighted samples, 0% errors, and p95 wall time `1,105 ms`; the
+  0%-candidate had no row. This is wall-duration/sample-count evidence, not Worker CPU evidence, and
+  it did not generate traffic.
+- The local shell has no Cloudflare API/Analytics token or account ID configured. Wrangler OAuth can
+  list deployments, but this environment has no direct `workersInvocationsAdaptive` query path, so
+  current exact-version CPU p50/p95/p99 could not be refreshed. No extra Worker or weather-provider
+  requests were made. Keep PERF-002 `IN_PROGRESS`/HOLD and do not infer a CPU pass from this check.
