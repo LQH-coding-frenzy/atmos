@@ -5,6 +5,7 @@ import {
   buildWorkerCpuQuery,
   createWorkerCpuSnapshot,
   evaluateWorkerCpuSnapshot,
+  markdownSummary,
   queryWorkerCpu,
   rowsFromWorkerCpuResponse,
 } from './worker-cpu-snapshot.mjs';
@@ -164,6 +165,7 @@ test('holds above-budget CPU or errors and reports insufficient natural samples 
   });
   assert.equal(missingQuantiles.decision, 'INSUFFICIENT_DATA');
   assert.equal(missingQuantiles.metrics.cpuTimeMs, null);
+  assert.match(markdownSummary(missingQuantiles), /CPU quantiles \| unavailable/);
 });
 
 test('rejects malformed, ambiguous, or inconsistent Cloudflare analytics rows', () => {

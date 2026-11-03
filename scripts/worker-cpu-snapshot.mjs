@@ -250,9 +250,15 @@ export async function createWorkerCpuSnapshot({
   return evaluateWorkerCpuSnapshot({ rows, versionId, window, checkedAt });
 }
 
-function markdownSummary(report) {
+export function markdownSummary(report) {
   const metrics = report.metrics
-    ? `| Natural requests | ${report.metrics.requests} |\n| Errors | ${report.metrics.errors} |\n| CPU p50 / p95 / p99 | ${report.metrics.cpuTimeMs.p50} / ${report.metrics.cpuTimeMs.p95} / ${report.metrics.cpuTimeMs.p99} ms |`
+    ? [
+        `| Natural requests | ${report.metrics.requests} |`,
+        `| Errors | ${report.metrics.errors} |`,
+        report.metrics.cpuTimeMs
+          ? `| CPU p50 / p95 / p99 | ${report.metrics.cpuTimeMs.p50} / ${report.metrics.cpuTimeMs.p95} / ${report.metrics.cpuTimeMs.p99} ms |`
+          : '| CPU quantiles | unavailable |',
+      ].join('\n')
     : '| Natural requests | 0 |\n| CPU quantiles | unavailable |';
   return [
     '## Read-only Worker CPU snapshot',
