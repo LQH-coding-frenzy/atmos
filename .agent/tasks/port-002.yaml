@@ -1,0 +1,73 @@
+task:
+  id: PORT-002
+  title: Interview demo package
+  status: DONE
+  objective: Deliver a timed 12-minute portfolio walkthrough, pre-demo readiness checklist, evidence-backed answers to all 23 Section 35.2 interview questions, and a prioritized optional production hardening roadmap.
+  depends_on: [PORT-001]
+  external_policy_checks:
+    - All answers and metrics match verified repository evidence and live architecture state (including CVRET-001 retirements, RESTORE-001 11-second RTO, DOC-002 Cloudflare 10220 postmortem, and truthful PERF-002 IN_PROGRESS/HOLD status).
+    - Deferred production hardening items (BACKUP-002, GAME-006, AZJOB-002, OBS-005) remain deferred and clearly documented.
+  runtime_placement:
+    allowed: [documentation]
+    selected: documentation
+    reason: Portfolio documentation and interview guide only; requires no runtime, database, or infrastructure change.
+  scope:
+    include:
+      - docs/portfolio/interview-demo-package.md
+      - README.md
+      - docs/evidence/port-002/2026-11-19.md
+      - .agent/tasks/port-002.yaml
+      - .agent/status.yaml
+    exclude:
+      - Application code, database schema, migrations, Terraform resources, workflows, or secret values.
+      - Enabling deferred recurring production hardening tasks.
+  inputs:
+    required_config:
+      - Master plan Section 35 (35.1 demo script and 35.2 interview questions)
+      - Verified evidence artifacts linked from README.md
+    required_secrets: [none]
+  outputs:
+    files:
+      - docs/portfolio/interview-demo-package.md
+      - README.md
+      - docs/evidence/port-002/2026-11-19.md
+      - .agent/tasks/port-002.yaml
+      - .agent/status.yaml
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [none]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert the documentation PR commit through protected Git; runtime services are unaffected.
+  validation:
+    commands:
+      - Verify all relative Markdown links in docs/portfolio/interview-demo-package.md and README.md resolve to existing repository files
+      - corepack pnpm format:check
+      - corepack pnpm docs:runbooks:check
+      - git diff --check
+      - Protected PR quality, database, playwright, security, and Vercel checks
+    expected:
+      - Every Section 35.1 demo segment and all 23 Section 35.2 questions are covered with accurate, non-fabricated evidence links.
+      - Every relative link resolves cleanly and Prettier/runbook checks pass.
+  security_checks:
+    - gitleaks
+    - codeql_or_semgrep
+    - trivy_if_applicable
+    - No secrets, token values, PII, or internal credentials in documentation.
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [none]
+    logs: [none]
+    traces: [none]
+  evidence:
+    - docs/portfolio/interview-demo-package.md
+    - docs/evidence/port-002/2026-11-19.md
+  rollback:
+    strategy: Revert the PORT-002 merge commit through protected Git.
+  human_approval:
+    required: true
+    reason: Owner authorized completing PORT-002 on 2026-11-19 alongside PORT-001 under the CV showcase boundary.

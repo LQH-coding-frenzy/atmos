@@ -76,7 +76,7 @@ threshold before any free-tier limit (see [docs/cost/quota-budget.md](docs/cost/
 | Supabase Free              | Auth, Postgres, RLS, versioned Edge Functions (`api-<sha>`)            | `500 MB` DB, `500K` EF invocations/mo                       | `350 MB` DB, `350K` EF invocations/mo                             |
 | Grafana Cloud Free         | 4 Singapore API synthetics (15m), 2 SLOs, OTLP traces                  | `100K` API synthetics/mo, `10K` series, `50 GB` logs/traces | `11,904` 31-day synthetics (`11.9%`); `70%` across series/OTLP    |
 | HCP Terraform Free         | Remote state and speculative/approved applies                          | `500` managed resources                                     | `350` resources; no auto-apply on prod workspaces                 |
-| Azure for Students         | On-demand backup ACI / manual Workload Profiles ACA Job                | Student credit + ACA monthly free grants                    | `\$10/mo` alert budget; idle/manual only, never PAYG              |
+| Azure for Students         | On-demand backup ACI / manual Workload Profiles ACA Job                | Student credit + ACA monthly free grants                    | `$10/mo` alert budget; idle/manual only, never PAYG               |
 | Open-Meteo Free            | Weather forecast (`5` weighted units/miss), AQI (`1–2`), geocode (`1`) | `600/min`, `5K/hr`, `10K/day`, `300K/mo` (non-commercial)   | `70%` per window + CC BY 4.0 attribution                          |
 | Queues & ACA Log Analytics | Notification queues (`CVRET-001`) & ACA environment                    | Retired                                                     | Removed to eliminate idle ops/credit risk                         |
 
@@ -97,6 +97,7 @@ threshold before any free-tier limit (see [docs/cost/quota-budget.md](docs/cost/
 
 ## Evidence & Architecture References
 
+- [Interview & 12-minute demo walkthrough package](docs/portfolio/interview-demo-package.md)
 - [Live production audit remediation](docs/evidence/cv-audit/2026-09-22-remediation.md)
 - [Authenticated user-captured weather history](docs/evidence/hist-cap-001/2026-09-27.md)
 - [CV runtime retirement](docs/evidence/cvret-001/2026-09-22.md)
