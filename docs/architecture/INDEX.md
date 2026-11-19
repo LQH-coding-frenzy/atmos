@@ -15,8 +15,9 @@ Use this file to route work to the owning subsystem. Read detailed architecture 
 
 ## Accepted Target Dependency Direction
 
-The PERF-002 Vercel weather/AQI placement is accepted but not yet implemented. Until its protected
-cutover, the production browser path continues to use the Worker.
+First-party public weather/AQI requests now run on Vercel Route Handlers (`dpl_9si2pyXodY2cJpU8yZTxbMY2gaEv`),
+while `PERF-002` remains `IN_PROGRESS` pending a passing post-cutover remaining-Worker CPU snapshot
+(`p95 <= 7 ms`) and measured Vercel monthly WAF/Runtime Cache usage.
 
 ```text
 browser -> Vercel public weather/AQI Route Handlers -> contracts/provider-openmeteo
