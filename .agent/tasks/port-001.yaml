@@ -1,0 +1,72 @@
+task:
+  id: PORT-001
+  title: Architecture and evidence README
+  status: DONE
+  objective: Upgrade the root README into an accurate portfolio index covering live architecture, steady-state free-tier cost/quota guardrails, verified DevSecOps/reliability evidence, and intentionally deferred production hardening.
+  depends_on: [FRONTREL-001, REL-006, SLO-002, GAME-003, RESTORE-001, CTR-003]
+  external_policy_checks:
+    - Owner explicitly approved on 2026-11-19 satisfying the Section 29 GAME-006 DR evidence prerequisite with completed one-time drill RESTORE-001 (docs/evidence/restore-001/2026-09-19.md) under the CV Showcase Completion Boundary, while keeping BACKUP-002, GAME-006, AZJOB-002, and OBS-005 deferred.
+    - All reported metrics, resource statuses, and PERF-002 gate state reflect observed evidence only; no unverified capacity, billing, or Worker CPU pass claim is introduced.
+  runtime_placement:
+    allowed: [documentation]
+    selected: documentation
+    reason: Portfolio documentation update in repository Markdown and task tracking files only; requires no runtime or infrastructure change.
+  scope:
+    include:
+      - README.md
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/evidence/port-001/2026-11-19.md
+      - .agent/tasks/port-001.yaml
+      - .agent/status.yaml
+    exclude:
+      - Application code, database schema, migrations, RLS policies, Terraform resources, workflows, or secret values.
+      - Enabling deferred recurring production operations (BACKUP-002, GAME-006, AZJOB-002, OBS-005).
+  inputs:
+    required_config:
+      - Verified evidence files under docs/evidence/, docs/postmortems/, docs/adr/, docs/cost/, and docs/operations/.
+    required_secrets: [none]
+  outputs:
+    files:
+      - README.md
+      - docs/architecture/atmos-devsecops-master-plan.md
+      - docs/evidence/port-001/2026-11-19.md
+      - .agent/tasks/port-001.yaml
+      - .agent/status.yaml
+    terraform_resources: [none]
+    database_changes: [none]
+    deployed_units: [none]
+  compatibility:
+    requires_expand_contract: false
+    stable_version_compatible: true
+    rollback_window: Revert the documentation PR commit through protected Git; runtime services are unaffected.
+  validation:
+    commands:
+      - Verify all relative Markdown links in README.md resolve to existing repository files
+      - corepack pnpm format:check
+      - corepack pnpm docs:runbooks:check
+      - git diff --check
+      - Protected PR quality, database, playwright, security, and Vercel checks
+    expected:
+      - Every linked evidence, ADR, cost, postmortem, and operational document resolves cleanly.
+      - README accurately reflects active Vercel public weather placement, Cloudflare Worker gateway responsibilities, retired CVRET-001 components, PERF-002 IN_PROGRESS/HOLD state, and deferred production hardening boundaries.
+  security_checks:
+    - gitleaks
+    - codeql_or_semgrep
+    - trivy_if_applicable
+    - No secrets, token values, PII, or internal credentials in documentation.
+  budget_checks:
+    worker_cpu_budget_ms: 7
+    creates_paid_resource: false
+    requires_student_credit: false
+  telemetry:
+    metrics: [none]
+    logs: [none]
+    traces: [none]
+  evidence:
+    - README.md
+    - docs/evidence/port-001/2026-11-19.md
+  rollback:
+    strategy: Revert the PORT-001 merge commit through protected Git.
+  human_approval:
+    required: true
+    reason: Owner approved the CV-boundary dependency override on 2026-11-19 to use completed RESTORE-001 instead of deferred recurring GAME-006.
