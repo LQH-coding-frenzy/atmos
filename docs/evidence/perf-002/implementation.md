@@ -1,13 +1,13 @@
 # PERF-002 — Expanded weather/AQI Worker CPU remediation
 
-Date: 2026-10-25
+Date: 2026-11-19
 
-Status: **IN_PROGRESS — CPU/WAE/Grafana gates PASS; awaiting explicit owner decision before any
-traffic shift. Stable remains at 100%, candidate at 0%.** The exact-version candidate measured below
-the 7 ms CPU p95 gate overall and on bounded cache-miss/cache-hit samples. The WAE gate and a fresh
-read-only Grafana synthetic check now pass. Two application-level 5xx responses were counted; at
-least one correlated 503 is confirmed as an upstream provider timeout. No database or provider-plan
-change occurred.
+Status: **IN_PROGRESS / HOLD — First-party public weather/AQI now serves from Vercel Route Handlers
+(updated 2026-11-19), while stable Worker `2503a1f0-985f-4026-a368-bd9bb5504d23` remains at 100%
+and candidate `a998dabc-c89b-48bc-a336-ae9358e3bce6` remains at 0%.** Read-only 24-hour Worker CPU
+snapshot `44457037961` measured `p95 14.148 ms` (above the 7 ms internal budget -> `HOLD`), and
+Vercel monthly WAF/Runtime Cache billing usage remains unavailable (`vercel usage` error). No
+database or provider-plan change occurred.
 
 ## Baseline
 
@@ -804,3 +804,64 @@ Limit Requests` as 1,000,000 allowed requests/month included; the authenticated 
   `a998dabc-c89b-48bc-a336-ae9358e3bce6` remains at 0%; no Worker deployment, traffic shift, or
   provider request occurred. The stable-version result does not measure the 0%-candidate version.
   PERF-002 remains `IN_PROGRESS`/HOLD. Vercel monthly WAF/Runtime Cache usage also remains unmeasured.
+
+## Live maintenance, Open-Meteo horizon fix & post-cutover CPU snapshot — 2026-11-19 UTC
+
+- **Initial maintenance findings:** Read-only checks on `https://rainify.dpdns.org/` and
+  `POST https://rainify.dpdns.org/api/public/v1/weather/dashboard` observed HTTP 200 with the
+  unavailable weather fallback and HTTP 503 (`WEATHER_UNAVAILABLE`), respectively, while Worker
+  `/health` (`200`), `/health/dependencies` (`200`, `database: ok`), and `/version` (`d81923250215`)
+  remained healthy. `vercel logs` recorded repeated `weather_dashboard_provider_failed` events with
+  `failure_class: "invalid_response"` on both `/` and `/api/public/v1/weather/dashboard`.
+- **Root-cause diagnosis:** One diagnostic Open-Meteo `v1/forecast` (`forecast_days=16`) lookup
+  returned HTTP 200 (`hourly.time` length 384, `daily.time` length 16, valid `current`), with
+  trailing `null` entries at the end of the 16-day horizon (`hourly.temperature_2m`,
+  `hourly.weather_code`, and `hourly.uv_index` at indices 380–383; `daily.temperature_2m_max`,
+  `daily.temperature_2m_min`, `daily.weather_code`, and `daily.uv_index_max` at index 15).
+  `OpenMeteoProvider` previously required `isNumberArray(...)` across all 384 hourly and 16 daily
+  slots, rejecting the entire response whenever Open-Meteo returned trailing Day-16 nulls near a
+  model-run rollout boundary (explaining intermittent scheduled `Live showcase content smoke`
+  failures such as run `44421828291`).
+- **Hotfix PR #347 (`6327edd202e5f951816301b3a3b2ff4beebb7116`):** Updated
+  `packages/provider-openmeteo/src/index.ts` and `packages/provider-openmeteo/src/full-weather.test.ts`
+  to validate `temperature_2m`/`weather_code` and `temperature_2m_max`/`temperature_2m_min`/`weather_code`
+  as length-matched nullable series, still strictly reject `null` values in the 12-hour near-term
+  `hourly` slice or 7-day core `daily` slice, and cleanly stop `extendedDaily` before any trailing
+  incomplete model-horizon day. Passed all 11 protected PR checks before merge.
+- **Bounded Vercel production releases:**
+  - Initial run [44456101172](https://github.com/LQH-coding-frenzy/atmos/actions/runs/44456101172)
+    uploaded candidate `dpl_9jNmSjgihZHFVbK7cv6oEX2uHmeM` and stopped safely at
+    `Smoke exact deployment` without promoting; `vercel logs` (`pdx1`/`sfo1`) confirmed both cold
+    requests failed with `failure_class: "timeout"` at the unchanged 5-second provider cutoff.
+  - Owner-approved bounded retry
+    [44456740465](https://github.com/LQH-coding-frenzy/atmos/actions/runs/44456740465)
+    (`promote=true`, max 17 weighted units, zero Worker change) passed exact-deployment homepage
+    smoke, public `dashboard` (`cache=HIT`) and `air-quality` (`cache=MISS`) handler smokes,
+    promoted deployment `dpl_9si2pyXodY2cJpU8yZTxbMY2gaEv`
+    (`https://atmos-3lkc33jg0-23520608-3283s-projects.vercel.app`, created
+    `2026-11-19T04:13:41Z`), and passed the production-domain smoke without triggering rollback.
+  - Independent post-promote verification confirmed `GET https://rainify.dpdns.org/` returns HTTP
+    200 with required security headers and live Berlin weather content (no unavailable fallback), and
+    `POST https://rainify.dpdns.org/api/public/v1/weather/dashboard` returns HTTP 200 (`x-cache: HIT`,
+    `meta.provider: "open-meteo"`, 12 hourly / 7 daily entries).
+- **Grafana synthetics & security/usage state:**
+  - Read-only Prometheus query confirmed Grafana check `8198` (`Atmos production weather`) already
+    targets `https://rainify.dpdns.org/api/public/v1/weather/dashboard` (while checks `8192`, `8193`,
+    and `8194` remained `PASS`).
+  - `vercel usage --format json` returned billing cost data unavailable for `2026-11-01` through
+    `2026-11-19` (not zero usage), so monthly WAF and Runtime Cache utilization remain unmeasured.
+  - GitHub security scan inventory showed 0 open code-scanning alerts and 0 open secret-scanning
+    alerts; Dependabot alerts are disabled at the repository settings level (`403`), with 10 open
+    Dependabot PRs (Sep 1–8) and open PR #331.
+  - `wrangler deployments list` confirmed no Worker deployment or traffic shift occurred: latest
+    deployment remains `ccafc4af-8010-4aec-ac7f-4493264a6049` with stable
+    `2503a1f0-985f-4026-a368-bd9bb5504d23` (`d81923250215`) at 100% and candidate
+    `a998dabc-c89b-48bc-a336-ae9358e3bce6` (`5105fa59910b`) at 0%.
+- **Clean post-cutover 24h Worker CPU snapshot:** Protected read-only run
+  [44457037961](https://github.com/LQH-coding-frenzy/atmos/actions/runs/44457037961) queried exact
+  stable version `2503a1f0-985f-4026-a368-bd9bb5504d23` over
+  `2026-11-18T04:05:32.434Z`–`2026-11-19T04:05:32.434Z` (`1440` minutes) and observed `208`
+  natural requests, `0` errors, CPU `p50 6.121 ms`, `p95 14.148 ms`, and `p99 17.348 ms` ->
+  decision `HOLD` (above the unchanged 7 ms internal budget). `PERF-002` therefore remains
+  `IN_PROGRESS` / `HOLD` pending both a passing remaining-Worker CPU snapshot (`p95 <= 7 ms`) and
+  measured Vercel monthly WAF/Runtime Cache usage.

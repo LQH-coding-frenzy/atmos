@@ -5,42 +5,45 @@ weather journey backed by credible DevSecOps evidence, not continuous production
 
 ## Active Demonstration
 
-| Component                                                    | Decision       | Purpose                                                                              |
-| ------------------------------------------------------------ | -------------- | ------------------------------------------------------------------------------------ |
-| Vercel dashboard                                             | keep active    | presents live Berlin weather, forecast, chart, map marker, and unit selection        |
-| Cloudflare Worker gateway                                    | keep active    | validates input, applies cache and security controls, and calls Open-Meteo           |
-| Supabase project and edge API                                | keep active    | serves RLS-backed saved-location, snapshot-history, and in-app alert APIs            |
-| Grafana synthetics                                           | keep active    | detects public frontend, gateway, dependency, and weather-route outages              |
-| GitHub Actions and branch protection                         | keep active    | verifies build, browser, database, security, SBOM, and supply-chain controls         |
-| Terraform and HCP Terraform configuration                    | keep active    | documents reproducible infrastructure and provider boundaries                        |
-| GHCR backup image, R2 archive, and restore tooling           | keep on demand | supports one verified backup and ephemeral restore demonstration                     |
-| Backup secret bootstrap                                      | disabled       | retained evidence does not justify rotating the project-wide database password       |
-| Staging Worker                                               | not maintained | dependency health is intentionally unavailable; do not treat it as a release lane    |
-| Production release controls                                  | keep on demand | protected Vercel and Edge Runtime workflows preserve candidate and rollback evidence |
-| Cloudflare Queues and alert delivery runtime                 | retired        | removed; in-app alert status does not publish notifications                          |
-| Azure Container Apps environment and Log Analytics workspace | retired        | removed; backup evidence uses a one-shot Container Instance, not an Apps environment |
+| Component                                                    | Decision       | Purpose                                                                                                          |
+| ------------------------------------------------------------ | -------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Vercel dashboard and weather API                             | keep active    | presents live Berlin weather, forecast, chart, map marker, unit selection, and same-origin dashboard/AQI caching |
+| Cloudflare Worker gateway                                    | keep active    | handles bounded location search, map/radar APIs, health, security headers, and authenticated API proxying        |
+| Supabase project and edge API                                | keep active    | serves RLS-backed saved-location, snapshot-history, and in-app alert APIs                                        |
+| Grafana synthetics                                           | keep active    | detects public frontend, gateway, dependency, and Vercel weather-route outages                                   |
+| GitHub Actions and branch protection                         | keep active    | verifies build, browser, database, security, SBOM, and supply-chain controls                                     |
+| Terraform and HCP Terraform configuration                    | keep active    | documents reproducible infrastructure and provider boundaries                                                    |
+| GHCR backup image, R2 archive, and restore tooling           | keep on demand | supports one verified backup and ephemeral restore demonstration                                                 |
+| Backup secret bootstrap                                      | disabled       | retained evidence does not justify rotating the project-wide database password                                   |
+| Staging Worker                                               | not maintained | dependency health is intentionally unavailable; do not treat it as a release lane                                |
+| Production release controls                                  | keep on demand | protected Vercel and Edge Runtime workflows preserve candidate and rollback evidence                             |
+| Cloudflare Queues and alert delivery runtime                 | retired        | removed; in-app alert status does not publish notifications                                                      |
+| Azure Container Apps environment and Log Analytics workspace | retired        | removed; backup evidence uses a one-shot Container Instance (plus on-demand manual ACA Job), not an Apps env     |
 
 Provider-side retirement completed under the owner-approved CVRET-001 plan. See
 `docs/evidence/cvret-001/2026-09-22.md` for the sanitized release and provider evidence.
 
-## Accepted PERF-002 Target (Not Yet Deployed)
+## Active PERF-002 Vercel Cutover (Verification Pending)
 
-The owner accepted moving first-party public dashboard/AQI requests to same-origin Vercel Next.js
-Route Handlers so provider normalization and normalized-response caching do not execute in Workers
-Free. The Worker remains active for authenticated API proxying, health/version, CORS/security,
-correlation, and other lightweight edge responsibilities. The production browser path has not yet
-been switched; stable Worker `d81923250215` remains at 100%, and candidate `5105fa59910b` remains at
-0% after a bounded provider failure. Do not claim PERF-002 complete until the Next.js cache/stale
-contract is verified and remaining Worker CPU p95 is measured at or below 7 ms.
-Local handlers now enforce and test same-origin/JSON request checks. The production cutover remains
-blocked until a shared abuse control is approved and tested, and account-level Runtime Cache plus
-weighted Open-Meteo usage is projected below the 70% warning thresholds. The control must also cover
-the dynamic homepage's coordinate share-link query path, which can initiate provider work without
-passing through the POST handler. A Vercel WAF rule is now active: 60 requests/10 minutes per source
-IP on `/` and `/api/public/v1/weather/`, 429 on excess. Hobby includes 1,000,000 allowed requests/month
-with a 700K HOLD threshold. Team Usage shows 9.7K CDN requests/1M in the last 30 days but no
-WAF-specific meter; the limit is per-region, not a global provider quota. See
-`docs/cost/quota-budget.md`, `docs/operations/perf-002-public-weather-abuse-control.md`, and ADR 0005.
+First-party public dashboard and AQI requests now execute on same-origin Vercel Next.js Route
+Handlers (`dpl_5DvyKMTH2GCiBYXBXYgcCEARDy31` on 2026-11-03; updated with the Open-Meteo trailing
+model-horizon null fix in PR #347 via `dpl_9si2pyXodY2cJpU8yZTxbMY2gaEv` on 2026-11-19), and
+Grafana synthetic check `8198` exercises `POST https://rainify.dpdns.org/api/public/v1/weather/dashboard`.
+The Worker remains active for authenticated API proxying, location search, bounded map/radar routes,
+health/version, CORS/security, correlation, and retained compatibility paths; stable Worker
+`2503a1f0-985f-4026-a368-bd9bb5504d23` (`d81923250215`) remains at 100%, and candidate
+`a998dabc-c89b-48bc-a336-ae9358e3bce6` (`5105fa59910b`) remains at 0%.
+
+A Vercel WAF rule is active: 60 requests/10 minutes per source IP on `/` and
+`/api/public/v1/weather/`, returning HTTP 429 on excess (covering both the POST handlers and the
+dynamic homepage's share-link query path). Hobby includes 1,000,000 allowed requests/month with a
+700K HOLD threshold; per-region WAF counters are not a global Open-Meteo quota. `PERF-002` remains
+`IN_PROGRESS` / `HOLD`: the 2026-11-19 post-cutover 24-hour Worker CPU snapshot (`44457037961`,
+208 natural requests, 0 errors) measured `p95 14.148 ms` (above the unchanged 7 ms limit), and
+`vercel usage` reported billing cost data unavailable for 2026-11-01 through 2026-11-19, leaving
+monthly WAF and Runtime Cache usage unmeasured. See `docs/cost/quota-budget.md`,
+`docs/operations/perf-002-public-weather-abuse-control.md`, `docs/evidence/perf-002/implementation.md`,
+and ADR 0005.
 
 ## Maintenance Routine
 
@@ -67,6 +70,8 @@ WAF-specific meter; the limit is per-region, not a global provider quota. See
 
 ## Deferred Production Work
 
-The master plan remains a future-hardening roadmap. Automatic retention, scheduled backups, recurring
-restore exercises, external paging, and new vendor resources are deferred until an owner explicitly
-chooses a production operating profile.
+The master plan remains a future-hardening roadmap. On 2026-11-19, the owner confirmed keeping
+Section 29 production-only items `BACKUP-002` (automatic retention and scheduled backups),
+`GAME-006` (recurring restore drills), `AZJOB-002` (historical backfill job), and `OBS-005`
+(Azure job telemetry), along with external paging and new vendor resources, deferred until an owner
+explicitly chooses a production operating profile.
