@@ -134,6 +134,49 @@ describe('full normalized Open-Meteo weather', () => {
     expect(result.current.hourlyEstimates).toMatchObject({ visibilityM: null, uvIndex: null });
     expect(result.extendedDaily?.[15]?.precipitationProbability).toBeNull();
   });
+  it('truncates incomplete trailing model-horizon days without failing the forecast', async () => {
+    const data = fixture();
+    for (const index of [380, 381, 382, 383]) {
+      data.hourly.temperature_2m[index] = null;
+      data.hourly.weather_code[index] = null;
+      data.hourly.uv_index[index] = null;
+    }
+    data.hourly.precipitation_probability[352] = null;
+    data.hourly.visibility[374] = null;
+    data.daily.temperature_2m_max[15] = null;
+    data.daily.temperature_2m_min[15] = null;
+    data.daily.weather_code[15] = null;
+    data.daily.uv_index_max[15] = null;
+    data.daily.precipitation_probability_max[14] = null;
+    data.daily.precipitation_probability_max[15] = null;
+
+    const result = await new OpenMeteoProvider(
+      async () => new Response(JSON.stringify(data)),
+    ).getDashboard(input);
+
+    expect(result.daily).toHaveLength(7);
+    expect(result.hourly).toHaveLength(12);
+    expect(result.extendedDaily).toHaveLength(15);
+    expect(result.extendedDaily?.[14]?.date).toBe('2026-09-15');
+    expect(result.extendedDaily?.[14]?.precipitationProbability).toBeNull();
+  });
+  it('rejects null values in the core 7-day daily or 12-hour hourly windows', async () => {
+    const missingDaily = fixture();
+    missingDaily.daily.temperature_2m_max[3] = null;
+    await expect(
+      new OpenMeteoProvider(async () => new Response(JSON.stringify(missingDaily))).getDashboard(
+        input,
+      ),
+    ).rejects.toMatchObject({ failureClass: 'invalid_response' });
+
+    const missingHourly = fixture();
+    missingHourly.hourly.weather_code[11] = null;
+    await expect(
+      new OpenMeteoProvider(async () => new Response(JSON.stringify(missingHourly))).getDashboard(
+        input,
+      ),
+    ).rejects.toMatchObject({ failureClass: 'invalid_response' });
+  });
   it('does not use a future hourly value as a current estimate', async () => {
     const data = fixture();
     data.current.time = data.hourly.time[0]! - 900;

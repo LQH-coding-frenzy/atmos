@@ -293,16 +293,16 @@ type OpenMeteoResponse = {
   };
   hourly: Partial<Record<(typeof hourlyVariables)[number], Array<number | null>>> & {
     time: number[];
-    temperature_2m: number[];
+    temperature_2m: Array<number | null>;
     precipitation_probability: Array<number | null>;
-    weather_code: number[];
+    weather_code: Array<number | null>;
   };
   daily: Partial<Record<(typeof dailyVariables)[number], Array<number | null>>> & {
     time: number[];
-    temperature_2m_max: number[];
-    temperature_2m_min: number[];
+    temperature_2m_max: Array<number | null>;
+    temperature_2m_min: Array<number | null>;
     precipitation_probability_max: Array<number | null>;
-    weather_code: number[];
+    weather_code: Array<number | null>;
   };
 };
 
@@ -444,25 +444,23 @@ function isOpenMeteoResponse(value: unknown): value is OpenMeteoResponse {
     isNumberArray(hourly?.time) &&
     hourly.time.length > 0 &&
     hourly.time.length <= 400 &&
-    isNumberArray(hourly.temperature_2m) &&
-    validOptionalSeries(hourly.precipitation_probability, hourly.time.length) &&
+    Array.isArray(hourly.temperature_2m) &&
+    validOptionalSeries(hourly.temperature_2m, hourly.time.length) &&
     Array.isArray(hourly.precipitation_probability) &&
-    isNumberArray(hourly.weather_code) &&
-    hourly.time.length === hourly.temperature_2m.length &&
-    hourly.time.length === hourly.precipitation_probability.length &&
-    hourly.time.length === hourly.weather_code.length &&
+    validOptionalSeries(hourly.precipitation_probability, hourly.time.length) &&
+    Array.isArray(hourly.weather_code) &&
+    validOptionalSeries(hourly.weather_code, hourly.time.length) &&
     isNumberArray(daily?.time) &&
     daily.time.length > 0 &&
     daily.time.length <= openMeteoForecastDays &&
-    isNumberArray(daily.temperature_2m_max) &&
-    isNumberArray(daily.temperature_2m_min) &&
-    validOptionalSeries(daily.precipitation_probability_max, daily.time.length) &&
+    Array.isArray(daily.temperature_2m_max) &&
+    validOptionalSeries(daily.temperature_2m_max, daily.time.length) &&
+    Array.isArray(daily.temperature_2m_min) &&
+    validOptionalSeries(daily.temperature_2m_min, daily.time.length) &&
     Array.isArray(daily.precipitation_probability_max) &&
-    isNumberArray(daily.weather_code) &&
-    daily.time.length === daily.temperature_2m_max.length &&
-    daily.time.length === daily.temperature_2m_min.length &&
-    daily.time.length === daily.precipitation_probability_max.length &&
-    daily.time.length === daily.weather_code.length &&
+    validOptionalSeries(daily.precipitation_probability_max, daily.time.length) &&
+    Array.isArray(daily.weather_code) &&
+    validOptionalSeries(daily.weather_code, daily.time.length) &&
     currentVariables.every(
       (key) => current[key] === undefined || isAirQualityValue(current[key]),
     ) &&
@@ -616,15 +614,30 @@ export class OpenMeteoProvider
       visibility: data.hourly.visibility,
     });
     const firstForecastDate = localDate(data.daily.time[0]!, dateFormatter);
-    const days = Array.from(data.daily.time.keys(), (index) => {
+    const days = [];
+    for (let index = 0; index < data.daily.time.length; index++) {
+      const highC = data.daily.temperature_2m_max[index];
+      const lowC = data.daily.temperature_2m_min[index];
+      const weatherCode = data.daily.weather_code[index];
+      if (
+        highC === null ||
+        highC === undefined ||
+        lowC === null ||
+        lowC === undefined ||
+        weatherCode === null ||
+        weatherCode === undefined
+      ) {
+        // Long-range model updates can leave trailing extended days null before the next run finishes.
+        break;
+      }
       const date = forecastDate(firstForecastDate, index);
       const aggregate = hourlyByLocalDate.get(date);
-      return {
+      days.push({
         date,
-        highC: data.daily.temperature_2m_max[index],
-        lowC: data.daily.temperature_2m_min[index],
+        highC,
+        lowC,
         precipitationProbability: data.daily.precipitation_probability_max[index],
-        condition: conditionFromCode(data.daily.weather_code[index]!),
+        condition: conditionFromCode(weatherCode),
         sunrise:
           data.daily.sunrise === undefined ? undefined : sunlightTime(data.daily.sunrise[index]),
         sunset:
@@ -641,8 +654,14 @@ export class OpenMeteoProvider
         pressureMeanHpa: aggregateMean(aggregate?.pressure),
         cloudCoverMeanPercent: aggregateMean(aggregate?.clouds),
         visibilityMeanM: aggregateMean(aggregate?.visibility),
-      };
-    });
+      });
+    }
+    if (days.length < Math.min(7, data.daily.time.length)) {
+      throw new OpenMeteoProviderError(
+        'invalid_response',
+        'Open-Meteo response has incomplete core daily forecast',
+      );
+    }
     const dashboard = {
       location: {
         id: `${input.latitude}:${input.longitude}`,
@@ -673,11 +692,27 @@ export class OpenMeteoProvider
         .slice(firstForecastHour, firstForecastHour + 12)
         .map((time, index) => {
           const sourceIndex = firstForecastHour + index;
+          const temperatureC = data.hourly.temperature_2m[sourceIndex];
+          const precipitationProbability = data.hourly.precipitation_probability[sourceIndex];
+          const weatherCode = data.hourly.weather_code[sourceIndex];
+          if (
+            temperatureC === null ||
+            temperatureC === undefined ||
+            precipitationProbability === null ||
+            precipitationProbability === undefined ||
+            weatherCode === null ||
+            weatherCode === undefined
+          ) {
+            throw new OpenMeteoProviderError(
+              'invalid_response',
+              'Open-Meteo response has incomplete near-term hourly forecast',
+            );
+          }
           return {
             time: toIso(time),
-            temperatureC: data.hourly.temperature_2m[sourceIndex],
-            precipitationProbability: data.hourly.precipitation_probability[sourceIndex],
-            condition: conditionFromCode(data.hourly.weather_code[sourceIndex]!),
+            temperatureC,
+            precipitationProbability,
+            condition: conditionFromCode(weatherCode),
             apparentTemperatureC: data.hourly.apparent_temperature?.[sourceIndex],
             humidityPercent: data.hourly.relative_humidity_2m?.[sourceIndex],
             pressureHpa: data.hourly.surface_pressure?.[sourceIndex],
