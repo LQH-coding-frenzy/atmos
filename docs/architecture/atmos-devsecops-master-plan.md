@@ -3419,6 +3419,8 @@ The active CV showcase stops after a functional deployed application and verifie
 - outstanding production-only telemetry, affinity, portability, and vendor-expansion work.
 
 Do not create an R2 lifecycle policy in this profile. Retention policy examples in Section 31 remain future-production guidance.
+
+On 2026-11-19, the owner explicitly approved satisfying `PORT-001`'s disaster-recovery evidence prerequisite with completed one-time drill `RESTORE-001` (`docs/evidence/restore-001/2026-09-19.md`) in place of deferred recurring `GAME-006`, while keeping `BACKUP-002`, `GAME-006`, `AZJOB-002`, and `OBS-005` deferred.
 | PORT-002 | interview demo package | PORT-001 | CV/interview evidence |
 
 ---
