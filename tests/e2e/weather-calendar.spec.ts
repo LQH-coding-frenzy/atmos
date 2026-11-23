@@ -162,7 +162,7 @@ test('shows selected-day hourly, sun, AQI, planner, and caller-scoped rule conte
   await page.locator('.weather-calendar-days > button').nth(1).click();
   await expect(page.locator('.weather-calendar-day')).toContainText('Wed, Sep 2');
   await expect(page.locator('.weather-calendar-day')).toContainText(
-    'AQI model has no values for this date',
+    'No air quality data for this date.',
   );
 
   await page.setViewportSize({ width: 390, height: 844 });
