@@ -1,15 +1,13 @@
-import {
-  airQualitySchema,
-  dashboardSchema,
-  type AirQuality,
-  type AirQualityInput,
-  type AirQualityProvider,
-  type Dashboard,
-  type LocationInput,
-  type LocationSearchProvider,
-  type LocationSearchResult,
-  type WeatherCondition,
-  type WeatherProvider,
+import type {
+  AirQuality,
+  AirQualityInput,
+  AirQualityProvider,
+  Dashboard,
+  LocationInput,
+  LocationSearchProvider,
+  LocationSearchResult,
+  WeatherCondition,
+  WeatherProvider,
 } from '@atmos/contracts';
 
 const openMeteoBaseUrl = 'https://api.open-meteo.com/v1/forecast';
@@ -511,6 +509,10 @@ function isOpenMeteoAirQualityResponse(value: unknown): value is OpenMeteoAirQua
   );
 }
 
+function isNonNegativeAirQualityValue(value: unknown): value is number | null {
+  return value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0);
+}
+
 function normalizeAirQualityTimeline(value: unknown) {
   if (!value || typeof value !== 'object') {
     throw new OpenMeteoProviderError('invalid_response', 'Air-quality timeline is unavailable');
@@ -521,11 +523,12 @@ function normalizeAirQualityTimeline(value: unknown) {
     !isNumberArray(times) ||
     !times.length ||
     times.length > 288 ||
+    !times.every((time, index) => index === 0 || time > (times[index - 1] ?? -Infinity)) ||
     !airQualityVariables.every(
       (key) =>
         Array.isArray(series[key]) &&
         series[key].length === times.length &&
-        series[key].every(isAirQualityValue),
+        series[key].every(isNonNegativeAirQualityValue),
     )
   ) {
     throw new OpenMeteoProviderError(
@@ -540,15 +543,15 @@ function normalizeAirQualityTimeline(value: unknown) {
     requestedForecastDays: 5 as const,
     hours: times.map((time, index) => ({
       time: toIso(time),
-      usAqi: values.us_aqi[index],
-      europeanAqi: values.european_aqi[index],
+      usAqi: values.us_aqi[index] ?? null,
+      europeanAqi: values.european_aqi[index] ?? null,
       pollutants: {
-        pm25: values.pm2_5[index],
-        pm10: values.pm10[index],
-        carbonMonoxide: values.carbon_monoxide[index],
-        nitrogenDioxide: values.nitrogen_dioxide[index],
-        sulphurDioxide: values.sulphur_dioxide[index],
-        ozone: values.ozone[index],
+        pm25: values.pm2_5[index] ?? null,
+        pm10: values.pm10[index] ?? null,
+        carbonMonoxide: values.carbon_monoxide[index] ?? null,
+        nitrogenDioxide: values.nitrogen_dioxide[index] ?? null,
+        sulphurDioxide: values.sulphur_dioxide[index] ?? null,
+        ozone: values.ozone[index] ?? null,
       },
     })),
   };
@@ -636,7 +639,7 @@ export class OpenMeteoProvider
         date,
         highC,
         lowC,
-        precipitationProbability: data.daily.precipitation_probability_max[index],
+        precipitationProbability: data.daily.precipitation_probability_max[index] ?? null,
         condition: conditionFromCode(weatherCode),
         sunrise:
           data.daily.sunrise === undefined ? undefined : sunlightTime(data.daily.sunrise[index]),
@@ -662,6 +665,18 @@ export class OpenMeteoProvider
         'Open-Meteo response has incomplete core daily forecast',
       );
     }
+    const coreDaily = days.slice(0, 7).map((day) => {
+      if (typeof day.precipitationProbability !== 'number') {
+        throw new OpenMeteoProviderError(
+          'invalid_response',
+          'Open-Meteo response has incomplete core daily forecast',
+        );
+      }
+      return {
+        ...day,
+        precipitationProbability: day.precipitationProbability,
+      };
+    });
     const dashboard = {
       location: {
         id: `${input.latitude}:${input.longitude}`,
@@ -728,7 +743,7 @@ export class OpenMeteoProvider
             isDay: dayFlag(data.hourly.is_day?.[sourceIndex]),
           };
         }),
-      daily: days.slice(0, 7),
+      daily: coreDaily,
       extendedDaily: days,
       meta: {
         provider: 'open-meteo',
@@ -738,11 +753,15 @@ export class OpenMeteoProvider
       },
     };
 
-    try {
-      return dashboardSchema.parse(dashboard);
-    } catch {
+    if (
+      (dashboard.current.cloudCoverPercent != null &&
+        (dashboard.current.cloudCoverPercent < 0 || dashboard.current.cloudCoverPercent > 100)) ||
+      dashboard.current.humidityPercent < 0 ||
+      dashboard.current.humidityPercent > 100
+    ) {
       throw new OpenMeteoProviderError('invalid_response');
     }
+    return dashboard satisfies Dashboard;
   }
 
   async getAirQuality(input: AirQualityInput): Promise<AirQuality> {
@@ -767,7 +786,7 @@ export class OpenMeteoProvider
       );
     }
     try {
-      return airQualitySchema.parse({
+      return {
         observedAt: toIso(data.current.time),
         usAqi: data.current.us_aqi,
         europeanAqi: data.current.european_aqi,
@@ -786,7 +805,7 @@ export class OpenMeteoProvider
           stale: false,
           updatedAt: new Date().toISOString(),
         },
-      });
+      } satisfies AirQuality;
     } catch (error) {
       if (error instanceof OpenMeteoProviderError) throw error;
       throw new OpenMeteoProviderError('invalid_response');
@@ -840,7 +859,27 @@ export class OpenMeteoProvider
 export class MockWeatherProvider implements WeatherProvider {
   async getDashboard(input: LocationInput): Promise<Dashboard> {
     void input;
-    return dashboardSchema.parse({
+    const hourlyRows: Array<[string, number, WeatherCondition]> = [
+      ['09:00', 17, 'cloudy'],
+      ['10:00', 19, 'partly-cloudy'],
+      ['11:00', 21, 'partly-cloudy'],
+      ['12:00', 23, 'clear'],
+      ['13:00', 24, 'clear'],
+      ['14:00', 25, 'partly-cloudy'],
+      ['15:00', 24, 'rain'],
+      ['16:00', 22, 'rain'],
+      ['17:00', 21, 'cloudy'],
+    ];
+    const dailyRows: Array<[string, number, number, WeatherCondition]> = [
+      ['2026-09-02', 22, 15, 'partly-cloudy'],
+      ['2026-09-03', 20, 14, 'rain'],
+      ['2026-09-04', 25, 16, 'thunderstorm'],
+      ['2026-09-05', 23, 14, 'clear'],
+      ['2026-09-06', 21, 13, 'cloudy'],
+      ['2026-09-07', 19, 12, 'rain'],
+      ['2026-09-08', 22, 13, 'partly-cloudy'],
+    ];
+    return {
       location: {
         id: 'berlin-de',
         name: 'Berlin',
@@ -858,31 +897,13 @@ export class MockWeatherProvider implements WeatherProvider {
         pressureHpa: 1017,
         condition: 'partly-cloudy',
       },
-      hourly: [
-        ['09:00', 17, 'cloudy'],
-        ['10:00', 19, 'partly-cloudy'],
-        ['11:00', 21, 'partly-cloudy'],
-        ['12:00', 23, 'clear'],
-        ['13:00', 24, 'clear'],
-        ['14:00', 25, 'partly-cloudy'],
-        ['15:00', 24, 'rain'],
-        ['16:00', 22, 'rain'],
-        ['17:00', 21, 'cloudy'],
-      ].map(([hour, temperatureC, condition], index) => ({
+      hourly: hourlyRows.map(([hour, temperatureC, condition], index) => ({
         time: `2026-09-01T${hour}:00.000Z`,
         temperatureC,
         precipitationProbability: index > 5 ? 40 : 5,
         condition,
       })),
-      daily: [
-        ['2026-09-02', 22, 15, 'partly-cloudy'],
-        ['2026-09-03', 20, 14, 'rain'],
-        ['2026-09-04', 25, 16, 'thunderstorm'],
-        ['2026-09-05', 23, 14, 'clear'],
-        ['2026-09-06', 21, 13, 'cloudy'],
-        ['2026-09-07', 19, 12, 'rain'],
-        ['2026-09-08', 22, 13, 'partly-cloudy'],
-      ].map(([date, highC, lowC, condition]) => ({
+      daily: dailyRows.map(([date, highC, lowC, condition]) => ({
         date,
         highC,
         lowC,
@@ -895,6 +916,6 @@ export class MockWeatherProvider implements WeatherProvider {
         stale: false,
         updatedAt: '2026-09-01T10:00:00.000Z',
       },
-    });
+    } satisfies Dashboard;
   }
 }
