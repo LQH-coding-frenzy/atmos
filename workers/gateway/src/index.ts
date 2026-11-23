@@ -9,6 +9,7 @@ import type {
   LocationSearchProvider,
   LocationSearchResult,
   LocationInput,
+  OpenWeatherMapLayer,
   WeatherRadarTimeline,
   WeatherProvider,
 } from '@atmos/contracts';
@@ -544,12 +545,17 @@ function reserveOpenWeatherTileRequest(now = Date.now()) {
   return true;
 }
 
-async function openWeatherTileInput(params: Record<string, string>) {
-  const { openWeatherMapLayerSchema } = await import('@atmos/contracts');
-  const layer = openWeatherMapLayerSchema.safeParse(params.layer);
+const openWeatherMapLayers = new Set<string>(['precipitation', 'clouds', 'temperature', 'wind']);
+
+function isOpenWeatherMapLayer(value: string | undefined): value is OpenWeatherMapLayer {
+  return value !== undefined && openWeatherMapLayers.has(value);
+}
+
+function openWeatherTileInput(params: Record<string, string>) {
+  const layer = params.layer;
   const { z: zoomValue, x: xValue, y: yValue } = params;
   if (
-    !layer.success ||
+    !isOpenWeatherMapLayer(layer) ||
     !/^\d{1,2}$/.test(zoomValue ?? '') ||
     !/^\d{1,7}$/.test(xValue ?? '') ||
     !/^\d{1,7}$/.test(yValue ?? '')
@@ -575,12 +581,10 @@ async function openWeatherTileInput(params: Record<string, string>) {
     return undefined;
   }
 
-  return { layer: layer.data, zoom, x, y } as const;
+  return { layer, zoom, x, y } as const;
 }
 
-async function normalizeRainViewerTimeline(
-  payload: unknown,
-): Promise<WeatherRadarTimeline | undefined> {
+function normalizeRainViewerTimeline(payload: unknown): WeatherRadarTimeline | undefined {
   if (!isRecord(payload) || payload.host !== rainViewerTileHost) return undefined;
   if (!isRecord(payload.radar) || !Array.isArray(payload.radar.past)) return undefined;
 
@@ -613,13 +617,11 @@ async function normalizeRainViewerTimeline(
     payload.generated > 0
       ? payload.generated
       : null;
-  const { weatherRadarTimelineSchema } = await import('@atmos/contracts');
-  const parsed = weatherRadarTimelineSchema.safeParse({
+  return {
     generatedAt,
     tileHost: rainViewerTileHost,
     frames,
-  });
-  return parsed.success ? parsed.data : undefined;
+  };
 }
 
 function locationSearchInput(context: { req: { query: (name: string) => string | undefined } }) {
@@ -980,12 +982,19 @@ export function createApp(
           );
         }
         const result = await weatherProvider.getAirQuality!(input);
-        const { airQualitySchema } = await import('@atmos/contracts');
-        const parsed = airQualitySchema.safeParse(result);
-        if (!parsed.success || (input.includeTimeline && !parsed.data.timeline)) {
+        if (
+          !isRecord(result) ||
+          typeof result.observedAt !== 'string' ||
+          !isRecord(result.pollutants) ||
+          !isRecord(result.meta) ||
+          (input.includeTimeline &&
+            (!isRecord(result.timeline) ||
+              result.timeline.kind !== 'model' ||
+              !Array.isArray(result.timeline.hours)))
+        ) {
           throw new Error('Air-quality response has an invalid shape');
         }
-        return parsed.data;
+        return result;
       });
 
       const responseBodies = isWeatherCacheVariants(result)
@@ -1130,18 +1139,16 @@ export function createApp(
     }
   });
 
-  app.get('/api/v1/weather/map/layers', async (context) => {
-    const { weatherMapConfigurationSchema } = await import('@atmos/contracts');
-    const configuration = weatherMapConfigurationSchema.parse({
+  app.get('/api/v1/weather/map/layers', (context) => {
+    const response = context.json({
       openWeatherAvailable: Boolean(context.env?.OPENWEATHER_API_KEY?.trim()),
     });
-    const response = context.json(configuration);
     response.headers.set('cache-control', 'no-store');
     return response;
   });
 
   app.get('/api/v1/weather/maps/openweather/:layer/:z/:x/:y', async (context) => {
-    const input = await openWeatherTileInput(context.req.param());
+    const input = openWeatherTileInput(context.req.param());
     if (!input) {
       return gatewayError(
         context,
