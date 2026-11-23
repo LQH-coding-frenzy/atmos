@@ -509,6 +509,10 @@ function isOpenMeteoAirQualityResponse(value: unknown): value is OpenMeteoAirQua
   );
 }
 
+function isNonNegativeAirQualityValue(value: unknown): value is number | null {
+  return value === null || (typeof value === 'number' && Number.isFinite(value) && value >= 0);
+}
+
 function normalizeAirQualityTimeline(value: unknown) {
   if (!value || typeof value !== 'object') {
     throw new OpenMeteoProviderError('invalid_response', 'Air-quality timeline is unavailable');
@@ -519,11 +523,12 @@ function normalizeAirQualityTimeline(value: unknown) {
     !isNumberArray(times) ||
     !times.length ||
     times.length > 288 ||
+    !times.every((time, index) => index === 0 || time > (times[index - 1] ?? -Infinity)) ||
     !airQualityVariables.every(
       (key) =>
         Array.isArray(series[key]) &&
         series[key].length === times.length &&
-        series[key].every(isAirQualityValue),
+        series[key].every(isNonNegativeAirQualityValue),
     )
   ) {
     throw new OpenMeteoProviderError(
@@ -748,6 +753,14 @@ export class OpenMeteoProvider
       },
     };
 
+    if (
+      (dashboard.current.cloudCoverPercent != null &&
+        (dashboard.current.cloudCoverPercent < 0 || dashboard.current.cloudCoverPercent > 100)) ||
+      dashboard.current.humidityPercent < 0 ||
+      dashboard.current.humidityPercent > 100
+    ) {
+      throw new OpenMeteoProviderError('invalid_response');
+    }
     return dashboard satisfies Dashboard;
   }
 

@@ -545,7 +545,13 @@ function reserveOpenWeatherTileRequest(now = Date.now()) {
   return true;
 }
 
-const openWeatherMapLayers = new Set<string>(['precipitation', 'clouds', 'temperature', 'wind']);
+const openWeatherMapLayers = new Set<string>([
+  'precipitation_new',
+  'clouds_new',
+  'pressure_new',
+  'wind_new',
+  'temp_new',
+]);
 
 function isOpenWeatherMapLayer(value: string | undefined): value is OpenWeatherMapLayer {
   return value !== undefined && openWeatherMapLayers.has(value);
