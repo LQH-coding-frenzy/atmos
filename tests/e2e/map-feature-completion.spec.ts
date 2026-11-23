@@ -139,8 +139,7 @@ test('loads bounded AQI point samples and selects arbitrary map coordinates dire
   await expect(aqiPanel).toContainText('U.S. AQI Unavailable');
   await expect(aqiPanel).toContainText('European AQI 35');
   await expect(aqiPanel).toContainText('UTC');
-  await expect(aqiPanel).toContainText('Dots only—not a continuous surface.');
-  await expect(aqiPanel).toContainText('not station readings');
+  await expect(aqiPanel).toContainText('Air quality at the selected location');
   await expect(aqiPanel.getByRole('link', { name: 'CC BY 4.0' })).toBeVisible();
   expect(requestedAqi).toHaveLength(1);
   expect(requestedAqi[0]).toMatchObject({ latitude: 52.52, longitude: 13.405 });

@@ -117,7 +117,7 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
         <section className="weather-unavailable panel" aria-labelledby="weather-unavailable-title">
           <p className="eyebrow">Live weather</p>
           <h1 id="weather-unavailable-title">Weather data is temporarily unavailable.</h1>
-          <p>The dashboard keeps real weather honest and will not substitute mock data.</p>
+          <p>Live weather data could not be loaded right now. Please try again in a moment.</p>
           <RetryWeatherButton />
           <LegalLinks />
         </section>

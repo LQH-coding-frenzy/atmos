@@ -65,10 +65,9 @@ test('loads AQI timelines only on request and switches period, range and metric 
   const timeline = page.getByRole('region', { name: 'Air quality over time' });
   await expect(timeline.getByRole('img', { name: /U.S. AQI forecast chart/ })).toBeVisible();
   await expect(timeline).toContainText('3/4 hourly values available.');
-  await expect(timeline).toContainText('not ground-station observations');
   await timeline.getByText('Exact hourly values', { exact: true }).click();
   await expect(timeline.getByRole('table')).toContainText('Unavailable');
-  await timeline.getByRole('button', { name: 'Past model data', exact: true }).click();
+  await timeline.getByRole('button', { name: 'History', exact: true }).click();
   await expect(timeline.getByRole('img', { name: /past model chart/ })).toBeVisible();
   await expect(timeline).toContainText('2/2 hourly values available.');
   await timeline.getByLabel('Measurement', { exact: true }).selectOption('pm25');

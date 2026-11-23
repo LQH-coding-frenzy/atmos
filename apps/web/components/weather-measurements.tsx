@@ -84,10 +84,6 @@ export function CurrentMeasurements({
           ['Snowfall', formatSnowfall(current.snowfallCm, units)],
         ]}
       />
-      <p className="measurement-note">
-        Wind direction is where the wind comes from. Current precipitation is the model’s current
-        reporting interval, not a daily total.
-      </p>
       <Measurements
         label="Hourly model estimates"
         values={[
@@ -97,13 +93,10 @@ export function CurrentMeasurements({
       />
       <p className="measurement-note">
         {current.hourlyEstimates
-          ? `Visibility and UV are hourly model estimates for ${new Intl.DateTimeFormat('en', { hour: 'numeric', minute: '2-digit', timeZone: timezone }).format(new Date(current.hourlyEstimates.time))} local time.`
-          : 'Visibility and UV estimates are unavailable in this response.'}
+          ? `As of ${new Intl.DateTimeFormat('en', { hour: 'numeric', minute: '2-digit', timeZone: timezone }).format(new Date(current.hourlyEstimates.time))}.`
+          : 'Visibility and UV are currently unavailable.'}
       </p>
       <DaylightMeasurements day={day} timezone={timezone} />
-      <p className="measurement-note">
-        Sun times use {timezone}. “No event” can occur during polar day or night.
-      </p>
     </div>
   );
 }

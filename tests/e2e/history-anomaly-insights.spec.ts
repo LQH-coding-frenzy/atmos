@@ -136,7 +136,9 @@ test('requires baseline coverage and labels deterministic anomalies from recorde
   await expect(anomalyPanel).toContainText('Wind');
   await expect(anomalyPanel).toContainText('Unusual thunderstorm condition');
   await expect(anomalyPanel).toContainText('0 of 12 recorded condition snapshots');
-  await expect(anomalyPanel).toContainText('Rainfall amount, AQI and UV baselines are unavailable');
+  await expect(anomalyPanel).toContainText(
+    'Based on your recorded temperature, humidity, pressure, wind, and condition snapshots.',
+  );
   if (!process.env.CI) {
     await page.setViewportSize({ width: 1440, height: 900 });
     await anomalyPanel.screenshot({ path: testInfo.outputPath('history-anomalies-desktop.png') });

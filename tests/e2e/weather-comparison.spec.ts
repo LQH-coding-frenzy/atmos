@@ -295,7 +295,6 @@ test('compares a bounded set of cities with expanded metrics and opt-in AQI suit
   expect(maximumActiveAqiRequests).toBeLessThanOrEqual(2);
   await expect(ranking).toContainText('U.S. AQI');
   await expect(ranking).toContainText('European AQI');
-  await expect(ranking).toContainText('Coverage 100%');
   await expect(page.getByRole('link', { name: 'CC BY 4.0' })).toBeVisible();
   await expect(
     ranking.locator('.weather-comparison-city').nth(3).getByRole('heading', { name: 'Munich' }),
