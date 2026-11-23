@@ -13,7 +13,6 @@ import {
   plannerActivityLabels,
   type PlannerActivity,
   type PlannerActivityKind,
-  type PlannerDimension,
   type PlannerThresholds,
 } from '@atmos/domain';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -22,18 +21,6 @@ import { fetchPublicAirQuality } from '../lib/public-weather-api';
 type ActivityPlannerProps = Pick<Dashboard, 'hourly' | 'location'> & {
   units: UnitSystem;
   displayTimezone: string;
-};
-
-const plannerDimensionLabels: Record<PlannerDimension, string> = {
-  temperature: 'temperature',
-  'feels-like': 'feels-like temperature',
-  humidity: 'humidity',
-  rain: 'rain',
-  precipitation: 'hourly precipitation',
-  wind: 'wind',
-  uv: 'UV',
-  aqi: 'U.S. AQI',
-  conditions: 'conditions',
 };
 
 function toDisplayTemperature(valueC: number, units: UnitSystem) {
@@ -315,9 +302,7 @@ export function ActivityPlanner({
               />
             </label>
           </div>
-          <p className="planner-custom-note">
-            Feels-like uses the same temperature range. Changes are not saved to an account.
-          </p>
+          <p className="planner-custom-note">Saved locally in this browser.</p>
         </fieldset>
       ) : null}
       <div className="planner-aqi-control">
@@ -332,42 +317,32 @@ export function ActivityPlanner({
           }}
         >
           {airQualityStatus === 'loading'
-            ? 'Loading model AQI…'
+            ? 'Loading AQI…'
             : airQualityStatus === 'ready'
               ? includeAqi
                 ? 'Exclude AQI from score'
                 : 'Include AQI in score'
               : airQualityStatus === 'idle'
-                ? 'Load AQI forecast (optional)'
+                ? 'Include AQI'
                 : 'Retry AQI forecast'}
         </button>
-        {airQualityStatus === 'idle' ? (
-          <p>Air quality is not requested or scored until you choose to include it.</p>
-        ) : null}
-        {airQualityStatus === 'loading' ? (
-          <p role="status">Loading the on-demand air-quality model timeline…</p>
-        ) : null}
+        {airQualityStatus === 'loading' ? <p role="status">Loading air quality…</p> : null}
         {airQualityStatus === 'failed' ? (
-          <p role="status">AQI is unavailable. It is not scored; planner coverage remains lower.</p>
+          <p role="status">Air quality is currently unavailable.</p>
         ) : null}
         {airQualityStatus === 'unsupported' ? (
-          <p role="status">
-            This response has no AQI timeline. AQI remains unscored and unavailable.
-          </p>
+          <p role="status">Air quality forecast is unavailable for this location.</p>
         ) : null}
         {airQualityStatus === 'ready' ? (
           <p role="status">
-            {airQuality?.meta.stale ? 'Using cached model data. ' : ''}
-            {includeAqi
-              ? 'Modeled U.S. AQI is included where hourly values are available.'
-              : 'AQI is excluded; the loaded model data is not used.'}{' '}
-            Not station readings.{' '}
+            {airQuality?.meta.stale ? 'Cached · ' : ''}
+            {includeAqi ? 'Includes U.S. AQI' : 'AQI excluded'} ·{' '}
             <a
               href="https://open-meteo.com/en/docs/air-quality-api"
               target="_blank"
               rel="noreferrer"
             >
-              Open-Meteo/CAMS model · CC BY 4.0
+              Open-Meteo · CAMS (CC BY 4.0)
             </a>
           </p>
         ) : null}
@@ -375,21 +350,10 @@ export function ActivityPlanner({
       {plan.rankedWindows.length > 0 ? (
         <p className="planner-summary">
           Best upcoming {activityName} window: <strong>{plan.score}/100</strong>
-          <span> · {plan.coveragePercent}% input coverage</span>
         </p>
       ) : (
         <p className="planner-summary">Suitability is unavailable without hourly forecast data.</p>
       )}
-      <p className="planner-coverage-note">
-        Suitability is a deterministic estimate, not safety advice. Missing inputs lower coverage
-        and keep the score closer to neutral.
-      </p>
-      {plan.missingDimensions.length > 0 ? (
-        <p className="planner-missing-inputs" role="status">
-          Not assessed in the best window:{' '}
-          {plan.missingDimensions.map((dimension) => plannerDimensionLabels[dimension]).join(', ')}.
-        </p>
-      ) : null}
       {plan.rankedWindows.length === 0 ? (
         <p role="status">Hourly forecast windows are unavailable for this place.</p>
       ) : null}
@@ -408,16 +372,6 @@ export function ActivityPlanner({
                 <strong>{window.score}/100</strong>
               </div>
             </div>
-            <p className="planner-window-coverage">Coverage {window.coveragePercent}%</p>
-            {window.missingDimensions.length > 0 ? (
-              <p className="planner-window-missing">
-                Not assessed:{' '}
-                {window.missingDimensions
-                  .map((dimension) => plannerDimensionLabels[dimension])
-                  .join(', ')}
-                .
-              </p>
-            ) : null}
             <details className="planner-window-details">
               <summary>Why this window?</summary>
               <ul>

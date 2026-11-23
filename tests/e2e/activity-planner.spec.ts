@@ -144,24 +144,18 @@ test('offers all activity profiles, session-local custom thresholds, and opt-in 
       Number((await planner.locator('.planner-summary strong').textContent())?.split('/')[0]),
     )
     .toBeLessThan(tolerantScore);
-  await expect(planner).toContainText('AQI');
-  await expect(planner).toContainText('coverage');
-
-  await planner.getByRole('button', { name: 'Load AQI forecast (optional)' }).click();
-  await expect(planner).toContainText('Modeled U.S. AQI is included');
-  await expect(planner).toContainText('Not station readings.');
+  await planner.getByRole('button', { name: 'Include AQI' }).click();
+  await expect(planner).toContainText('Includes U.S. AQI');
   expect(aqiRequests).toHaveLength(1);
   expect(aqiRequests[0]).toMatchObject({
     includeTimeline: true,
     latitude: 52.52,
     longitude: 13.405,
   });
-  await expect(planner.locator('.planner-summary')).toContainText('100% input coverage');
   await planner.locator('.planner-window-details').first().locator('summary').click();
   await expect(planner.locator('.planner-window-details').first()).toContainText(
     'Modeled U.S. AQI',
   );
-  await expect(planner).toContainText('not safety advice');
   if (!process.env.CI) {
     await page.setViewportSize({ width: 1440, height: 900 });
     await planner.screenshot({ path: testInfo.outputPath('activity-planner-desktop.png') });

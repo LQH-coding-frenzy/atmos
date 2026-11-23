@@ -92,7 +92,7 @@ export function SevereWeatherPanel({ location }: SevereWeatherPanelProps) {
       <section className="severe-weather-popover" aria-label="Official weather alerts">
         <header className="severe-weather-heading">
           <div>
-            <p className="eyebrow">Source-backed coverage</p>
+            <p className="eyebrow">Official alerts</p>
             <h2>Official weather alerts</h2>
           </div>
           <button

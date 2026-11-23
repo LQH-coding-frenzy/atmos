@@ -129,7 +129,7 @@ test('shows honest 24-hour/custom analytics for user-recorded history only', asy
   await expect(history.locator('.weather-history-summary')).toContainText('62.5%');
   await expect(history.locator('.weather-history-summary')).toContainText('70%');
   await expect(history.getByRole('region', { name: 'Recorded condition counts' })).toContainText(
-    'Snapshot counts, not event durations.',
+    'Based on your recorded observations.',
   );
 
   if (!process.env.CI) {

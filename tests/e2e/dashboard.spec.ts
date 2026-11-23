@@ -162,7 +162,7 @@ test('shows expanded model measurements and a compatible extended outlook withou
   await expect(details).toContainText('32 km/h');
   await expect(details).toContainText('13h 00m');
   await expect(details).toContainText('7:00 AM');
-  await expect(details).toContainText('hourly model estimates for 12:00 PM');
+  await expect(details).toContainText('As of 12:00 PM');
   await page.getByRole('button', { name: 'Fahrenheit' }).click();
   await expect(details).toContainText('1 in');
   await expect(details).toContainText('1 mi');

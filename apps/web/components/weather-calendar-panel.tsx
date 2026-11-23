@@ -188,12 +188,10 @@ function WeatherDayDetails({
 
       <section className="weather-calendar-section" aria-labelledby="weather-calendar-aqi-title">
         <h4 id="weather-calendar-aqi-title">Air quality</h4>
-        {aqiStatus === 'loading' ? <p role="status">Loading the on-demand AQI timeline…</p> : null}
-        {aqiStatus === 'unavailable' ? (
-          <p role="status">AQI data is unavailable; it is not treated as zero.</p>
-        ) : null}
+        {aqiStatus === 'loading' ? <p role="status">Loading air quality…</p> : null}
+        {aqiStatus === 'unavailable' ? <p role="status">Air quality is unavailable.</p> : null}
         {aqiStatus === 'ready' && !airQuality?.timeline ? (
-          <p role="status">This response does not include an AQI timeline.</p>
+          <p role="status">Air quality timeline is unavailable for this location.</p>
         ) : null}
         {aqiStatus === 'ready' && airQuality?.meta.stale ? (
           <p className="weather-calendar-stale" role="status">
@@ -207,9 +205,7 @@ function WeatherDayDetails({
               {maxPm25 === undefined ? 'Unavailable' : `${maxPm25} µg/m³`}
             </p>
           ) : (
-            <p role="status">
-              The AQI model has no values for this date; missing values are not zero.
-            </p>
+            <p role="status">No air quality data for this date.</p>
           )
         ) : null}
       </section>
@@ -272,10 +268,6 @@ function WeatherDayDetails({
         {rulesStatus === 'ready' && scheduledRules.length === 0 ? (
           <p>No enabled in-app rules are scheduled for this date.</p>
         ) : null}
-        <p className="measurement-note">
-          This is schedule context only. Rule status still evaluates against the open dashboard; no
-          delivery or date backfill runs here.
-        </p>
       </section>
     </section>
   );
@@ -441,9 +433,6 @@ export function WeatherCalendarPanel({
       <section className="weather-calendar-popover" aria-label="Weather forecast calendar">
         <h2>Weather calendar</h2>
         <p className="weather-calendar-location">{dashboard.location.name}</p>
-        <p className="measurement-note">
-          Select a forecast date. Calendar days and hours follow {dashboard.location.timezone}.
-        </p>
         <div className="weather-calendar-days" role="group" aria-label="Forecast dates">
           {days.map((day) => (
             <button

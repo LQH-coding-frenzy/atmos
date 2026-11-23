@@ -70,11 +70,8 @@ export function AirQualityTimeline({ location, active }: { location: Location; a
       aria-busy={status === 'loading'}
     >
       <h3 id={`${id}-title`}>Air quality over time</h3>
-      <p>
-        Past model data and forecasts—not ground-station observations or your recorded weather
-        history.
-      </p>
-      {status === 'loading' ? <p role="status">Loading AQI forecast and past model data…</p> : null}
+      <p>Hourly air quality forecast and recent history.</p>
+      {status === 'loading' ? <p role="status">Loading air quality timeline…</p> : null}
       {status === 'failed' || status === 'unsupported' ? (
         <>
           <p role="status">
@@ -99,10 +96,7 @@ export function AirQualityTimeline({ location, active }: { location: Location; a
               refreshed.
             </p>
           ) : null}
-          <p className="aqi-model-time">
-            Model reference: {formatTime(data.observedAt)}. Updated{' '}
-            {formatTime(data.meta.updatedAt)}.
-          </p>
+          <p className="aqi-model-time">Updated {formatTime(data.meta.updatedAt)}.</p>
           <div className="metric-tabs" role="group" aria-label="AQI timeline period">
             <button
               type="button"
@@ -118,7 +112,7 @@ export function AirQualityTimeline({ location, active }: { location: Location; a
               className={period === 'history' ? 'active' : ''}
               onClick={() => setPeriod('history')}
             >
-              Past model data
+              History
             </button>
           </div>
           <div className="aqi-timeline-selectors">

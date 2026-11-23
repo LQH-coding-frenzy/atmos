@@ -781,12 +781,6 @@ export function Dashboard({ initialDashboard, gatewayOrigin }: DashboardProps) {
                 Up to 16 days
               </button>
             </div>
-            {forecastDays === 16 ? (
-              <p className="measurement-note">
-                Longer-range forecasts have greater uncertainty. Showing the days available from the
-                provider.
-              </p>
-            ) : null}
             <div className="forecast-list">
               {visibleDays.map((day, index) => (
                 <div className="forecast-day" key={day.date}>

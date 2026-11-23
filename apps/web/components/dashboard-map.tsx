@@ -1400,18 +1400,16 @@ export function DashboardMap({
             </button>
           </div>
           <p className="map-aqi-explanation">
-            Current estimates at this place and up to seven visible saved places. Dots only—not a
-            continuous surface.
+            Air quality at the selected location and visible saved places.
           </p>
           {aqiMapStatus === 'loading' ? (
             <p className="map-aqi-status" role="status">
-              Loading bounded AQI samples…
+              Loading air quality…
             </p>
           ) : null}
           {aqiMapStatus === 'unavailable' ? (
             <p className="map-aqi-status" role="status">
-              AQI is unavailable for these locations right now. Unavailable values are not shown as
-              zero.
+              Air quality is temporarily unavailable.
             </p>
           ) : null}
           {aqiMapStatus === 'limited' ? (
@@ -1479,7 +1477,7 @@ export function DashboardMap({
             ))}
           </div>
           <p className="map-aqi-attribution">
-            Model estimates (~11–45 km resolution), not station readings.{' '}
+            Data:{' '}
             <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
               Open-Meteo Air Quality API
             </a>{' '}

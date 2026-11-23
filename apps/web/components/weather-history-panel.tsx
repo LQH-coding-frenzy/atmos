@@ -421,9 +421,7 @@ export function WeatherHistoryPanel({
                     ? 'Live data unavailable'
                     : 'Record this observation'}
             </button>
-            <p className="weather-history-hint">
-              History contains observations you choose to record; earlier weather is not backfilled.
-            </p>
+            <p className="weather-history-hint">Observations you record appear here.</p>
             {loading ? <p role="status">Loading your observations…</p> : null}
             {snapshots.length >= 100 ? (
               <p className="weather-history-cap" role="status">
@@ -518,7 +516,7 @@ export function WeatherHistoryPanel({
                 >
                   <div>
                     <h3>Recorded conditions</h3>
-                    <p>Snapshot counts, not event durations.</p>
+                    <p>Based on your recorded observations.</p>
                   </div>
                   <ul>
                     {conditionCounts.map(({ condition, count }) => (
@@ -572,9 +570,7 @@ export function WeatherHistoryPanel({
               </>
             ) : null}
             {!loading && visibleSnapshots.length === 0 ? (
-              <p className="weather-history-empty">
-                No user-recorded observations in this range. Earlier weather is not backfilled.
-              </p>
+              <p className="weather-history-empty">No recorded observations in this range.</p>
             ) : null}
             {!loading ? (
               <WeatherHistoryAnomalyInsights
@@ -614,10 +610,7 @@ function WeatherHistoryAnomalyInsights({
   return (
     <section className="weather-history-anomalies" aria-label="Recorded baseline anomaly insights">
       <h3>Current weather vs your recorded baseline</h3>
-      <p>
-        Deterministic deviations from your own recorded observations; not a forecast alert or safety
-        advice.
-      </p>
+      <p>Compares current conditions against your recorded baseline.</p>
       {stale ? (
         <p role="status">Current weather is stale. Anomaly comparisons are paused.</p>
       ) : !analysis.eligible ? (
@@ -634,10 +627,7 @@ function WeatherHistoryAnomalyInsights({
             two standard deviations and the metric's minimum threshold.
           </p>
           {analysis.anomalies.length === 0 && analysis.unusualConditions.length === 0 ? (
-            <p role="status">
-              No supported reading exceeds its threshold. Unrecorded times and unsupported metrics
-              remain unknown.
-            </p>
+            <p role="status">Current conditions are within your typical recorded range.</p>
           ) : null}
           {analysis.anomalies.length > 0 ? (
             <ul className="weather-history-anomaly-list" aria-label="Recorded baseline anomalies">
@@ -688,7 +678,7 @@ function WeatherHistoryAnomalyInsights({
                   <strong>Unusual {item.condition.replace('-', ' ')} condition</strong>
                   <span>
                     Current condition appeared in {item.observedCount} of {item.sampleCount}{' '}
-                    recorded condition snapshots. This is not a rainfall amount or event duration.
+                    recorded condition snapshots.
                   </span>
                 </li>
               ))}
@@ -697,8 +687,7 @@ function WeatherHistoryAnomalyInsights({
         </>
       )}
       <p className="weather-history-anomaly-unsupported">
-        Rainfall amount, AQI and UV baselines are unavailable because those values are not stored in
-        recorded snapshots; no provider history is substituted.
+        Based on your recorded temperature, humidity, pressure, wind, and condition snapshots.
       </p>
     </section>
   );

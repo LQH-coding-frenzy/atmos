@@ -581,10 +581,7 @@ export function InAppAlertsPanel({
         {session ? (
           <>
             <p className="in-app-alerts-note">
-              Status compares the current dashboard snapshot and forecast when loaded or changed.
-              Weekdays use the location's local time; date-window inputs use your device time.
-              Cooldown is saved for future delivery only. No email, push, or background delivery
-              occurs.
+              Evaluated against the active forecast while the dashboard is open.
             </p>
             {stale ? (
               <p className="in-app-alerts-stale" role="status">

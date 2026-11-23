@@ -499,7 +499,7 @@ export function WeatherComparisonPanel({
             ) : null}
             {airQualityState === 'failed' ? (
               <p className="weather-comparison-status" role="status">
-                AQI timelines are unavailable. AQI remains unscored, not zero.
+                Air quality data is unavailable.
               </p>
             ) : null}
             {switchFailedId ? (
@@ -537,8 +537,6 @@ export function WeatherComparisonPanel({
               ))}
             </div>
             <p className="weather-comparison-attribution">
-              Weather and AQI are model estimates, not station readings. AQI is included only when
-              explicitly requested and time-matched; missing metrics lower activity-score coverage.{' '}
               Sources:{' '}
               <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">
                 Open-Meteo
@@ -671,10 +669,6 @@ function ComparisonCity({
           <span>{plannerActivityLabels[activity]} fit</span>
           <strong>{plan.score}/100</strong>
         </div>
-        <small>Coverage {plan.coveragePercent}%</small>
-        {plan.missingDimensions.length > 0 ? (
-          <small>Not assessed: {plan.missingDimensions.join(', ').replaceAll('-', ' ')}.</small>
-        ) : null}
       </div>
       {airQuality ? (
         <small className={airQuality.meta.stale ? 'stale' : ''}>
