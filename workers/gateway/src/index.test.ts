@@ -875,6 +875,68 @@ describe('gateway', () => {
     });
   });
 
+  it('delegates current air-quality requests to the Next transform when getAirQuality is omitted', async () => {
+    const airQuality = {
+      observedAt: '2026-10-23T12:00:00.000Z',
+      usAqi: 42,
+      europeanAqi: 30,
+      pollutants: {
+        pm25: 9.8,
+        pm10: 14.2,
+        carbonMonoxide: 185,
+        nitrogenDioxide: 18.4,
+        sulphurDioxide: 2.1,
+        ozone: 48,
+      },
+      meta: {
+        provider: 'open-meteo',
+        cached: false,
+        stale: false,
+        updatedAt: '2026-10-23T12:00:00.000Z',
+      },
+    };
+    const proxy = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      expect(request.url).toBe('https://rainify.dpdns.org/api/v1/weather/air-quality');
+      expect(request.method).toBe('POST');
+      await expect(request.json()).resolves.toEqual({
+        latitude: 52.52,
+        longitude: 13.405,
+        includeTimeline: false,
+      });
+      return cacheVariantsResponse(airQuality);
+    });
+    vi.stubGlobal('fetch', proxy);
+    const provider = new MockWeatherProvider();
+    const airQualityApp = createApp({
+      getDashboard: provider.getDashboard.bind(provider),
+    });
+    const env = {
+      WEATHER_TRANSFORM_ORIGIN: 'https://rainify.dpdns.org',
+      WEATHER_TRANSFORM_TOKEN: testWeatherTransformToken,
+      CF_VERSION_METADATA: {
+        id: '7cf6db10-8f5e-4cb2-a70c-34a1d3f28193',
+        tag: 'abcdef012345',
+        timestamp: '2026-10-23T00:00:00.000Z',
+      },
+    };
+
+    const response = await airQualityApp.request(
+      'http://localhost/api/v1/weather/air-quality?lat=52.52&lon=13.405',
+      undefined,
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(proxy).toHaveBeenCalledOnce();
+    await expect(response.json()).resolves.toMatchObject({
+      observedAt: '2026-10-23T12:00:00.000Z',
+      usAqi: 42,
+      europeanAqi: 30,
+      meta: { cached: false, stale: false },
+    });
+  });
+
   it('normalizes and caches recent RainViewer frames behind the gateway contract', async () => {
     const now = Math.floor(Date.now() / 1000);
     const payload = {

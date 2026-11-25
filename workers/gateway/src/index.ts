@@ -963,8 +963,7 @@ export function createApp(
       );
     }
 
-    const useNextTransform =
-      input.includeTimeline === true && usesNextWeatherTransform(context.env);
+    const useNextTransform = usesNextWeatherTransform(context.env);
     if (!useNextTransform && !weatherProvider.getAirQuality) {
       return gatewayError(
         context,

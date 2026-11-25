@@ -446,6 +446,7 @@ export function DashboardMap({
               source: 'atmos-saved-locations',
               layout: {
                 'text-field': ['get', 'name'],
+                'text-font': ['Noto Sans Regular'],
                 'text-size': 10,
                 'text-offset': [0, 1.25],
                 'text-anchor': 'top',
@@ -503,6 +504,7 @@ export function DashboardMap({
                   '—',
                   ['to-string', ['round', ['get', 'usAqi']]],
                 ],
+                'text-font': ['Noto Sans Bold'],
                 'text-size': 10,
                 'text-allow-overlap': true,
               },
@@ -510,6 +512,7 @@ export function DashboardMap({
                 'text-color': '#ffffff',
                 'text-halo-color': '#183236',
                 'text-halo-width': 1.5,
+                'text-translate': [0, -12],
               },
             });
           }
@@ -1632,12 +1635,6 @@ export function DashboardMap({
         <p className="map-feedback" role="status">
           This map style doesn&apos;t offer selectable city labels. Click anywhere to choose
           coordinates, or search above.
-        </p>
-      ) : null}
-      {mapReady && cityLayersAvailable && visibleCities.length === 0 ? (
-        <p className="map-feedback" role="status">
-          No selectable city names are in view. Pan or zoom, click anywhere to choose coordinates,
-          or search above.
         </p>
       ) : null}
       {!aqiVisible && visibleCities.length > 0 ? (
