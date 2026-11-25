@@ -902,7 +902,6 @@ describe('gateway', () => {
       await expect(request.json()).resolves.toEqual({
         latitude: 52.52,
         longitude: 13.405,
-        includeTimeline: false,
       });
       return cacheVariantsResponse(airQuality);
     });
