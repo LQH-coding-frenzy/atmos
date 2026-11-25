@@ -56,16 +56,7 @@ POST handler's Origin/content-type checks. Any approved shared abuse control and
 must cover both the public POST handlers and the homepage query path; otherwise the root URL remains a
 cache-miss amplification path.
 
-Vercel WAF rate limiting is active for PERF-002. The read-only Vercel CLI pricing lookup resolved the
-current plan as Hobby and listed 1,000,000 allowed requests/month included; the internal 70% warning
-is 700,000 requests/month. The CLI's current-period usage query returned no billing data and explicitly
-warned this does not mean usage is zero. Before the change, the Atmos Firewall overview showed zero
-Custom Rules; Team Usage reports 9.7K CDN requests against 1M over the last 30 days but no WAF-specific
-meter, so this is only a coarse baseline. The published rule `PERF-002 public weather abuse guard`
-matches `/` OR `/api/public/v1/weather/`, limits to 60 requests per 10 minutes per source IP, and
-returns 429 on excess. Hobby counters are regional, and this feature is listed as regionally
-usage-priced. Monitor usage after propagation; HOLD at 700,000 allowed requests/month and stop before
-any charge/plan change. This is a per-source ingress bound, not a global provider quota.
+Vercel WAF rate limiting is active for PERF-002 (`PERF-002 public weather abuse guard`, matching `/` OR `/api/public/v1/weather/`, `60` requests / `600 s` / source IP, `429` on excess). Authenticated `/v2/usage` and `/v1/security/firewall/*` queries on `2026-11-25T02:25Z` verified Nov MTD team total requests of `8,183` (`<= 0.82%` of `1,000,000` WAF allowance; `0` mitigation events) and `5,586` function invocations (`0.56%`, bounding Runtime Cache reads `<= 0.56%` of `1,000,000` and writes `<= 2.79%` of `200,000`), well below the `70%` HOLD thresholds. Hobby counters are regional, and this feature is listed as regionally usage-priced. Continue monitoring usage; HOLD at `700,000` allowed requests/month and stop before any charge/plan change. This is a per-source ingress bound, not a global provider quota.
 
 Do not use Runtime Cache `get`/`set` as a distributed rate counter: its documented API has no atomic
 increment/compare-and-set, and its regional, evictable records plus concurrent writers cannot enforce
