@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MockWeatherProvider } from '@atmos/provider-openmeteo';
 import { app, createApp } from './index';
+import worker from './worker';
 
 const testWeatherTransformToken = 'test-only-'.repeat(4);
 const workerCacheVariantsContentType = 'application/vnd.atmos.weather-cache-variants; version=2';
@@ -1557,6 +1558,113 @@ describe('gateway', () => {
     expect(JSON.parse(String(warning.mock.calls[0]?.[0]))).toMatchObject({
       event: 'weather_cache_write_failed',
       error_type: 'Error',
+    });
+  });
+
+  it('serves fast-path /health, /version, and /health/dependencies via worker.fetch', async () => {
+    const writeDataPoint = vi.fn();
+    const health = await worker.fetch(
+      new Request('https://api.rainify.dpdns.org/health', {
+        headers: { origin: 'https://rainify.dpdns.org' },
+      }),
+      {
+        CORS_ORIGIN: 'https://rainify.dpdns.org',
+        REQUEST_ANALYTICS: { writeDataPoint },
+      },
+    );
+    expect(health.status).toBe(200);
+    expect(health.headers.get('access-control-allow-origin')).toBe('https://rainify.dpdns.org');
+    expect(health.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(health.headers.get('x-request-id')).toBeTruthy();
+    expect(health.headers.get('traceparent')).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/);
+    await expect(health.json()).resolves.toEqual({ status: 'ok' });
+
+    const version = await worker.fetch(new Request('https://api.rainify.dpdns.org/version'), {
+      RELEASE_ID: 'abcdef012345',
+    });
+    expect(version.status).toBe(200);
+    await expect(version.json()).resolves.toEqual({ release: 'abcdef012345' });
+
+    const fetcher = vi.fn(async (request: Request) => {
+      void request;
+      return Response.json({ status: 'ok', database: 'ok' });
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const deps = await worker.fetch(
+      new Request('https://api.rainify.dpdns.org/health/dependencies', {
+        headers: {
+          authorization: 'Bearer private-token',
+          cookie: 'session=abc',
+          origin: 'https://evil.example',
+        },
+      }),
+      {
+        CORS_ORIGIN: 'https://rainify.dpdns.org',
+        SUPABASE_FUNCTION_URL: 'https://project.supabase.co/functions/v1/api-abcdef012345',
+        REQUEST_ANALYTICS: { writeDataPoint },
+        RELEASE_ID: 'abcdef012345',
+      },
+    );
+    expect(deps.status).toBe(200);
+    expect(deps.headers.get('cache-control')).toBe('no-store');
+    expect(deps.headers.get('access-control-allow-origin')).toBeNull();
+    await expect(deps.json()).resolves.toEqual({ status: 'ok', database: 'ok' });
+    const upstreamReq = fetcher.mock.calls[0]?.[0];
+    expect(upstreamReq?.url).toBe(
+      'https://project.supabase.co/functions/v1/api-abcdef012345/health/dependencies',
+    );
+    expect(upstreamReq?.headers.get('authorization')).toBeNull();
+    expect(upstreamReq?.headers.get('cookie')).toBeNull();
+    expect(writeDataPoint).toHaveBeenCalledTimes(2);
+    expect(writeDataPoint.mock.calls[1]?.[0]).toMatchObject({
+      blobs: ['abcdef012345', 'health_dependencies', '2xx', 'BYPASS', 'abcdef012345', 'supabase'],
+    });
+  });
+
+  it('falls through to Hono for OPTIONS preflight and geocoding search via worker.fetch', async () => {
+    const preflight = await worker.fetch(
+      new Request('https://api.rainify.dpdns.org/api/v1/me', {
+        method: 'OPTIONS',
+        headers: {
+          origin: 'https://rainify.dpdns.org',
+          'access-control-request-method': 'GET',
+        },
+      }),
+      { CORS_ORIGIN: 'https://rainify.dpdns.org' },
+    );
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get('access-control-allow-origin')).toBe('https://rainify.dpdns.org');
+
+    const fetcher = vi.fn(async () =>
+      Response.json({
+        results: [
+          {
+            id: 2950159,
+            name: 'Berlin',
+            country: 'Germany',
+            latitude: 52.52,
+            longitude: 13.405,
+            timezone: 'Europe/Berlin',
+          },
+        ],
+      }),
+    );
+    vi.stubGlobal('fetch', fetcher);
+    const search = await worker.fetch(
+      new Request('https://api.rainify.dpdns.org/api/v1/locations/search?q=Berlin'),
+    );
+    expect(search.status).toBe(200);
+    await expect(search.json()).resolves.toEqual({
+      results: [
+        {
+          id: '2950159',
+          name: 'Berlin',
+          country: 'Germany',
+          latitude: 52.52,
+          longitude: 13.405,
+          timezone: 'Europe/Berlin',
+        },
+      ],
     });
   });
 });

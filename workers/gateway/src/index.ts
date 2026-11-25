@@ -1,4 +1,5 @@
-import { Hono, type Context } from 'hono';
+import { Hono } from 'hono/tiny';
+import type { Context } from 'hono';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 import type {
@@ -23,7 +24,7 @@ import {
   type RequestAnalyticsDataset,
 } from './request-analytics';
 
-type Bindings = {
+export type Bindings = {
   CORS_ORIGIN?: string;
   OPENWEATHER_API_KEY?: string;
   RELEASE_ID?: string;
@@ -1374,6 +1375,173 @@ export function createApp(
   app.notFound((context) => gatewayError(context, 'NOT_FOUND', 'Route not found.', 404));
 
   return app;
+}
+
+let cachedDependencyTarget:
+  { source: string; target: { dependencyUrl: string; backendRelease: string } | null } | undefined;
+
+function resolveDependencyTarget(functionUrl: string | undefined) {
+  if (!functionUrl) return null;
+  if (cachedDependencyTarget?.source === functionUrl) return cachedDependencyTarget.target;
+  let target: { dependencyUrl: string; backendRelease: string } | null = null;
+  try {
+    const base = functionUrl.endsWith('/') ? functionUrl : `${functionUrl}/`;
+    target = {
+      dependencyUrl: new URL('health/dependencies', base).toString(),
+      backendRelease: backendReleaseFromUrl(functionUrl),
+    };
+  } catch {
+    target = null;
+  }
+  cachedDependencyTarget = { source: functionUrl, target };
+  return target;
+}
+
+function requestPathname(url: string) {
+  const schemeEnd = url.indexOf('://');
+  const pathStart = schemeEnd >= 0 ? url.indexOf('/', schemeEnd + 3) : url.indexOf('/');
+  if (pathStart < 0) return '/';
+  const queryStart = url.indexOf('?', pathStart);
+  const hashStart = url.indexOf('#', pathStart);
+  const end =
+    queryStart >= 0 && hashStart >= 0
+      ? Math.min(queryStart, hashStart)
+      : queryStart >= 0
+        ? queryStart
+        : hashStart;
+  return end >= 0 ? url.slice(pathStart, end) : url.slice(pathStart);
+}
+
+function fastPathHeaders(
+  request: Request,
+  env: Bindings | undefined,
+  correlation: { requestId: string; traceparent: string },
+  noStore = false,
+) {
+  const headers = new Headers({
+    'content-type': 'application/json; charset=UTF-8',
+    'x-content-type-options': 'nosniff',
+    'x-frame-options': 'SAMEORIGIN',
+    'referrer-policy': 'no-referrer',
+    'strict-transport-security': 'max-age=15552000; includeSubDomains',
+    'cross-origin-opener-policy': 'same-origin',
+    'cross-origin-resource-policy': 'same-origin',
+    'origin-agent-cluster': '?1',
+    'x-dns-prefetch-control': 'off',
+    'x-download-options': 'noopen',
+    'x-permitted-cross-domain-policies': 'none',
+    'x-xss-protection': '0',
+    vary: 'Origin',
+    'x-request-id': correlation.requestId,
+    traceparent: correlation.traceparent,
+  });
+  const origin = request.headers.get('origin');
+  const allowedOrigin = env?.CORS_ORIGIN ?? 'http://127.0.0.1:3000';
+  if (origin && origin === allowedOrigin) {
+    headers.set('access-control-allow-origin', origin);
+  }
+  if (noStore) headers.set('cache-control', 'no-store');
+  return headers;
+}
+
+/**
+ * Handles lightweight liveness, version, and dependency probes before initializing Hono.
+ */
+export function handleFastPathRequest(
+  request: Request,
+  env: Bindings | undefined,
+): Response | Promise<Response> | undefined {
+  if (request.method !== 'GET') return undefined;
+  const pathname = requestPathname(request.url);
+  if (pathname !== '/health' && pathname !== '/version' && pathname !== '/health/dependencies') {
+    return undefined;
+  }
+
+  const startedAt = performance.now();
+  const correlation = createCorrelation(
+    request.headers.get('x-request-id') ?? undefined,
+    request.headers.get('traceparent') ?? undefined,
+  );
+  const releaseId = canonicalReleaseId(env?.RELEASE_ID, env?.CF_VERSION_METADATA?.tag);
+  const workerVersionId = env?.CF_VERSION_METADATA?.id;
+
+  if (pathname === '/health' || pathname === '/version') {
+    const body =
+      pathname === '/health'
+        ? '{"status":"ok"}'
+        : JSON.stringify({ release: releaseId ?? 'local' });
+    const response = new Response(body, {
+      status: 200,
+      headers: fastPathHeaders(request, env, correlation),
+    });
+    recordRequestAnalytics(env?.REQUEST_ANALYTICS, {
+      workerVersionId,
+      releaseId,
+      routeGroup: pathname === '/health' ? 'health' : 'version',
+      status: 200,
+      backendRelease: 'none',
+      provider: 'none',
+      wallDurationMs: performance.now() - startedAt,
+    });
+    return response;
+  }
+
+  const target = resolveDependencyTarget(env?.SUPABASE_FUNCTION_URL);
+  if (!target) {
+    recordRequestAnalytics(env?.REQUEST_ANALYTICS, {
+      workerVersionId,
+      releaseId,
+      routeGroup: 'health_dependencies',
+      status: 503,
+      backendRelease: 'none',
+      provider: 'none',
+      wallDurationMs: performance.now() - startedAt,
+    });
+    return new Response('{"status":"degraded","database":"degraded"}', {
+      status: 503,
+      headers: fastPathHeaders(request, env, correlation, true),
+    });
+  }
+
+  return (async () => {
+    const providerStartedAt = performance.now();
+    let healthy = false;
+    try {
+      const upstream = await fetch(
+        new Request(target.dependencyUrl, {
+          headers: {
+            accept: 'application/json',
+            'x-request-id': correlation.requestId,
+            traceparent: correlation.traceparent,
+          },
+        }),
+      );
+      const body = (await upstream.json().catch(() => undefined)) as
+        { status?: unknown; database?: unknown } | undefined;
+      healthy = upstream.ok && body?.status === 'ok' && body.database === 'ok';
+    } catch {
+      healthy = false;
+    }
+    const providerDurationMs = performance.now() - providerStartedAt;
+    const status = healthy ? 200 : 503;
+    recordRequestAnalytics(env?.REQUEST_ANALYTICS, {
+      workerVersionId,
+      releaseId,
+      routeGroup: 'health_dependencies',
+      status,
+      backendRelease: target.backendRelease,
+      provider: 'supabase',
+      wallDurationMs: performance.now() - startedAt,
+      providerDurationMs,
+    });
+    return new Response(
+      healthy ? '{"status":"ok","database":"ok"}' : '{"status":"degraded","database":"degraded"}',
+      {
+        status,
+        headers: fastPathHeaders(request, env, correlation, true),
+      },
+    );
+  })();
 }
 
 export const app = createApp();
