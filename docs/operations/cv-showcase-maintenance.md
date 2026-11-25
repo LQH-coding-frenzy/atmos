@@ -26,22 +26,23 @@ Provider-side retirement completed under the owner-approved CVRET-001 plan. See
 ## Active PERF-002 Vercel Cutover (Verification Pending)
 
 First-party public dashboard and AQI requests now execute on same-origin Vercel Next.js Route
-Handlers (`dpl_5DvyKMTH2GCiBYXBXYgcCEARDy31` on 2026-11-03; updated with the Open-Meteo trailing
-model-horizon null fix in PR #347 via `dpl_9si2pyXodY2cJpU8yZTxbMY2gaEv` on 2026-11-19), and
-Grafana synthetic check `8198` exercises `POST https://rainify.dpdns.org/api/public/v1/weather/dashboard`.
+Handlers (`dpl_FDWsmrXFswDc5HRSZjTDaZKLZAxQ` live on `https://rainify.dpdns.org/`), and Grafana
+synthetic check `8198` exercises `POST https://rainify.dpdns.org/api/public/v1/weather/dashboard`.
 The Worker remains active for authenticated API proxying, location search, bounded map/radar routes,
-health/version, CORS/security, correlation, and retained compatibility paths; stable Worker
-`2503a1f0-985f-4026-a368-bd9bb5504d23` (`d81923250215`) remains at 100%, and candidate
-`a998dabc-c89b-48bc-a336-ae9358e3bce6` (`5105fa59910b`) remains at 0%.
+health/version, CORS/security, correlation, and retained compatibility paths; Worker version
+`605b084d-a40c-4c0e-8ba7-f68f905b7dca` (`48559e421950`, `137.48 KiB` / `31.15 KiB` gzip) is at 100%
+following PR #355 (runtime Zod removal), PR #366 (pre-Hono fast-path probes, `hono/tiny`, and
+geocoding subpath split), and Edge release `45535843367`.
 
 A Vercel WAF rule is active: 60 requests/10 minutes per source IP on `/` and
 `/api/public/v1/weather/`, returning HTTP 429 on excess (covering both the POST handlers and the
-dynamic homepage's share-link query path). Hobby includes 1,000,000 allowed requests/month with a
-700K HOLD threshold; per-region WAF counters are not a global Open-Meteo quota. `PERF-002` remains
-`IN_PROGRESS` / `HOLD`: the 2026-11-19 post-cutover 24-hour Worker CPU snapshot (`44457037961`,
-208 natural requests, 0 errors) measured `p95 14.148 ms` (above the unchanged 7 ms limit), and
-`vercel usage` reported billing cost data unavailable for 2026-11-01 through 2026-11-19, leaving
-monthly WAF and Runtime Cache usage unmeasured. See `docs/cost/quota-budget.md`,
+dynamic homepage's share-link query path). Authenticated Vercel `/v2/usage` and
+`/v1/security/firewall/*` queries on `2026-11-25T02:25Z` confirmed Vercel compliance (`PASS`: Nov MTD
+`8,183` total requests `<= 0.82%` of `1M` WAF allowance, `5,586` function invocations bounding
+Runtime Cache reads `<= 0.56%` of `1M` and writes `<= 2.79%` of `200K`, `0` firewall mitigation
+events). `PERF-002` remains `IN_PROGRESS` / `HOLD` pending the 24-hour Worker CPU snapshot
+(`p95 <= 7 ms`) on `605b084d-a40c-4c0e-8ba7-f68f905b7dca` (prior `a7b9c500` snapshot `45533597237`
+measured `223` reqs, `p50 5.032 ms`, `p95 11.631 ms`, `p99 14.042 ms`). See `docs/cost/quota-budget.md`,
 `docs/operations/perf-002-public-weather-abuse-control.md`, `docs/evidence/perf-002/implementation.md`,
 and ADR 0005.
 

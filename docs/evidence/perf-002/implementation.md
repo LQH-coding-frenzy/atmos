@@ -1,13 +1,16 @@
 # PERF-002 — Expanded weather/AQI Worker CPU remediation
 
-Date: 2026-11-19
+Date: 2026-11-25
 
-Status: **IN_PROGRESS / HOLD — First-party public weather/AQI now serves from Vercel Route Handlers
-(updated 2026-11-19), while stable Worker `2503a1f0-985f-4026-a368-bd9bb5504d23` remains at 100%
-and candidate `a998dabc-c89b-48bc-a336-ae9358e3bce6` remains at 0%.** Read-only 24-hour Worker CPU
-snapshot `44457037961` measured `p95 14.148 ms` (above the 7 ms internal budget -> `HOLD`), and
-Vercel monthly WAF/Runtime Cache billing usage remains unavailable (`vercel usage` error). No
-database or provider-plan change occurred.
+Status: **IN_PROGRESS / HOLD (Worker CPU) · PASS (Vercel Hobby Usage & WAF) — First-party public
+weather/AQI serves from Vercel Route Handlers (`dpl_FDWsmrXFswDc5HRSZjTDaZKLZAxQ`), and live Worker
+`605b084d-a40c-4c0e-8ba7-f68f905b7dca` (`48559e421950`, `137.48 KiB` / `31.15 KiB` gzip) is at 100%.**
+Authenticated Vercel `/v2/usage` and `/v1/security/firewall/*` queries on `2026-11-25` verified all
+Vercel Hobby WAF (`<= 0.82%`) and Runtime Cache (`<= 0.56%` reads / `<= 2.79%` writes) thresholds
+pass well below the `70%` limit, while the remaining Worker CPU snapshot (`#45533597237` on prior
+`a7b9c500`) measured `p95 11.631 ms` (`HOLD` above `7 ms`). A new 24h `worker-cpu-snapshot.yml` check
+is required on `605b084d-a40c-4c0e-8ba7-f68f905b7dca` after natural traffic accumulates. No database
+or provider-plan change occurred.
 
 ## Baseline
 
@@ -865,3 +868,49 @@ Limit Requests` as 1,000,000 allowed requests/month included; the authenticated 
   decision `HOLD` (above the unchanged 7 ms internal budget). `PERF-002` therefore remains
   `IN_PROGRESS` / `HOLD` pending both a passing remaining-Worker CPU snapshot (`p95 <= 7 ms`) and
   measured Vercel monthly WAF/Runtime Cache usage.
+
+## Runtime Zod Removal, Cold-Start Fast-Path & Vercel Usage Verification (2026-11-23 to 2026-11-25)
+
+- **Pre-fix 24h Worker CPU snapshot (2026-11-23):** Protected read-only run
+  [45144424856](https://github.com/LQH-coding-frenzy/atmos/actions/runs/45144424856) on
+  `2503a1f0-985f-4026-a368-bd9bb5504d23` (`2026-11-22T08:59:14.981Z`–`2026-11-23T08:59:14.981Z`,
+  `1440` minutes) observed `533` natural requests, `0` errors, CPU `p50 1.701 ms`, `p95 9.96 ms`,
+  and `p99 39.361 ms` (`HOLD` above `7 ms`). Source-map inspection showed `81.5%` (`826,344` /
+  `1,014,109` source chars) of the Worker bundle was `zod`.
+- **PR #355 (`7c4df60`) & Edge release `45148524164` (2026-11-23):** Removed runtime `zod` schema
+  imports from `workers/gateway/src/index.ts` and `packages/provider-openmeteo/src/index.ts`,
+  reducing `wrangler deploy --dry-run` `Total Upload` from `1,008.44 KiB` (`161.52 KiB` gzip) to
+  `144.63 KiB` (`33.06 KiB` gzip). Protected release
+  [45148524164](https://github.com/LQH-coding-frenzy/atmos/actions/runs/45148524164) deployed
+  Worker `a7b9c500-4a3d-40bc-a0e4-d1a2b06da352` (`7c4df6079e01`) at 100%.
+- **Post-Zod 24h Worker CPU snapshot (2026-11-25):** Protected read-only run
+  [45533597237](https://github.com/LQH-coding-frenzy/atmos/actions/runs/45533597237) on
+  `a7b9c500-4a3d-40bc-a0e4-d1a2b06da352` (`2026-11-24T02:22:02.977Z`–`2026-11-25T02:22:02.977Z`,
+  `1440` minutes) observed `223` natural requests, `0` errors, CPU `p50 5.032 ms`, `p95 11.631 ms`,
+  and `p99 14.042 ms` (`p99` dropped `64%`, but `p95` remained `HOLD` above `7 ms` due to
+  cold-isolate Hono `RegExpRouter` compilation and eager forecast-provider bundling on low-volume
+  synthetic probes).
+- **Vercel Hobby usage & WAF compliance (`PASS`, 2026-11-25T02:25Z):** While `vercel usage` CLI
+  still reports Hobby billing cost data unavailable, authenticated Vercel REST API queries on
+  `team_1a5UfkAlVAYcy9s5cV4QZ3fF` / `prj_q2m4hiSmxpZKIVcQCQe2Y5EAJDCn` verified:
+  - `/v1/security/firewall/config/active` & `/events`: `firewallEnabled: true`, rule
+    `PERF-002 public weather abuse guard` (`id: rule_perf_002_public_weather_abuse_guard_wVSVDS`,
+    `active: true`, `valid: true`, `60` req / `600 s` / IP on `/` OR `/api/public/v1/weather/`),
+    `0` mitigation events.
+  - `/v2/usage` Nov MTD (`2026-11-01`–`2026-11-25`, 25 days): `8,183` total requests (`2,119` hits,
+    `6,064` misses -> WAF Rate Limit Requests `<= 0.82%` of `1,000,000` allowance), `5,586`
+    function invocations (`0.56%` of `1,000,000`; `0` errors on Nov 23–25, `0` throttles, `0`
+    timeouts; bounding Runtime Cache reads `<= 5,586 / 1,000,000` or `<= 0.56%` and writes
+    `<= 5,586 / 200,000` or `<= 2.79%`), `269.41 MB` outgoing bandwidth (`0.27%`), and Data Cache
+    `74.13 MB` sent / `30.07 MB` received. Rolling 31-day totals (`2026-10-26`–`2026-11-25`):
+    `10,782` requests (`1.08%`), `8,002` function invocations (`0.80%`), and `331.1 MB` bandwidth.
+- **PR #366 (`48559e4`) & Edge release `45535843367` (2026-11-25):** Added `handleFastPathRequest`
+  for `GET /health`, `/version`, and `/health/dependencies` before Hono initialization, switched to
+  `hono/tiny` (`LinearRouter`), optimized `createCorrelation` to a single `crypto.getRandomValues`
+  hex-LUT call, and split `@atmos/provider-openmeteo/geocoding` from forecast/AQI normalization via
+  `workers/gateway/src/worker.ts` (`Total Upload: 137.48 KiB / gzip: 31.15 KiB`). Protected release
+  [45535843367](https://github.com/LQH-coding-frenzy/atmos/actions/runs/45535843367) promoted Worker
+  `605b084d-a40c-4c0e-8ba7-f68f905b7dca` (`48559e421950`) at 100%, and live `/health`,
+  `/health/dependencies`, and `/version` returned HTTP 200. `PERF-002` remains `IN_PROGRESS` pending
+  the 24-hour natural-traffic `worker-cpu-snapshot.yml` check (`p95 <= 7 ms`) on
+  `605b084d-a40c-4c0e-8ba7-f68f905b7dca`.

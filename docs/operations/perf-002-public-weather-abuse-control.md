@@ -2,14 +2,7 @@
 
 ## Status
 
-Production WAF guard published 2026-10-30 after explicit owner approval. A read-only Vercel CLI
-pricing lookup resolved the current plan as Hobby and listed `Firewall Rate Limit Requests` with
-1,000,000 allowed requests/month included. The current-period `vercel usage` query returned no billing
-data; Vercel explicitly says this does not imply zero usage. Before configuration, the Atmos Firewall
-overview showed `Custom Rules 0`; Team Usage showed 9.7K CDN requests against 1M over the last 30 days,
-but no WAF-specific meter. This is a broad baseline, not an exact WAF allowance reading. The rule is
-active; application production propagation and WAF behavior testing remain pending. This plan does not
-authorize paid usage beyond the Hobby included allowance.
+Production WAF guard published 2026-10-30 after explicit owner approval (`PERF-002 public weather abuse guard`, `rule_perf_002_public_weather_abuse_guard_wVSVDS`). A read-only Vercel CLI pricing lookup resolved the current plan as Hobby and listed `Firewall Rate Limit Requests` with 1,000,000 allowed requests/month included. While `vercel usage` CLI reports Hobby billing cost data unavailable, authenticated `/v2/usage` and `/v1/security/firewall/*` API queries on `2026-11-25T02:25Z` confirmed Nov MTD team total requests are `8,183` (`<= 0.82%` of the `1,000,000` WAF allowance) with `0` mitigation events, and `5,586` function invocations (`0.56%`) bounding Runtime Cache reads (`<= 0.56%`) and writes (`<= 2.79%`) well under the `70%` HOLD thresholds. This plan does not authorize paid usage beyond the Hobby included allowance.
 
 ## Scope
 
