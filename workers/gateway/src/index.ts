@@ -1383,7 +1383,7 @@ let cachedDependencyTarget:
 function resolveDependencyTarget(functionUrl: string | undefined) {
   if (!functionUrl) return null;
   if (cachedDependencyTarget?.source === functionUrl) return cachedDependencyTarget.target;
-  let target: { dependencyUrl: string; backendRelease: string } | null = null;
+  let target: { dependencyUrl: string; backendRelease: string } | null;
   try {
     const base = functionUrl.endsWith('/') ? functionUrl : `${functionUrl}/`;
     target = {
@@ -1505,7 +1505,7 @@ export function handleFastPathRequest(
 
   return (async () => {
     const providerStartedAt = performance.now();
-    let healthy = false;
+    let healthy: boolean;
     try {
       const upstream = await fetch(
         new Request(target.dependencyUrl, {
