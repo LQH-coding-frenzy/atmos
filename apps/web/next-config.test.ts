@@ -31,4 +31,13 @@ describe('web response security headers', () => {
       "img-src 'self' blob: data: https://tiles.openfreemap.org https://tilecache.rainviewer.com",
     );
   });
+
+  it('rewrites /archify-diagram to the static Archify HTML bundle', async () => {
+    const rewrites = await nextConfig.rewrites?.();
+
+    expect(rewrites).toContainEqual({
+      source: '/archify-diagram',
+      destination: '/archify-diagram/index.html',
+    });
+  });
 });
