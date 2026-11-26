@@ -10556,25 +10556,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         return filename + '?' + params.toString() + hash;
       }
       function resolveParentHref() {
-        try {
-          var from = new URLSearchParams(location.search).get('from');
-          if (from && isSafeRelativeHtmlHref(from)) return from.trim();
-        } catch (_) {}
-        var authored = svg.getAttribute('data-parent-href');
-        if (authored && isSafeRelativeHtmlHref(authored)) return authored.trim();
         return null;
       }
-      function navigateToRelativeHtml(href) {
-        var next = hrefWithFrom(href);
-        if (!next) return false;
-        location.assign(next);
-        return true;
+      function navigateToRelativeHtml() {
+        return false;
       }
       function navigateToParent() {
-        var parent = resolveParentHref();
-        if (!parent) return false;
-        location.assign(withReaderContext(parent));
-        return true;
+        return false;
       }
       function syncParentBackControls() {
         var parent = resolveParentHref();
@@ -10626,31 +10614,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         return navigateToRelativeHtml(targets[0].href);
       }
 
-      function renderDrilldowns(node) {
+      function renderDrilldowns() {
         if (!drilldownsSection || !drilldownsList) return;
         drilldownsList.textContent = '';
-        var targets = parseNodeDrilldowns(node);
-        if (!targets.length) {
-          drilldownsSection.hidden = true;
-          return;
-        }
-        targets.forEach(function (target, index) {
-          var link = document.createElement('a');
-          link.className = 'semantic-passport-drilldown';
-          link.href = hrefWithFrom(target.href) || target.href;
-          link.setAttribute('data-drilldown-index', String(index));
-          link.setAttribute('aria-label', viewerText('viewer.passport.drilldowns.open', { label: target.label }));
-          var title = document.createElement('span');
-          title.textContent = target.label;
-          link.appendChild(title);
-          if (target.diagram_type) {
-            var type = document.createElement('small');
-            type.textContent = target.diagram_type;
-            link.appendChild(type);
-          }
-          drilldownsList.appendChild(link);
-        });
-        drilldownsSection.hidden = false;
+        drilldownsSection.hidden = true;
       }
 
       function relationshipsFor(id, byId) {
