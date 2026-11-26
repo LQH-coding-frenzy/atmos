@@ -30,14 +30,20 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ['127.0.0.1'],
   async rewrites() {
     const e2eGateway = process.env.ATMOS_E2E_GATEWAY_URL;
-    return e2eGateway
-      ? [
-          {
-            source: '/api/v1/weather/dashboard',
-            destination: `${e2eGateway}/api/v1/weather/dashboard`,
-          },
-        ]
-      : [];
+    return [
+      {
+        source: '/archify-diagram',
+        destination: '/archify-diagram/index.html',
+      },
+      ...(e2eGateway
+        ? [
+            {
+              source: '/api/v1/weather/dashboard',
+              destination: `${e2eGateway}/api/v1/weather/dashboard`,
+            },
+          ]
+        : []),
+    ];
   },
   async headers() {
     return [{ source: '/(.*)', headers: securityHeaders }];
